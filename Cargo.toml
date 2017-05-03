@@ -1,6 +1,11 @@
 [package]
-name = "Wafer"
+name = "wafer"
 version = "0.1.0"
 authors = ["Tim DuBois <tim.dubois@tcqp.org>"]
+build = "build.rs"
 
 [dependencies]
+
+
+[build-dependencies]
+vergen = "~0.1.0"
