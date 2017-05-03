@@ -11,3 +11,12 @@ fn main() {
     println!("              \\__/");
     println!("");
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn placeholder() {
+        let num = 5;
+        assert_eq!(num, 5);
+    }
+}

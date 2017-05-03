@@ -2,7 +2,18 @@
 name = "wafer"
 version = "0.1.0"
 authors = ["Tim DuBois <tim.dubois@tcqp.org>"]
+description = """
+Wafer exploits a Wick-rotated time-dependent Schrödinger equation to solve for time-independent solutions in three dimensions.
+"""
+readme = "README.md"
+homepage = "http://wafer.tcqp.science"
+license = "MIT"
 build = "build.rs"
+
+[[bin]]
+bench = false
+path = "src/main.rs"
+name = "wafer"
 
 [dependencies]
 
