@@ -16,8 +16,9 @@ path = "src/main.rs"
 name = "wafer"
 
 [dependencies]
-serde = "*"
-serde-hjson = "*"
+serde = "1.0.2"
+serde_derive = "1.0.2"
+serde_json = "1.0.1"
 
 [build-dependencies]
 vergen = "~0.1.0"
