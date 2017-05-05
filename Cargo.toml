@@ -16,11 +16,14 @@ path = "src/main.rs"
 name = "wafer"
 
 [dependencies]
-term_size = "0.3"
 ansi_term = "0.9"
+blas-sys = { version = "0.6.7", default-features = false, features = ["openblas"] }
+ndarray = { version = "0.9.1", features = ["blas"] }
+num = "0.1"
 serde = "1.0.2"
 serde_derive = "1.0.2"
 serde_json = "1.0.1"
+term_size = "0.3"
 
 [build-dependencies]
 vergen = "~0.1.0"

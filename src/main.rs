@@ -1,17 +1,24 @@
 extern crate ansi_term;
+extern crate num;
 extern crate term_size;
 
+#[macro_use(array)]
+extern crate ndarray;
 #[macro_use]
 extern crate serde_derive;
 
+use std::time::Instant;
 use ansi_term::Colour::Blue;
 use config::Config;
 
 include!(concat!(env!("OUT_DIR"), "/version.rs"));
 
 mod config;
+mod grid;
 
 fn main() {
+
+    let start_time = Instant::now();
 
     let mut sha = sha();
     let mut term_width = 100;
@@ -39,6 +46,12 @@ fn main() {
     let config = Config::load();
     config.print(term_width);
 
+    grid::show_complex();
+    grid::build_array();
+
+    let elapsed = start_time.elapsed();
+    let time_taken = (elapsed.as_secs() as f64) + (elapsed.subsec_nanos() as f64 / 1000_000_000.0);
+    println!("Elapsed time: {} seconds.", time_taken);
 }
 
 #[cfg(test)]
