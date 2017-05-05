@@ -1,11 +1,9 @@
-extern crate serde;
-extern crate serde_json;
-
 use std::fmt;
 use std::io::Error;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
 use std::path::Path;
+use serde_json;
 
 fn read_file<P: AsRef<Path>>(file_path: P) -> Result<String, Error> {
     let mut contents = String::new();
@@ -15,7 +13,7 @@ fn read_file<P: AsRef<Path>>(file_path: P) -> Result<String, Error> {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Config {
-    grid: Grid,
+    pub grid: Grid,
     tolerance: f32,
     max_steps: f64,
     wavenum: u8,
@@ -23,7 +21,7 @@ pub struct Config {
     clustrun: bool,
     al_clust: Point3,
     output: Output,
-    potential: Potential,
+    pub potential: Potential,
     mass: f32,
     init_condition: InitialCondition,
     sig: f32,
@@ -31,12 +29,10 @@ pub struct Config {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct Grid {
-    x: u32,
-    y: u32,
-    z: u32,
-    dn: f32,
-    dt: f32,
+pub struct Grid {
+    pub size: Index3,
+    pub dn: f64,
+    dt: f64,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -44,6 +40,13 @@ struct Point3 {
     x: f64,
     y: f64,
     z: f64,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Index3 {
+    pub x: u32,
+    pub y: u32,
+    pub z: u32,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -56,20 +59,20 @@ struct Output {
 
 //TODO: This is not a complete list
 #[derive(Serialize, Deserialize, Debug)]
-enum Potential {
+pub enum Potential {
     NoPotential,
-    Square,
+    Cube,
     QuadWell,
-    DoubleWell,
+    ComplexCoulomb,
 }
 
 impl fmt::Display for Potential {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Potential::NoPotential => write!(f, "No potential (V=0)"),
-            Potential::Square => write!(f, "3D square well"),
+            Potential::Cube => write!(f, "3D square (i.e. cubic) well"),
             Potential::QuadWell => write!(f, "3D quad well (short side along z-axis)"),
-            Potential::DoubleWell => write!(f, "3D double well"),
+            Potential::ComplexCoulomb => write!(f, "Complex Coulomb"),
         }
     }
 }
@@ -167,9 +170,9 @@ impl Config {
             println!("{:5}{:<dwidth$}{:<width$}{:<width$}",
                      "",
                      format!("Grid {{ x: {}, y: {}, z: {} }}",
-                             self.grid.x,
-                             self.grid.y,
-                             self.grid.z),
+                             self.grid.size.x,
+                             self.grid.size.y,
+                             self.grid.size.z),
                      format!("Δ{{x,y,z}}: {:e}", self.grid.dn),
                      format!("Δt: {:e}", self.grid.dt),
                      dwidth = dcolwidth,
@@ -227,9 +230,9 @@ impl Config {
             println!("{:5}{}",
                      "",
                      format!("Grid {{ x: {}, y: {}, z: {} }}",
-                             self.grid.x,
-                             self.grid.y,
-                             self.grid.z));
+                             self.grid.size.x,
+                             self.grid.size.y,
+                             self.grid.size.z));
             println!("{:5}{:<width$}{:<width$}",
                      "",
                      format!("Δ{{x,y,z}}: {:e}", self.grid.dn),

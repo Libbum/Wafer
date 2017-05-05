@@ -1,5 +1,7 @@
 extern crate ansi_term;
 extern crate num;
+extern crate serde;
+extern crate serde_json;
 extern crate term_size;
 
 #[macro_use(array)]
@@ -15,6 +17,7 @@ include!(concat!(env!("OUT_DIR"), "/version.rs"));
 
 mod config;
 mod grid;
+mod potential;
 
 fn main() {
 
@@ -48,6 +51,8 @@ fn main() {
 
     grid::show_complex();
     grid::build_array();
+    let idx = config::Index3 { x: 1, y: 2, z: 3 };
+    println!("Potential at 1,2,3: {}", potential::potential(&config, idx));
 
     let elapsed = start_time.elapsed();
     let time_taken = (elapsed.as_secs() as f64) + (elapsed.subsec_nanos() as f64 / 1000_000_000.0);
