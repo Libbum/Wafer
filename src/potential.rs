@@ -1,13 +1,52 @@
 //use num::Complex;
 
-//use config::{Potential, Config, Index3};
+use std::time::Instant;
+use ndarray::{Array3, Zip};
+use ndarray_parallel::prelude::*;
 use config::*;
 
 //struct PotentialValue<T>(T); //Some kind of generic like this may work.
+pub fn generate(config: &Config) {
+    //For now, just print at the end.
+    let num = &config.grid.size;
+    let init_size: [usize; 3] = [(num.x + 5) as usize, (num.y + 5) as usize, (num.z + 5) as usize];
+    let mut v = Array3::<f64>::zeros(init_size);
+    let mut u = Array3::<f64>::zeros(init_size);
+
+    let start_time = Instant::now();
+    Zip::indexed(&mut v).par_apply(|i, x| {
+        *x = potential(&config,
+                       Index3 {
+                           x: i.0 as u32,
+                           y: i.1 as u32,
+                           z: i.2 as u32,
+                       })
+    });
+    let elapsed = start_time.elapsed();
+    let time_taken = (elapsed.as_secs() as f64) + (elapsed.subsec_nanos() as f64 / 1000_000_000.0);
+    println!("Par: {} seconds.", time_taken);
+    //We can par_iter, but not for indexed data it seems.
+    //v.par_iter_mut().for_each(|elt| *elt += 1.);
+    let start_time2 = Instant::now();
+    for ((i, j, k), elt) in u.indexed_iter_mut() {
+        *elt = potential(&config,
+                         Index3 {
+                             x: i as u32,
+                             y: j as u32,
+                             z: k as u32,
+                         });
+    }
+    let elapsed2 = start_time2.elapsed();
+    let time_taken2 = (elapsed2.as_secs() as f64) +
+                      (elapsed2.subsec_nanos() as f64 / 1000_000_000.0);
+    println!("Seq: {} seconds.", time_taken2);
+    println!("{}", v == u);
+}
+
 
 //TODO: Maybe have the OPTION to be complex rather than force it.
 //For now we're dropping complex all together here.
-pub fn potential(config: &Config, idx: Index3) -> f64 {
+fn potential(config: &Config, idx: Index3) -> f64 {
     match config.potential {
         Potential::NoPotential => 0.0,
         Potential::Cube => {

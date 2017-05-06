@@ -9,8 +9,9 @@ pub fn show_complex() {
 }
 
 pub fn build_array() {
-    let test = array![[[1, 2], [3, 4]], [[5, 6], [7, 8]]];
-    println!("3D array: {}", test);
+    // I think we are going to dynamically fill everything...
+    //    let test = array![[[1, 2], [3, 4]], [[5, 6], [7, 8]]];
+    //   println!("3D array: {}", test);
 
     let mut test_fill = Array3::<f64>::zeros((3, 4, 5));
     println!("{}", test_fill);

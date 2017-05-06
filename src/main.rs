@@ -1,11 +1,12 @@
 extern crate ansi_term;
+extern crate ndarray;
+extern crate ndarray_parallel;
 extern crate num;
+extern crate rayon;
 extern crate serde;
 extern crate serde_json;
 extern crate term_size;
 
-#[macro_use(array)]
-extern crate ndarray;
 #[macro_use]
 extern crate serde_derive;
 
@@ -39,20 +40,22 @@ fn main() {
     println!("                    {}", Blue.paint("___"));
     println!("   __      ____ _  {}__ _ __", Blue.paint("/ __\\"));
     println!("   \\ \\ /\\ / / _` |{} / _ \\ '__|", Blue.paint("/ /"));
-    println!("    \\ V  V / (_| {}|  __/ |", Blue.paint("/ _\\"));
-    println!("     \\_/\\_/ \\__,{}   \\___|_|    Current build SHA1: {}",
-             Blue.paint("/ /"),
+    println!("    \\ V  V / (_| {}|  __/ |    Current build SHA1: {}",
+             Blue.paint("/ _\\"),
              sha);
+    println!("     \\_/\\_/ \\__,{}   \\___|_|    Parallel tasks running on {} threads.",
+             Blue.paint("/ /"),
+             rayon::current_num_threads());
     println!("              {}", Blue.paint("\\__/"));
     println!("");
 
     let config = Config::load();
     config.print(term_width);
-
-    grid::show_complex();
-    grid::build_array();
-    let idx = config::Index3 { x: 1, y: 2, z: 3 };
-    println!("Potential at 1,2,3: {}", potential::potential(&config, idx));
+    //   grid::show_complex();
+    //   grid::build_array();
+    potential::generate(&config);
+    //    let idx = config::Index3 { x: 1, y: 2, z: 3 };
+    //    println!("Potential at 1,2,3: {}", potential::potential(&config, idx));
 
     let elapsed = start_time.elapsed();
     let time_taken = (elapsed.as_secs() as f64) + (elapsed.subsec_nanos() as f64 / 1000_000_000.0);
