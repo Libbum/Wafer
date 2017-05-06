@@ -5,29 +5,8 @@ use std::io::prelude::*;
 use std::path::Path;
 use serde_json;
 
-fn read_file<P: AsRef<Path>>(file_path: P) -> Result<String, Error> {
-    let mut contents = String::new();
-    OpenOptions::new().read(true).open(file_path)?.read_to_string(&mut contents)?;
-    Ok(contents)
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Config {
-    pub grid: Grid,
-    tolerance: f32,
-    max_steps: f64,
-    wavenum: u8,
-    wavemax: u8,
-    clustrun: bool,
-    al_clust: Point3,
-    output: Output,
-    pub potential: Potential,
-    mass: f32,
-    init_condition: InitialCondition,
-    sig: f32,
-    init_symmetry: SymmetryConstraint,
-}
-
+/// Grid size information. `size` is an **Index3** for now, but maybe could just
+/// be tuple. `dn` is the grid size, i.e. Δ{x,y,z}.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Grid {
     pub size: Index3,
@@ -42,11 +21,14 @@ struct Point3 {
     z: f64,
 }
 
+/// A simple index struct to identify an {x,y,z} position.
+/// In the future it may be a good idea to cast/imply an
+/// `ndarray::NdIndex` from/to this.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Index3 {
-    pub x: u32,
-    pub y: u32,
-    pub z: u32,
+    pub x: usize,
+    pub y: usize,
+    pub z: usize,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -58,12 +40,21 @@ struct Output {
 }
 
 //TODO: This is not a complete list
+/// Type of potential the user wishes to invoke. There are many potientials
+/// built in, or the user can opt for two (three) external possibilites:
+///
+/// 1. Input a pre-calculated potential: `FromFile`
+/// 2. Use a **python** script called from `potential_generator.py`: `FromScript`
+/// 3. Sumbit an issue or pull request for a potential you deem worthy of
+/// inclusion to the built in selection.
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Potential {
     NoPotential,
     Cube,
     QuadWell,
     ComplexCoulomb,
+    FromFile,
+    FromScript,
 }
 
 impl fmt::Display for Potential {
@@ -73,6 +64,8 @@ impl fmt::Display for Potential {
             Potential::Cube => write!(f, "3D square (i.e. cubic) well"),
             Potential::QuadWell => write!(f, "3D quad well (short side along z-axis)"),
             Potential::ComplexCoulomb => write!(f, "Complex Coulomb"),
+            Potential::FromFile => write!(f, "User generated potential from file"),
+            Potential::FromScript => write!(f, "User generated potential from script"),
         }
     }
 }
@@ -137,8 +130,33 @@ impl fmt::Display for RunType {
     }
 }
 
+/// The main struct which all input data from `wafer.cfg` is pushed into.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Config {
+    pub grid: Grid,
+    tolerance: f32,
+    max_steps: f64,
+    wavenum: u8,
+    wavemax: u8,
+    clustrun: bool,
+    al_clust: Point3,
+    output: Output,
+    pub potential: Potential,
+    mass: f32,
+    init_condition: InitialCondition,
+    sig: f32,
+    init_symmetry: SymmetryConstraint,
+}
 
 impl Config {
+    /// Reads and parses data from the `wafer.cfg` file.
+    ///
+    /// # Panics
+    ///
+    /// Will dump if we see a file i/o error reading `wafer.cfg`; if the
+    /// contents of this file are not valid *json* (soon to be *hjson*
+    /// to minimise this possibility); and finally there are a number of checks
+    /// on bounds of the user input. For example; grid.dt ≤ grid.dn²/3.
     pub fn load() -> Config {
         //Read in configuration file (hjson format)
         let raw_config = match read_file("wafer.cfg") {
@@ -161,6 +179,12 @@ impl Config {
         }
     }
 
+    /// Pretty prints the **Config** contents to stdout.
+    ///
+    /// # Arguments
+    ///
+    /// * `w` - width of display. This is limited from 70 to 100 characters before being accessed
+    /// here, but no such restriction is required inside this function.
     pub fn print(&self, w: usize) {
         println!("{:=^width$}", " Configuration ", width = w);
         let mid = w - 10;
@@ -294,4 +318,30 @@ impl Config {
         }
         println!("{:=^width$}", "=", width = w);
     }
+}
+
+/// Returns the contents of a file on disk to a string
+///
+/// # Arguments
+///
+/// * `file_path` - A path to the file one wishes to read from disk. This is cast, so can be an `&str`.
+///
+/// # Examples
+///
+/// ```rust
+/// let config = read_file("wafer.cfg");
+/// ```
+///
+/// # Errors
+///
+/// Returns `std::io::Error` if unsuccesful
+///
+/// # Remarks
+///
+/// This reader probably doesn't need to be so generic.
+/// For now it is only called for `wafer.cfg`.
+fn read_file<P: AsRef<Path>>(file_path: P) -> Result<String, Error> {
+    let mut contents = String::new();
+    OpenOptions::new().read(true).open(file_path)?.read_to_string(&mut contents)?;
+    Ok(contents)
 }

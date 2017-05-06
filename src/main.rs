@@ -1,3 +1,19 @@
+//! **Wa** ve **f** unction Solv **er**: a parallelized, 3D, Schrödinger equation solver.
+//!
+//! Wafer exploits a Wick-rotated time-dependent Schrödinger equation to solve for
+//! time-independent solutions in three dimensions.
+//!
+//! Inspired by [quantumfdtd](http://sourceforge.net/projects/quantumfdtd/),
+//! which is a proof of concept tool and falls short of a general purpose utility.
+//! Wafer attempts to remedy this issue.
+//!
+//! If you use Wafer in your research, please reference the following articles:
+//!
+//! M. Strickland and D. Yager-Elorriaga, “A parallel algorithm for solving the 3d
+//! Schrödinger equation”,
+//! [Journal of Computational Physics __229__, 6015–6026 (2010)](http://dx.doi.org/10.1016/j.jcp.2010.04.032).
+
+
 #![cfg_attr(feature="clippy", feature(plugin))]
 #![cfg_attr(feature="clippy", plugin(clippy))]
 
@@ -19,7 +35,10 @@ use config::Config;
 
 include!(concat!(env!("OUT_DIR"), "/version.rs"));
 
-mod config;
+/// Config is a (mostly) public module which reads the configuration file `wafer.cfg`
+/// and poplulates the `Config` struct with the information required to run the current
+/// instance of the application.
+pub mod config;
 mod grid;
 mod potential;
 
@@ -57,8 +76,6 @@ fn main() {
     //   grid::show_complex();
     //   grid::build_array();
     potential::generate(&config);
-    //    let idx = config::Index3 { x: 1, y: 2, z: 3 };
-    //    println!("Potential at 1,2,3: {}", potential::potential(&config, idx));
 
     let elapsed = start_time.elapsed();
     let time_taken = (elapsed.as_secs() as f64) + (elapsed.subsec_nanos() as f64 / 1000_000_000.0);
