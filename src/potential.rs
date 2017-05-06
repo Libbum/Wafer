@@ -15,8 +15,8 @@ pub fn generate(config: &Config) {
 
     let start_time = Instant::now();
     Zip::indexed(&mut v).par_apply(|i, x| {
-        *x = potential(&config,
-                       Index3 {
+        *x = potential(config,
+                       &Index3 {
                            x: i.0 as u32,
                            y: i.1 as u32,
                            z: i.2 as u32,
@@ -29,8 +29,8 @@ pub fn generate(config: &Config) {
     //v.par_iter_mut().for_each(|elt| *elt += 1.);
     let start_time2 = Instant::now();
     for ((i, j, k), elt) in u.indexed_iter_mut() {
-        *elt = potential(&config,
-                         Index3 {
+        *elt = potential(config,
+                         &Index3 {
                              x: i as u32,
                              y: j as u32,
                              z: k as u32,
@@ -46,7 +46,7 @@ pub fn generate(config: &Config) {
 
 //TODO: Maybe have the OPTION to be complex rather than force it.
 //For now we're dropping complex all together here.
-fn potential(config: &Config, idx: Index3) -> f64 {
+fn potential(config: &Config, idx: &Index3) -> f64 {
     match config.potential {
         Potential::NoPotential => 0.0,
         Potential::Cube => {
@@ -78,7 +78,7 @@ fn potential(config: &Config, idx: Index3) -> f64 {
     }
 }
 
-fn calculate_r(idx: Index3, grid: &Grid) -> f64 {
+fn calculate_r(idx: &Index3, grid: &Grid) -> f64 {
     let dx = (idx.x as f64) - ((grid.size.x as f64) + 1.) / 2.;
     let dy = (idx.y as f64) - ((grid.size.y as f64) + 1.) / 2.;
     let dz = (idx.z as f64) - ((grid.size.z as f64) + 1.) / 2.; //TDOD: DISTNUMZ

@@ -18,6 +18,7 @@ name = "wafer"
 [dependencies]
 ansi_term = "0.9"
 blas-sys = { version = "0.6.7", default-features = false, features = ["openblas"] }
+clippy = {git = "https://github.com/Manishearth/rust-clippy", optional = true}
 ndarray = { version = "0.9.1", features = ["blas"] }
 ndarray-parallel = "0.3.0"
 num = "0.1"
@@ -29,3 +30,6 @@ term_size = "0.3"
 
 [build-dependencies]
 vergen = "~0.1.0"
+
+[features]
+default = []
