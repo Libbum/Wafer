@@ -1,6 +1,9 @@
 use num::Complex;
 use ndarray::Array3;
 
+use potential;
+use config::*;
+
 pub fn show_complex() {
     let test = Complex::new(52, 20);
     println!("Complex number: {}", test);
@@ -19,4 +22,11 @@ pub fn build_array() {
 
     test_fill[[2, 2, 2]] += 0.5;
     println!("{}", test_fill);
+}
+
+pub fn load_potential_arrays(config: &Config) {
+    let origin = Index3 { x: 0, y: 0, z: 0 };
+    let minima: f64 = potential::potential(config, &origin);
+    let v: Array3<f64> = potential::generate(config);
+    let b = 1. / (1. + config.grid.dt * v / 2.);
 }

@@ -11,7 +11,7 @@ use serde_json;
 pub struct Grid {
     pub size: Index3,
     pub dn: f64,
-    dt: f64,
+    pub dt: f64,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

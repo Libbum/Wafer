@@ -75,7 +75,7 @@ fn main() {
     config.print(term_width);
     //   grid::show_complex();
     //   grid::build_array();
-    potential::generate(&config);
+    grid::load_potential_arrays(&config);
 
     let elapsed = start_time.elapsed();
     let time_taken = (elapsed.as_secs() as f64) + (elapsed.subsec_nanos() as f64 / 1000_000_000.0);
