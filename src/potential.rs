@@ -8,7 +8,7 @@ use config::*;
 
 //TODO: Add failure modes for file read and scripting.
 #[derive(Debug)]
-enum PotentialError {
+pub enum PotentialError {
     NotAvailable,
 }
 
@@ -37,7 +37,7 @@ impl Error for PotentialError {
 
 //struct PotentialValue<T>(T); //Some kind of generic like this may work.
 
-pub fn generate(config: &Config) -> Array3<f64> {
+pub fn generate(config: &Config) -> Result<Array3<f64>, PotentialError> {
     let num = &config.grid.size;
     let init_size: [usize; 3] = [(num.x + 5) as usize, (num.y + 5) as usize, (num.z + 5) as usize];
     let mut v = Array3::<f64>::zeros(init_size);
@@ -49,7 +49,7 @@ pub fn generate(config: &Config) -> Array3<f64> {
                 Err(err) => panic!("Error: {}", err),
             }
         });
-    v
+    Ok(v)
 }
 
 /// Loads a pre-calculated potential from a user defined file.
