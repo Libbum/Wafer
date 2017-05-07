@@ -48,7 +48,7 @@ struct Output {
 /// 3. Sumbit an issue or pull request for a potential you deem worthy of
 /// inclusion to the built in selection.
 #[derive(Serialize, Deserialize, Debug)]
-pub enum Potential {
+pub enum PotentialType {
     NoPotential,
     Cube,
     QuadWell,
@@ -57,15 +57,15 @@ pub enum Potential {
     FromScript,
 }
 
-impl fmt::Display for Potential {
+impl fmt::Display for PotentialType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Potential::NoPotential => write!(f, "No potential (V=0)"),
-            Potential::Cube => write!(f, "3D square (i.e. cubic) well"),
-            Potential::QuadWell => write!(f, "3D quad well (short side along z-axis)"),
-            Potential::ComplexCoulomb => write!(f, "Complex Coulomb"),
-            Potential::FromFile => write!(f, "User generated potential from file"),
-            Potential::FromScript => write!(f, "User generated potential from script"),
+            PotentialType::NoPotential => write!(f, "No potential (V=0)"),
+            PotentialType::Cube => write!(f, "3D square (i.e. cubic) well"),
+            PotentialType::QuadWell => write!(f, "3D quad well (short side along z-axis)"),
+            PotentialType::ComplexCoulomb => write!(f, "Complex Coulomb"),
+            PotentialType::FromFile => write!(f, "User generated potential from file"),
+            PotentialType::FromScript => write!(f, "User generated potential from script"),
         }
     }
 }
@@ -141,7 +141,7 @@ pub struct Config {
     clustrun: bool,
     al_clust: Point3,
     output: Output,
-    pub potential: Potential,
+    pub potential: PotentialType,
     mass: f32,
     init_condition: InitialCondition,
     sig: f32,
@@ -342,6 +342,9 @@ impl Config {
 /// For now it is only called for `wafer.cfg`.
 fn read_file<P: AsRef<Path>>(file_path: P) -> Result<String, Error> {
     let mut contents = String::new();
-    OpenOptions::new().read(true).open(file_path)?.read_to_string(&mut contents)?;
+    OpenOptions::new()
+        .read(true)
+        .open(file_path)?
+        .read_to_string(&mut contents)?;
     Ok(contents)
 }

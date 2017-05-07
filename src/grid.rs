@@ -25,30 +25,32 @@ use config::*;
 //    println!("{}", test_fill);
 //}
 
-pub fn load_potential_arrays(config: &Config) {
+#[derive(Debug)]
+pub struct Potentials {
+    v: Array3<f64>,
+    a: Array3<f64>,
+    b: Array3<f64>,
+    epsilon: f64,
+}
+
+
+pub fn load_potential_arrays(config: &Config) -> Potentials {
     let mut minima: f64 = 1e20;
 
-    //TODO: This is a bit messy, figure out how to clean it up.
-    let mut v: Array3<_> = match config.potential {
-        Potential::FromFile => {
-            match potential::from_file() {
-                Ok(result) => result,
-                Err(err) => panic!("Error: {}", err),
-            }},
-        Potential::FromScript => {
-            match potential::from_script() {
-                Ok(result) => result,
-                Err(err) => panic!("Error: {}", err),
-            }},
-        _ => { 
-            match potential::generate(config) {
-                Ok(result) => result,
-                Err(err) => panic!("Error: {}", err),
-            }},
+    let result = match config.potential {
+        PotentialType::FromFile => potential::from_file(),
+        PotentialType::FromScript => potential::from_script(),
+        _ => potential::generate(config),
+    };
+    let mut v: Array3<f64> = match result {
+        Ok(r) => r,
+        Err(err) => panic!("Error: {}", err),
     };
 
+
     let b = 1. / (1. + config.grid.dt * &v / 2.);
-    let a = (1. - config.grid.dt * &v / 2.)*b;
+    let a = (1. - config.grid.dt * &v / 2.) * &b;
+
     // We can't do this in a par.
     // AFAIK, this is the safest way to work with the float here.
     for el in v.iter_mut() {
@@ -57,5 +59,7 @@ pub fn load_potential_arrays(config: &Config) {
         }
     }
     //Get 2*abs(min(potential)) for offset of beta
-    let epsilon = 2.*minima.abs();
+    let epsilon = 2. * minima.abs();
+
+    Potentials { v, a, b, epsilon }
 }
