@@ -43,6 +43,47 @@ pub mod config;
 mod grid;
 mod potential;
 
+/// Uses **term_size** to pull in the terminal width and from there sets the output
+/// pretty printing value to an appropreate value (between 70-100). Also sets the
+/// sha length for the banner output.
+fn get_term_size() -> (usize, String) {
+    let mut sha = sha();
+    let mut term_width = 100;
+    if let Some((width, _)) = term_size::dimensions() {
+        if width <= 97 {
+            sha = short_sha();
+        }
+        if width <= 70 {
+            term_width = 70;
+        } else if width < term_width {
+            term_width = width;
+        }
+    }
+    (term_width, sha.to_string())
+}
+
+/// Simply prints the Wafer banner with current commit info and thread count.
+fn print_banner(sha: String) {
+    println!("                    {}", Blue.paint("___"));
+    println!("   __      ____ _  {}__ _ __", Blue.paint("/ __\\"));
+    println!("   \\ \\ /\\ / / _` |{} / _ \\ '__|", Blue.paint("/ /"));
+    println!("    \\ V  V / (_| {}|  __/ |    Current build SHA1: {}",
+             Blue.paint("/ _\\"),
+             sha);
+    println!("     \\_/\\_/ \\__,{}   \\___|_|    Parallel tasks running on {} threads.",
+             Blue.paint("/ /"),
+             rayon::current_num_threads());
+    println!("              {}", Blue.paint("\\__/"));
+    println!("");
+}
+
+/// Fills potential and wavefunction variables with the required initial conditions
+/// Reads from disk if need be due to user input from the configuration file. Writes
+/// output if this also has been requested.
+///
+/// # Arguments
+///
+/// * `config` - The configuration struct for the programs current instance.
 fn initialise(config: &Config) {
     let potentials = grid::load_potential_arrays(config);
 
@@ -64,30 +105,8 @@ fn main() {
 
     let start_time = Instant::now();
 
-    let mut sha = sha();
-    let mut term_width = 100;
-    if let Some((width, _)) = term_size::dimensions() {
-        if width <= 97 {
-            sha = short_sha();
-        }
-        if width <= 70 {
-            term_width = 70;
-        } else if width < term_width {
-            term_width = width;
-        }
-    }
-
-    println!("                    {}", Blue.paint("___"));
-    println!("   __      ____ _  {}__ _ __", Blue.paint("/ __\\"));
-    println!("   \\ \\ /\\ / / _` |{} / _ \\ '__|", Blue.paint("/ /"));
-    println!("    \\ V  V / (_| {}|  __/ |    Current build SHA1: {}",
-             Blue.paint("/ _\\"),
-             sha);
-    println!("     \\_/\\_/ \\__,{}   \\___|_|    Parallel tasks running on {} threads.",
-             Blue.paint("/ /"),
-             rayon::current_num_threads());
-    println!("              {}", Blue.paint("\\__/"));
-    println!("");
+    let (term_width, sha) = get_term_size();
+    print_banner(sha);
 
     let config = Config::load();
     config.print(term_width);

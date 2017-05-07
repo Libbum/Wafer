@@ -101,8 +101,8 @@ fn potential(config: &Config, idx: &Index3) -> Result<f64, PotentialError> {
                 Ok(-1. / r)
             }
         }
-        PotentialType::FromFile => Err(PotentialError::NotAvailable),
-        PotentialType::FromScript => Err(PotentialError::NotAvailable), //TODO: This may not need to be an error.
+        PotentialType::FromFile |
+        PotentialType::FromScript => Err(PotentialError::NotAvailable), //TODO: Script may not need to error.
     }
 }
 
