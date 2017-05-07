@@ -21,6 +21,7 @@ extern crate ansi_term;
 extern crate ndarray;
 extern crate ndarray_parallel;
 extern crate num;
+extern crate rand;
 extern crate rayon;
 extern crate serde;
 extern crate serde_json;
@@ -41,6 +42,23 @@ include!(concat!(env!("OUT_DIR"), "/version.rs"));
 pub mod config;
 mod grid;
 mod potential;
+
+fn initialise(config: &Config) {
+    let potentials = grid::load_potential_arrays(config);
+
+    if config.output.save_potential {
+        //TODO: Build output routine.
+        //Not sure if we should use someting like messagepack as there are matlab
+        //and python bindings, or try for hdf5. The rust bindings there are pretty
+        //shonky. So not sure. We'll need a text only option anyhow, so build that fist.
+    }
+
+    if config.wavenum > 0 {
+        //TODO: We restart from an output file.
+    }
+
+    config::set_initial_conditions(config);
+}
 
 fn main() {
 
@@ -73,9 +91,8 @@ fn main() {
 
     let config = Config::load();
     config.print(term_width);
-    //   grid::show_complex();
-    //   grid::build_array();
-    let potentials = grid::load_potential_arrays(&config);
+
+    initialise(&config);
 
     let elapsed = start_time.elapsed();
     let time_taken = (elapsed.as_secs() as f64) + (elapsed.subsec_nanos() as f64 / 1000_000_000.0);

@@ -1,3 +1,7 @@
+use ndarray::Array3;
+use ndarray_parallel::prelude::*;
+use rand::distributions::{Normal, IndependentSample};
+use rand;
 use std::fmt;
 use std::io::Error;
 use std::fs::OpenOptions;
@@ -31,12 +35,14 @@ pub struct Index3 {
     pub z: usize,
 }
 
+/// Identifies the frequency of ouput to the screen or disk, as
+/// well as toggling the output of wavefunction and potential data.
 #[derive(Serialize, Deserialize, Debug)]
-struct Output {
+pub struct Output {
     screen_update: u32,
     snap_update: u32,
     save_wavefns: bool,
-    save_potential: bool,
+    pub save_potential: bool,
 }
 
 //TODO: This is not a complete list
@@ -136,15 +142,15 @@ pub struct Config {
     pub grid: Grid,
     tolerance: f32,
     max_steps: f64,
-    wavenum: u8,
+    pub wavenum: u8,
     wavemax: u8,
     clustrun: bool,
     al_clust: Point3,
-    output: Output,
+    pub output: Output,
     pub potential: PotentialType,
     mass: f32,
     init_condition: InitialCondition,
-    sig: f32,
+    sig: f64,
     init_symmetry: SymmetryConstraint,
 }
 
@@ -347,4 +353,34 @@ fn read_file<P: AsRef<Path>>(file_path: P) -> Result<String, Error> {
         .open(file_path)?
         .read_to_string(&mut contents)?;
     Ok(contents)
+}
+
+/// Sets initial conditions for the wavefunction `w`.
+///
+/// # Arguments
+///
+/// * `config` - a reference to the confguration struct
+pub fn set_initial_conditions(config: &Config) {
+    let w: Array3<f64> = match config.init_condition {
+        InitialCondition::FromFile => Array3::<f64>::zeros((1, 1, 1)), //TODO.
+        InitialCondition::Gaussian => generate_gaussian(config),
+        InitialCondition::Coulomb => Array3::<f64>::zeros((1, 1, 1)), //TODO.
+        InitialCondition::InteriorConstant => Array3::<f64>::zeros((1, 1, 1)), //TODO.
+        InitialCondition::BooleanTestGrid => Array3::<f64>::zeros((1, 1, 1)), //TODO.
+    };
+    //println!("{:?}", w);
+}
+
+/// Builds a gaussian distribution of values with a mean of 0 and standard
+/// distribution of `config.sig`.
+fn generate_gaussian(config: &Config) -> Array3<f64> {
+    let normal = Normal::new(0.0, config.sig);
+    let num = &config.grid.size;
+    let init_size: [usize; 3] = [(num.x + 5) as usize,
+                                 (num.y + 5) as usize,
+                                 (num.z + 5) as usize];
+    let mut w = Array3::<f64>::zeros(init_size);
+
+    w.par_map_inplace(|el| *el = normal.ind_sample(&mut rand::thread_rng()));
+    w
 }
