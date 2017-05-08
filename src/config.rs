@@ -385,11 +385,12 @@ pub fn set_initial_conditions(config: &Config) {
     w.slice_mut(s![.., 0..3, ..]).par_map_inplace(|el| *el = 0.);
     w.slice_mut(s![.., (init_size[1] - 3) as isize..init_size[1] as isize, ..])
         .par_map_inplace(|el| *el = 0.);
-    println!("{:?}", w);
+
+    //NOTE: qfdtd has a zeroing out of W here. We are yet to impliment (may not need W).
 
     // Symmetrise the IC.
-    symmetrise_wavefunction(config, &w);
-    //    println!("{:?}", w);
+    symmetrise_wavefunction(config, &mut w);
+    println!("{:?}", w);
 }
 
 /// Builds a gaussian distribution of values with a mean of 0 and standard
@@ -442,7 +443,7 @@ fn generate_boolean(init_size: [usize; 3]) -> Array3<f64> {
     let mut w = Array3::<f64>::zeros(init_size);
 
     Zip::indexed(&mut w)
-        .par_apply(|(i, j, k), x| { *x = i as f64 % 2. * j as f64 % 2. * k as f64 % 2.; });
+        .par_apply(|(i, j, k), el| { *el = i as f64 % 2. * j as f64 % 2. * k as f64 % 2.; });
     w
 }
 
@@ -452,14 +453,53 @@ fn generate_boolean(init_size: [usize; 3]) -> Array3<f64> {
 ///
 /// * `config` - a reference to the confguration struct
 /// * `w` - Reference to a wavefunction to impose symmetry conditions on.
-fn symmetrise_wavefunction(config: &Config, w: &Array3<f64>) {
+fn symmetrise_wavefunction(config: &Config, w: &mut Array3<f64>) {
     //TODO: Need to learn how to properly slice an ndarray for this.
+
+    let num = &config.grid.size;
+    let sign = match config.init_symmetry {
+        SymmetryConstraint::NotConstrained => 0.,
+        SymmetryConstraint::AntisymAboutY |
+        SymmetryConstraint::AntisymAboutZ => -1.,
+        SymmetryConstraint::AboutY |
+        SymmetryConstraint::AboutZ => 1.,
+    };
 
     match config.init_symmetry {
         SymmetryConstraint::NotConstrained => {}
         SymmetryConstraint::AboutZ |
-        SymmetryConstraint::AntisymAboutZ => {}
+        SymmetryConstraint::AntisymAboutZ => {
+            for sx in 0..(num.x + 6) {
+                for sy in 3..(3 + num.y + 1) {
+                    for sz in 3..(3 + num.z + 1) {
+                        let mut z = sz;
+                        if z > (3 + num.z) / 2 {
+                            z = (3 + num.z) + 1 - z;
+                        }
+                        w[[sx, sy, sz]] = sign * w[[sx, sy, z]];
+                    }
+                }
+            }
+        }
         SymmetryConstraint::AboutY |
-        SymmetryConstraint::AntisymAboutY => {}
+        SymmetryConstraint::AntisymAboutY => {
+            for sx in 0..(num.x + 6) {
+                for sy in 3..(3 + num.y + 1) {
+                    let mut y = sy;
+                    if y > (3 + num.y) / 2 {
+                        y = (3 + num.y) + 1 - y;
+                    }
+                    for sz in 3..(3 + num.z + 1) {
+                        w[[sx, sy, sz]] = sign * w[[sx, y, sz]];
+                    }
+                }
+            }
+            //Think we have to do this the hard way...
+            //let slice = &mut w.slice_mut(s![.., 3..3 + num.y as isize, 3..3 + num.z as isize]);
+            //Zip::indexed(slice).par_apply(|(i, j, k), el| {
+            //    let jj = if j < num.y / 2 { num.y + 1 - j } else { j };
+            //    *el = sign * &slice[[i, jj, k]];
+            //});
+        }
     };
 }
