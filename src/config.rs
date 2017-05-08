@@ -348,7 +348,8 @@ impl Config {
 /// For now it is only called for `wafer.cfg`.
 fn read_file<P: AsRef<Path>>(file_path: P) -> Result<String, Error> {
     let mut contents = String::new();
-    OpenOptions::new().read(true)
+    OpenOptions::new()
+        .read(true)
         .open(file_path)?
         .read_to_string(&mut contents)?;
     Ok(contents)
@@ -362,7 +363,9 @@ fn read_file<P: AsRef<Path>>(file_path: P) -> Result<String, Error> {
 pub fn set_initial_conditions(config: &Config) -> Array3<f64> {
     let num = &config.grid.size;
     //NOTE: Don't forget that sizes are non inclusive. We want num.n + 5 to be our last value, so we need num.n + 6 here.
-    let init_size: [usize; 3] = [(num.x + 6) as usize, (num.y + 6) as usize, (num.z + 6) as usize];
+    let init_size: [usize; 3] = [(num.x + 6) as usize,
+                                 (num.y + 6) as usize,
+                                 (num.z + 6) as usize];
     let mut w: Array3<f64> = match config.init_condition {
         InitialCondition::FromFile => Array3::<f64>::zeros((1, 1, 1)), //TODO.
         InitialCondition::Gaussian => generate_gaussian(config, init_size),
@@ -374,15 +377,18 @@ pub fn set_initial_conditions(config: &Config) -> Array3<f64> {
     //Enforce Boundary Conditions
     // NOTE: Don't forget that ranges are non-inclusive. So 0..3 means 'select 0,1,2'.
     // In Z
-    w.slice_mut(s![.., .., 0..3]).par_map_inplace(|el| *el = 0.);
+    w.slice_mut(s![.., .., 0..3])
+        .par_map_inplace(|el| *el = 0.);
     w.slice_mut(s![.., .., (init_size[2] - 3) as isize..init_size[2] as isize])
         .par_map_inplace(|el| *el = 0.);
     // In X
-    w.slice_mut(s![0..3, .., ..]).par_map_inplace(|el| *el = 0.);
+    w.slice_mut(s![0..3, .., ..])
+        .par_map_inplace(|el| *el = 0.);
     w.slice_mut(s![(init_size[0] - 3) as isize..init_size[0] as isize, .., ..])
         .par_map_inplace(|el| *el = 0.);
     // In Y
-    w.slice_mut(s![.., 0..3, ..]).par_map_inplace(|el| *el = 0.);
+    w.slice_mut(s![.., 0..3, ..])
+        .par_map_inplace(|el| *el = 0.);
     w.slice_mut(s![.., (init_size[1] - 3) as isize..init_size[1] as isize, ..])
         .par_map_inplace(|el| *el = 0.);
 
@@ -442,8 +448,9 @@ fn generate_coulomb(config: &Config, init_size: [usize; 3]) -> Array3<f64> {
 fn generate_boolean(init_size: [usize; 3]) -> Array3<f64> {
     let mut w = Array3::<f64>::zeros(init_size);
 
-    Zip::indexed(&mut w)
-        .par_apply(|(i, j, k), el| { *el = i as f64 % 2. * j as f64 % 2. * k as f64 % 2.; });
+    Zip::indexed(&mut w).par_apply(|(i, j, k), el| {
+                                       *el = i as f64 % 2. * j as f64 % 2. * k as f64 % 2.;
+                                   });
     w
 }
 
