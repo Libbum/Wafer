@@ -1,4 +1,4 @@
-use ndarray::Array3;
+use ndarray::{Array3, Zip};
 use ndarray_parallel::prelude::*;
 use rand::distributions::{Normal, IndependentSample};
 use rand;
@@ -81,8 +81,8 @@ enum InitialCondition {
     FromFile,
     Gaussian,
     Coulomb,
-    InteriorConstant,
-    BooleanTestGrid,
+    Constant,
+    Boolean,
 }
 
 impl fmt::Display for InitialCondition {
@@ -91,8 +91,8 @@ impl fmt::Display for InitialCondition {
             InitialCondition::FromFile => write!(f, "From wavefunction_*.dat on disk"),
             InitialCondition::Gaussian => write!(f, "Random Gaussian"),
             InitialCondition::Coulomb => write!(f, "Coulomb-like"),
-            InitialCondition::InteriorConstant => write!(f, "Constant of 0.1 in interior"),
-            InitialCondition::BooleanTestGrid => write!(f, "Boolean test grid"),
+            InitialCondition::Constant => write!(f, "Constant of 0.1 in interior"),
+            InitialCondition::Boolean => write!(f, "Boolean test grid"),
         }
     }
 }
@@ -148,7 +148,7 @@ pub struct Config {
     al_clust: Point3,
     pub output: Output,
     pub potential: PotentialType,
-    mass: f32,
+    mass: f64,
     init_condition: InitialCondition,
     sig: f64,
     init_symmetry: SymmetryConstraint,
@@ -348,8 +348,7 @@ impl Config {
 /// For now it is only called for `wafer.cfg`.
 fn read_file<P: AsRef<Path>>(file_path: P) -> Result<String, Error> {
     let mut contents = String::new();
-    OpenOptions::new()
-        .read(true)
+    OpenOptions::new().read(true)
         .open(file_path)?
         .read_to_string(&mut contents)?;
     Ok(contents)
@@ -361,26 +360,68 @@ fn read_file<P: AsRef<Path>>(file_path: P) -> Result<String, Error> {
 ///
 /// * `config` - a reference to the confguration struct
 pub fn set_initial_conditions(config: &Config) {
+    let num = &config.grid.size;
+    let init_size: [usize; 3] = [(num.x + 5) as usize, (num.y + 5) as usize, (num.z + 5) as usize];
     let w: Array3<f64> = match config.init_condition {
         InitialCondition::FromFile => Array3::<f64>::zeros((1, 1, 1)), //TODO.
-        InitialCondition::Gaussian => generate_gaussian(config),
-        InitialCondition::Coulomb => Array3::<f64>::zeros((1, 1, 1)), //TODO.
-        InitialCondition::InteriorConstant => Array3::<f64>::zeros((1, 1, 1)), //TODO.
-        InitialCondition::BooleanTestGrid => Array3::<f64>::zeros((1, 1, 1)), //TODO.
+        InitialCondition::Gaussian => generate_gaussian(config, init_size),
+        InitialCondition::Coulomb => generate_coulomb(config, init_size),
+        InitialCondition::Constant => Array3::<f64>::from_elem(init_size, 0.1),
+        InitialCondition::Boolean => generate_boolean(init_size),
     };
-    //println!("{:?}", w);
+    //    println!("{:?}", w);
 }
 
 /// Builds a gaussian distribution of values with a mean of 0 and standard
 /// distribution of `config.sig`.
-fn generate_gaussian(config: &Config) -> Array3<f64> {
+///
+/// # Arguments
+///
+/// * `config` - a reference to the confguration struct
+/// * `init_size` - {x,y,z} dimensions of the required wavefunction
+fn generate_gaussian(config: &Config, init_size: [usize; 3]) -> Array3<f64> {
     let normal = Normal::new(0.0, config.sig);
-    let num = &config.grid.size;
-    let init_size: [usize; 3] = [(num.x + 5) as usize,
-                                 (num.y + 5) as usize,
-                                 (num.z + 5) as usize];
     let mut w = Array3::<f64>::zeros(init_size);
 
     w.par_map_inplace(|el| *el = normal.ind_sample(&mut rand::thread_rng()));
+    w
+}
+
+/// Builds a Coulomb-like initial condition.
+///
+/// # Arguments
+///
+/// * `config` - a reference to the confguration struct
+/// * `init_size` - {x,y,z} dimensions of the required wavefunction
+fn generate_coulomb(config: &Config, init_size: [usize; 3]) -> Array3<f64> {
+    let mut w = Array3::<f64>::zeros(init_size);
+
+    Zip::indexed(&mut w).par_apply(|(i, j, k), x| {
+        //Coordinate system is centered in simulation volume
+        let dx = i as f64 - (init_size[0] as f64 / 2.);
+        let dy = j as f64 - (init_size[1] as f64 / 2.);
+        let dz = k as f64 - (init_size[2] as f64 / 2.);
+        let r = config.grid.dn * (dx.powi(2) + dy.powi(2) + dz.powi(2)).sqrt();
+        let costheta = config.grid.dn * dz / r;
+        let cosphi = config.grid.dn * dx / r;
+        let mr2 = (-config.mass * r / 2.).exp();
+        // Terms here represent: n=1; n=2, l=0; n=2,l=1,m=0; n=2,l=1,m±1 respectively.
+        *x = (-config.mass * r).exp() + (2. - config.mass * r) * mr2 +
+             config.mass * r * mr2 * costheta +
+             config.mass * r * mr2 * (1. - costheta.powi(2)).sqrt() * cosphi;
+    });
+    w
+}
+
+// Builds a Boolean test grid initial condition.
+///
+/// # Arguments
+///
+/// * `init_size` - {x,y,z} dimensions of the required wavefunction
+fn generate_boolean(init_size: [usize; 3]) -> Array3<f64> {
+    let mut w = Array3::<f64>::zeros(init_size);
+
+    Zip::indexed(&mut w)
+        .par_apply(|(i, j, k), x| { *x = i as f64 % 2. * j as f64 % 2. * k as f64 % 2.; });
     w
 }
