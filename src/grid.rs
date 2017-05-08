@@ -5,7 +5,7 @@ use config::*;
 
 #[derive(Debug)]
 pub struct Potentials {
-    v: Array3<f64>,
+    pub v: Array3<f64>,
     a: Array3<f64>,
     b: Array3<f64>,
     epsilon: f64,
@@ -39,5 +39,10 @@ pub fn load_potential_arrays(config: &Config) -> Potentials {
     //Get 2*abs(min(potential)) for offset of beta
     let epsilon = 2. * minima.abs();
 
-    Potentials { v, a, b, epsilon }
+    Potentials {
+        v: v,
+        a: a,
+        b: b,
+        epsilon: epsilon,
+    }
 }

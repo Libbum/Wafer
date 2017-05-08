@@ -39,7 +39,7 @@ pub struct Index3 {
 /// well as toggling the output of wavefunction and potential data.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Output {
-    screen_update: u32,
+    pub screen_update: f64,
     snap_update: u32,
     save_wavefns: bool,
     pub save_potential: bool,
@@ -141,14 +141,14 @@ impl fmt::Display for RunType {
 pub struct Config {
     pub grid: Grid,
     tolerance: f32,
-    max_steps: f64,
+    pub max_steps: f64,
     pub wavenum: u8,
     wavemax: u8,
     clustrun: bool,
     al_clust: Point3,
     pub output: Output,
     pub potential: PotentialType,
-    mass: f64,
+    pub mass: f64,
     init_condition: InitialCondition,
     sig: f64,
     init_symmetry: SymmetryConstraint,
@@ -359,7 +359,7 @@ fn read_file<P: AsRef<Path>>(file_path: P) -> Result<String, Error> {
 /// # Arguments
 ///
 /// * `config` - a reference to the confguration struct
-pub fn set_initial_conditions(config: &Config) {
+pub fn set_initial_conditions(config: &Config) -> Array3<f64> {
     let num = &config.grid.size;
     //NOTE: Don't forget that sizes are non inclusive. We want num.n + 5 to be our last value, so we need num.n + 6 here.
     let init_size: [usize; 3] = [(num.x + 6) as usize, (num.y + 6) as usize, (num.z + 6) as usize];
@@ -390,7 +390,7 @@ pub fn set_initial_conditions(config: &Config) {
 
     // Symmetrise the IC.
     symmetrise_wavefunction(config, &mut w);
-    println!("{:?}", w);
+    w
 }
 
 /// Builds a gaussian distribution of values with a mean of 0 and standard
@@ -495,10 +495,11 @@ fn symmetrise_wavefunction(config: &Config, w: &mut Array3<f64>) {
                 }
             }
             //Think we have to do this the hard way...
-            //let slice = &mut w.slice_mut(s![.., 3..3 + num.y as isize, 3..3 + num.z as isize]);
-            //Zip::indexed(slice).par_apply(|(i, j, k), el| {
+            //let mirror = w.view();
+            //let runner = w.view_mut();
+            //Zip::indexed(runner).par_apply(|(i, j, k), el| {
             //    let jj = if j < num.y / 2 { num.y + 1 - j } else { j };
-            //    *el = sign * &slice[[i, jj, k]];
+            //    *el = sign * mirror[[i, jj, k]];
             //});
         }
     };
