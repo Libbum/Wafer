@@ -28,11 +28,14 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
+#[macro_use]
+extern crate slog;
+extern crate slog_async;
+extern crate slog_term;
 extern crate term_size;
 
 use ansi_term::Colour::Blue;
-use ndarray::{Array3, Zip};
-use ndarray_parallel::prelude::*;
+use slog::Drain;
 use std::time::Instant;
 use config::Config;
 
@@ -45,7 +48,7 @@ pub mod config;
 mod grid;
 mod potential;
 
-/// Uses **term_size** to pull in the terminal width and from there sets the output
+/// Uses `term_size` to pull in the terminal width and from there sets the output
 /// pretty printing value to an appropreate value (between 70-100). Also sets the
 /// sha length for the banner output.
 fn get_term_size() -> (usize, String) {
@@ -65,7 +68,7 @@ fn get_term_size() -> (usize, String) {
 }
 
 /// Simply prints the Wafer banner with current commit info and thread count.
-fn print_banner(sha: String) {
+fn print_banner(sha: &str) {
     println!("                    {}", Blue.paint("___"));
     println!("   __      ____ _  {}__ _ __", Blue.paint("/ __\\"));
     println!("   \\ \\ /\\ / / _` |{} / _ \\ '__|", Blue.paint("/ /"));
@@ -84,12 +87,20 @@ fn main() {
     let start_time = Instant::now();
 
     let (term_width, sha) = get_term_size();
-    print_banner(sha);
+    print_banner(&sha);
 
+    let decorator = slog_term::TermDecorator::new().build();
+    let drain = slog_term::FullFormat::new(decorator).build().fuse();
+    let drain = slog_async::Async::new(drain).build().fuse();
+
+    let log = slog::Logger::root(drain, o!());
+
+    info!(log, "Loading Configuation from disk");
     let config = Config::load();
     config.print(term_width);
 
-    grid::solve(&config);
+    info!(log, "Starting calculation");
+    grid::solve(&config, &log);
 
     let elapsed = start_time.elapsed();
     let time_taken = (elapsed.as_secs() as f64) + (elapsed.subsec_nanos() as f64 / 1000_000_000.0);

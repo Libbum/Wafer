@@ -1,5 +1,6 @@
 use ndarray::{Array3, Zip};
 use ndarray_parallel::prelude::*;
+use slog::Logger;
 use potential;
 use config::*;
 
@@ -60,7 +61,8 @@ fn load_potential_arrays(config: &Config) -> Potentials {
 /// # Arguments
 ///
 /// * `config` - The configuration struct for the programs current instance.
-fn initialise(config: &Config) -> Params {
+fn initialise(config: &Config, log: &Logger) -> Params {
+    info!(log, "Loading potential arrays");
     let potentials = load_potential_arrays(config);
 
     if config.output.save_potential {
@@ -74,6 +76,7 @@ fn initialise(config: &Config) -> Params {
         //TODO: We restart from an output file.
     }
 
+    info!(log, "Setting initial conditions for wavefunction");
     let phi = set_initial_conditions(config);
     Params {
         potentials: potentials,
@@ -82,13 +85,14 @@ fn initialise(config: &Config) -> Params {
 }
 
 /// Runs the actual computation once system is setup and ready.
-pub fn solve(config: &Config) {
+pub fn solve(config: &Config, log: &Logger) {
 
-    let params = initialise(config);
+    let params = initialise(config, log);
     //    let mut step = 1.;
     //    let mut done = false;
     // while !done {
     //     //syncboundaries <- not needed until MPI
+    info!(log, "Computing observables");
     compute_observables(config, &params);
     //     //symmetrise_wavefunction
     //     //normalise_wavefunction
