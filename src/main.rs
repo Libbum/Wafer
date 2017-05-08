@@ -18,17 +18,17 @@
 #![cfg_attr(feature="clippy", plugin(clippy))]
 
 extern crate ansi_term;
+#[macro_use(s)]
 extern crate ndarray;
 extern crate ndarray_parallel;
 extern crate num;
 extern crate rand;
 extern crate rayon;
 extern crate serde;
-extern crate serde_json;
-extern crate term_size;
-
 #[macro_use]
 extern crate serde_derive;
+extern crate serde_json;
+extern crate term_size;
 
 use std::time::Instant;
 use ansi_term::Colour::Blue;

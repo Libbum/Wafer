@@ -38,16 +38,15 @@ impl Error for PotentialError {
 
 pub fn generate(config: &Config) -> Result<Array3<f64>, PotentialError> {
     let num = &config.grid.size;
-    let init_size: [usize; 3] = [(num.x + 5) as usize,
-                                 (num.y + 5) as usize,
-                                 (num.z + 5) as usize];
+    //NOTE: Don't forget that sizes are non inclusive. We want num.n + 5 to be our last value, so we need num.n + 6 here.
+    let init_size: [usize; 3] = [(num.x + 6) as usize, (num.y + 6) as usize, (num.z + 6) as usize];
     let mut v = Array3::<f64>::zeros(init_size);
 
-    Zip::indexed(&mut v).par_apply(|(i, j, k), x| match potential(config,
-                                                                  &Index3 { x: i, y: j, z: k }) {
-                                       Ok(result) => *x = result,
-                                       Err(err) => panic!("Error: {}", err),
-                                   });
+    Zip::indexed(&mut v)
+        .par_apply(|(i, j, k), x| match potential(config, &Index3 { x: i, y: j, z: k }) {
+            Ok(result) => *x = result,
+            Err(err) => panic!("Error: {}", err),
+        });
     Ok(v)
 }
 

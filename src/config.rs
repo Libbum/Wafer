@@ -361,14 +361,34 @@ fn read_file<P: AsRef<Path>>(file_path: P) -> Result<String, Error> {
 /// * `config` - a reference to the confguration struct
 pub fn set_initial_conditions(config: &Config) {
     let num = &config.grid.size;
-    let init_size: [usize; 3] = [(num.x + 5) as usize, (num.y + 5) as usize, (num.z + 5) as usize];
-    let w: Array3<f64> = match config.init_condition {
+    //NOTE: Don't forget that sizes are non inclusive. We want num.n + 5 to be our last value, so we need num.n + 6 here.
+    let init_size: [usize; 3] = [(num.x + 6) as usize, (num.y + 6) as usize, (num.z + 6) as usize];
+    let mut w: Array3<f64> = match config.init_condition {
         InitialCondition::FromFile => Array3::<f64>::zeros((1, 1, 1)), //TODO.
         InitialCondition::Gaussian => generate_gaussian(config, init_size),
         InitialCondition::Coulomb => generate_coulomb(config, init_size),
         InitialCondition::Constant => Array3::<f64>::from_elem(init_size, 0.1),
         InitialCondition::Boolean => generate_boolean(init_size),
     };
+
+    //Enforce Boundary Conditions
+    // NOTE: Don't forget that ranges are non-inclusive. So 0..3 means 'select 0,1,2'.
+    // In Z
+    w.slice_mut(s![.., .., 0..3]).par_map_inplace(|el| *el = 0.);
+    w.slice_mut(s![.., .., (init_size[2] - 3) as isize..init_size[2] as isize])
+        .par_map_inplace(|el| *el = 0.);
+    // In X
+    w.slice_mut(s![0..3, .., ..]).par_map_inplace(|el| *el = 0.);
+    w.slice_mut(s![(init_size[0] - 3) as isize..init_size[0] as isize, .., ..])
+        .par_map_inplace(|el| *el = 0.);
+    // In Y
+    w.slice_mut(s![.., 0..3, ..]).par_map_inplace(|el| *el = 0.);
+    w.slice_mut(s![.., (init_size[1] - 3) as isize..init_size[1] as isize, ..])
+        .par_map_inplace(|el| *el = 0.);
+    println!("{:?}", w);
+
+    // Symmetrise the IC.
+    symmetrise_wavefunction(config, &w);
     //    println!("{:?}", w);
 }
 
@@ -424,4 +444,22 @@ fn generate_boolean(init_size: [usize; 3]) -> Array3<f64> {
     Zip::indexed(&mut w)
         .par_apply(|(i, j, k), x| { *x = i as f64 % 2. * j as f64 % 2. * k as f64 % 2.; });
     w
+}
+
+/// Enforces symmetry conditions on wavefunctions
+///
+/// # Arguments
+///
+/// * `config` - a reference to the confguration struct
+/// * `w` - Reference to a wavefunction to impose symmetry conditions on.
+fn symmetrise_wavefunction(config: &Config, w: &Array3<f64>) {
+    //TODO: Need to learn how to properly slice an ndarray for this.
+
+    match config.init_symmetry {
+        SymmetryConstraint::NotConstrained => {}
+        SymmetryConstraint::AboutZ |
+        SymmetryConstraint::AntisymAboutZ => {}
+        SymmetryConstraint::AboutY |
+        SymmetryConstraint::AntisymAboutY => {}
+    };
 }
