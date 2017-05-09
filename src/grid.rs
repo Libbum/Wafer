@@ -1,4 +1,4 @@
-use ndarray::{Array3, Zip};
+use ndarray::{Array3, ArrayView3, Zip};
 use ndarray_parallel::prelude::*;
 use slog::Logger;
 use potential;
@@ -95,7 +95,7 @@ pub fn solve(config: &Config, log: &Logger) {
     info!(log, "Computing observables");
     compute_observables(config, &params);
     //     //symmetrise_wavefunction
-    //     //normalise_wavefunction
+    // normalise
     //     //orthognalise_wavefunction (if wavenum>0)
     //     //output_measurements
     //     if step < config.max_steps {
@@ -111,6 +111,41 @@ pub fn solve(config: &Config, log: &Logger) {
 fn compute_observables(config: &Config, params: &Params) {
     let energy = wfnc_energy(config, params);
     println!("Energy: {}", energy);
+    let dims = params.phi.dim();
+    let work = params
+        .phi
+        .slice(s![3..(dims.0 as isize) - 3,
+                  3..(dims.1 as isize) - 3,
+                  3..(dims.2 as isize) - 3]);
+
+    let norm2 = get_norm_squared(&work);
+    let v_inf_exp = get_v_infinity_expectation_value(&work, config);
+
+    println!("Norm2: {}", norm2);
+    println!("vinf: {}", v_inf_exp);
+}
+
+/// Normalisation of wavefunction
+fn get_norm_squared(w: &ArrayView3<f64>) -> f64 {
+    //NOTE: No complex conjugation due to all real input for now
+    (w * w).scalar_sum()
+}
+
+/// Normalisation of wavefunction
+fn get_v_infinity_expectation_value(w: &ArrayView3<f64>, config: &Config) -> f64 {
+    //NOTE: No complex conjugation due to all real input for now
+    let mut work = Array3::<f64>::zeros(w.dim());
+    Zip::indexed(&mut work)
+        .and(w)
+        .par_apply(|(i, j, k), work, &w| {
+                       let idx = Index3 { x: i, y: j, z: k };
+                       let potsub = match potential::potential_sub(config, &idx) {
+                           Ok(p) => p,
+                           Err(err) => panic!("Error: {}", err),
+                       };
+                       *work = w * w * potsub;
+                   });
+    work.scalar_sum()
 }
 
 /// Gets energy of the corresponding wavefunction

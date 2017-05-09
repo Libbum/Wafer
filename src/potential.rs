@@ -107,6 +107,20 @@ fn potential(config: &Config, idx: &Index3) -> Result<f64, PotentialError> {
     }
 }
 
+
+//TODO: For now we're dropping complex all together, but this is needed.
+pub fn potential_sub(config: &Config, idx: &Index3) -> Result<f64, PotentialError> {
+    //    let num = &config.grid.size;
+    match config.potential {
+        PotentialType::NoPotential |
+        PotentialType::Cube |
+        PotentialType::QuadWell |
+        PotentialType::ComplexCoulomb => Ok(0.0),
+        PotentialType::FromFile |
+        PotentialType::FromScript => Err(PotentialError::NotAvailable), //TODO: Script may not need to error.
+    }
+}
+
 fn calculate_r(idx: &Index3, grid: &Grid) -> f64 {
     let dx = (idx.x as f64) - ((grid.size.x as f64) + 1.) / 2.;
     let dy = (idx.y as f64) - ((grid.size.y as f64) + 1.) / 2.;
