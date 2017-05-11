@@ -19,6 +19,14 @@ struct Params {
     phi: Array3<f64>,
 }
 
+#[derive(Debug)]
+struct Observables {
+    energy: f64,
+    norm2: f64,
+    v_infinity: f64,
+    r2: f64,
+}
+
 fn load_potential_arrays(config: &Config) -> Potentials {
     let mut minima: f64 = 1e20;
 
@@ -93,7 +101,8 @@ pub fn solve(config: &Config, log: &Logger) {
     // while !done {
     //     //syncboundaries <- not needed until MPI
     info!(log, "Computing observables");
-    compute_observables(config, &params);
+    let observables = compute_observables(config, &params);
+    println!("{:?}", observables);
     //     //symmetrise_wavefunction
     // normalise
     //     //orthognalise_wavefunction (if wavenum>0)
@@ -108,21 +117,22 @@ pub fn solve(config: &Config, log: &Logger) {
 }
 
 /// Computes observable values of the system, for example the energy
-fn compute_observables(config: &Config, params: &Params) {
+fn compute_observables(config: &Config, params: &Params) -> Observables {
     let energy = wfnc_energy(config, params);
-    println!("Energy: {}", energy);
     let dims = params.phi.dim();
-    let work = params
-        .phi
-        .slice(s![3..(dims.0 as isize) - 3,
-                  3..(dims.1 as isize) - 3,
-                  3..(dims.2 as isize) - 3]);
+    let work = params.phi
+        .slice(s![3..(dims.0 as isize) - 3, 3..(dims.1 as isize) - 3, 3..(dims.2 as isize) - 3]);
 
     let norm2 = get_norm_squared(&work);
-    let v_inf_exp = get_v_infinity_expectation_value(&work, config);
+    let v_infinity = get_v_infinity_expectation_value(&work, config);
+    let r2 = get_r_squared_expectation_value(&work, &config.grid);
 
-    println!("Norm2: {}", norm2);
-    println!("vinf: {}", v_inf_exp);
+    Observables {
+        energy: energy,
+        norm2: norm2,
+        v_infinity: v_infinity,
+        r2: r2,
+    }
 }
 
 /// Normalisation of wavefunction
@@ -131,20 +141,34 @@ fn get_norm_squared(w: &ArrayView3<f64>) -> f64 {
     (w * w).scalar_sum()
 }
 
-/// Normalisation of wavefunction
+/// Get v infinity
 fn get_v_infinity_expectation_value(w: &ArrayView3<f64>, config: &Config) -> f64 {
     //NOTE: No complex conjugation due to all real input for now
     let mut work = Array3::<f64>::zeros(w.dim());
     Zip::indexed(&mut work)
         .and(w)
         .par_apply(|(i, j, k), work, &w| {
-                       let idx = Index3 { x: i, y: j, z: k };
-                       let potsub = match potential::potential_sub(config, &idx) {
-                           Ok(p) => p,
-                           Err(err) => panic!("Error: {}", err),
-                       };
-                       *work = w * w * potsub;
-                   });
+            let idx = Index3 { x: i, y: j, z: k };
+            let potsub = match potential::potential_sub(config, &idx) {
+                Ok(p) => p,
+                Err(err) => panic!("Error: {}", err),
+            };
+            *work = w * w * potsub;
+        });
+    work.scalar_sum()
+}
+
+/// Get r2
+fn get_r_squared_expectation_value(w: &ArrayView3<f64>, grid: &Grid) -> f64 {
+    //NOTE: No complex conjugation due to all real input for now
+    let mut work = Array3::<f64>::zeros(w.dim());
+    Zip::indexed(&mut work)
+        .and(w)
+        .par_apply(|(i, j, k), work, &w| {
+            let idx = Index3 { x: i, y: j, z: k };
+            let r = potential::calculate_r(&idx, grid);
+            *work = w * w * r;
+        });
     work.scalar_sum()
 }
 
@@ -153,17 +177,11 @@ fn get_v_infinity_expectation_value(w: &ArrayView3<f64>, config: &Config) -> f64
 fn wfnc_energy(config: &Config, params: &Params) -> f64 {
     let num = &config.grid.size; //NOTE: We could also obtain this by phi.dim() if other config values are not needed.
 
-    let w = params
-        .phi
-        .slice(s![3..3 + num.x as isize,
-                  3..3 + num.y as isize,
-                  3..3 + num.z as isize]);
-    let v = params
-        .potentials
+    let w = params.phi
+        .slice(s![3..3 + num.x as isize, 3..3 + num.y as isize, 3..3 + num.z as isize]);
+    let v = params.potentials
         .v
-        .slice(s![3..3 + num.x as isize,
-                  3..3 + num.y as isize,
-                  3..3 + num.z as isize]);
+        .slice(s![3..3 + num.x as isize, 3..3 + num.y as isize, 3..3 + num.z as isize]);
 
     let mut work = Array3::<f64>::zeros(w.dim());
     //NOTE: TODO: We don't have any complex conjugation here.
@@ -179,8 +197,7 @@ fn wfnc_energy(config: &Config, params: &Params) -> f64 {
             let lz = k as isize + 3;
             let o = 3;
             // get a slice which gives us our matrix of central difference points
-            let l = params
-                .phi
+            let l = params.phi
                 .slice(s![lx - 3..lx + 4, ly - 3..ly + 4, lz - 3..lz + 4]);
             // l can now be indexed with local offset `o` and modifiers
             *work = v * w * w -

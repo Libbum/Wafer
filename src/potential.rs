@@ -39,16 +39,14 @@ impl Error for PotentialError {
 pub fn generate(config: &Config) -> Result<Array3<f64>, PotentialError> {
     let num = &config.grid.size;
     //NOTE: Don't forget that sizes are non inclusive. We want num.n + 5 to be our last value, so we need num.n + 6 here.
-    let init_size: [usize; 3] = [(num.x + 6) as usize,
-                                 (num.y + 6) as usize,
-                                 (num.z + 6) as usize];
+    let init_size: [usize; 3] = [(num.x + 6) as usize, (num.y + 6) as usize, (num.z + 6) as usize];
     let mut v = Array3::<f64>::zeros(init_size);
 
-    Zip::indexed(&mut v).par_apply(|(i, j, k), x| match potential(config,
-                                                                  &Index3 { x: i, y: j, z: k }) {
-                                       Ok(result) => *x = result,
-                                       Err(err) => panic!("Error: {}", err),
-                                   });
+    Zip::indexed(&mut v)
+        .par_apply(|(i, j, k), x| match potential(config, &Index3 { x: i, y: j, z: k }) {
+            Ok(result) => *x = result,
+            Err(err) => panic!("Error: {}", err),
+        });
     Ok(v)
 }
 
@@ -121,7 +119,7 @@ pub fn potential_sub(config: &Config, idx: &Index3) -> Result<f64, PotentialErro
     }
 }
 
-fn calculate_r(idx: &Index3, grid: &Grid) -> f64 {
+pub fn calculate_r(idx: &Index3, grid: &Grid) -> f64 {
     let dx = (idx.x as f64) - ((grid.size.x as f64) + 1.) / 2.;
     let dy = (idx.y as f64) - ((grid.size.y as f64) + 1.) / 2.;
     let dz = (idx.z as f64) - ((grid.size.z as f64) + 1.) / 2.; //TODO: DISTNUMZ (if needed)
