@@ -40,7 +40,7 @@ pub struct Index3 {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Output {
     pub screen_update: f64,
-    snap_update: u32,
+    pub snap_update: u32,
     save_wavefns: bool,
     pub save_potential: bool,
 }
@@ -348,8 +348,7 @@ impl Config {
 /// For now it is only called for `wafer.cfg`.
 fn read_file<P: AsRef<Path>>(file_path: P) -> Result<String, Error> {
     let mut contents = String::new();
-    OpenOptions::new()
-        .read(true)
+    OpenOptions::new().read(true)
         .open(file_path)?
         .read_to_string(&mut contents)?;
     Ok(contents)
@@ -363,9 +362,7 @@ fn read_file<P: AsRef<Path>>(file_path: P) -> Result<String, Error> {
 pub fn set_initial_conditions(config: &Config) -> Array3<f64> {
     let num = &config.grid.size;
     //NOTE: Don't forget that sizes are non inclusive. We want num.n + 5 to be our last value, so we need num.n + 6 here.
-    let init_size: [usize; 3] = [(num.x + 6) as usize,
-                                 (num.y + 6) as usize,
-                                 (num.z + 6) as usize];
+    let init_size: [usize; 3] = [(num.x + 6) as usize, (num.y + 6) as usize, (num.z + 6) as usize];
     let mut w: Array3<f64> = match config.init_condition {
         InitialCondition::FromFile => Array3::<f64>::zeros((1, 1, 1)), //TODO.
         InitialCondition::Gaussian => generate_gaussian(config, init_size),
@@ -448,9 +445,8 @@ fn generate_coulomb(config: &Config, init_size: [usize; 3]) -> Array3<f64> {
 fn generate_boolean(init_size: [usize; 3]) -> Array3<f64> {
     let mut w = Array3::<f64>::zeros(init_size);
 
-    Zip::indexed(&mut w).par_apply(|(i, j, k), el| {
-                                       *el = i as f64 % 2. * j as f64 % 2. * k as f64 % 2.;
-                                   });
+    Zip::indexed(&mut w)
+        .par_apply(|(i, j, k), el| { *el = i as f64 % 2. * j as f64 % 2. * k as f64 % 2.; });
     w
 }
 
@@ -460,7 +456,7 @@ fn generate_boolean(init_size: [usize; 3]) -> Array3<f64> {
 ///
 /// * `config` - a reference to the confguration struct
 /// * `w` - Reference to a wavefunction to impose symmetry conditions on.
-fn symmetrise_wavefunction(config: &Config, w: &mut Array3<f64>) {
+pub fn symmetrise_wavefunction(config: &Config, w: &mut Array3<f64>) {
     //TODO: Need to learn how to properly slice an ndarray for this.
 
     let num = &config.grid.size;
