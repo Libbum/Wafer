@@ -92,6 +92,7 @@ pub fn solve(config: &Config, log: &Logger) {
     let mut done = false;
     let mut converged = false;
     let mut last_energy = MAX; //std::f64::MAX
+    let mut display_energy = MAX;
     while !done {
         //     //syncboundaries <- not needed until MPI
         //    info!(log, "Computing observables");
@@ -110,11 +111,13 @@ pub fn solve(config: &Config, log: &Logger) {
                 converged = true;
                 break;
             } else {
+                display_energy = last_energy;
                 last_energy = observables.energy;
             }
         }
-        //     //output_measurements
-        println!("{:?}", observables);
+        let tau = (step as f64) * config.grid.dt;
+        let diff = (display_energy - observables.energy).abs();
+        output_measurements(tau, diff, &observables);
         if step < config.max_steps {
             //            info!(log, "Evolving {} steps", config.output.screen_update);
             evolve(config, &mut params);
@@ -137,7 +140,7 @@ pub fn solve(config: &Config, log: &Logger) {
                           3..(dims.2 as isize) - 3]);
             for ((i, j, k), el) in work.indexed_iter() {
                 let output = format!("{}, {}, {}, {:e}\n", i, j, k, el);
-                buffer.write(output.as_bytes()).unwrap();
+                buffer.write_all(output.as_bytes()).unwrap();
             }
         }
         {
@@ -150,7 +153,7 @@ pub fn solve(config: &Config, log: &Logger) {
                           3..(dims.2 as isize) - 3]);
             for ((i, j, k), el) in work.indexed_iter() {
                 let output = format!("{}, {}, {}, {:e}\n", i, j, k, el);
-                buffer.write(output.as_bytes()).unwrap();
+                buffer.write_all(output.as_bytes()).unwrap();
             }
         }
     } else {
@@ -268,6 +271,15 @@ fn normalise_wavefunction(w: &mut Array3<f64>, norm2: f64) {
     w.par_map_inplace(|el| *el /= norm);
 }
 
+/// Pretty prints measurments at current step to screen
+fn output_measurements(tau: f64, diff: f64, observables: &Observables) {
+    println!("{:.3} {:.3} {:.3} {:.3}",
+             tau,
+             observables.energy,
+             observables.r2,
+             diff);
+}
+
 /// Evolves the solution a number of `steps`
 fn evolve(config: &Config, params: &mut Params) {
     //without mpi, this is just update interior (which is really updaterule if we dont need W)
@@ -277,45 +289,48 @@ fn evolve(config: &Config, params: &mut Params) {
     work_dims.0 -= 6;
     work_dims.1 -= 6;
     work_dims.2 -= 6;
-    let mut work = Array3::<f64>::zeros(work_dims);
-    //Scope so we can drop the borrow on params.phi
-    {
-        let steps = config.output.screen_update as f64;
-        let w = params.phi
-            .slice(s![3..(dims.0 as isize) - 3,
-                      3..(dims.1 as isize) - 3,
-                      3..(dims.2 as isize) - 3]);
-        let a = params.potentials
-            .a
-            .slice(s![3..(dims.0 as isize) - 3,
-                      3..(dims.1 as isize) - 3,
-                      3..(dims.2 as isize) - 3]);
-        let b = params.potentials
-            .b
-            .slice(s![3..(dims.0 as isize) - 3,
-                      3..(dims.1 as isize) - 3,
-                      3..(dims.2 as isize) - 3]);
+    let mut steps = 0;
+    loop {
+
+        let mut work = Array3::<f64>::zeros(work_dims);
+        //Scope so we can drop the borrow on params.phi
+        {
+            let w = params.phi
+                .slice(s![3..(dims.0 as isize) - 3,
+                          3..(dims.1 as isize) - 3,
+                          3..(dims.2 as isize) - 3]);
+            let a = params.potentials
+                .a
+                .slice(s![3..(dims.0 as isize) - 3,
+                          3..(dims.1 as isize) - 3,
+                          3..(dims.2 as isize) - 3]);
+            let b = params.potentials
+                .b
+                .slice(s![3..(dims.0 as isize) - 3,
+                          3..(dims.1 as isize) - 3,
+                          3..(dims.2 as isize) - 3]);
 
 
-        //NOTE: TODO: We don't have any complex conjugation here.
-        // Complete matrix multiplication step using 7 point central differenc
-        // TODO: Option for 3 or 5 point caclulation
-        Zip::indexed(&mut work)
-            .and(w)
-            .and(a)
-            .and(b)
-            .par_apply(|(i, j, k), work, &w, &a, &b| {
-                // Offset indexes as we are already in a slice
-                let lx = i as isize + 3;
-                let ly = j as isize + 3;
-                let lz = k as isize + 3;
-                let o = 3;
-                // get a slice which gives us our matrix of central difference points
-                let l = params.phi
-                    .slice(s![lx - 3..lx + 4, ly - 3..ly + 4, lz - 3..lz + 4]);
-                // l can now be indexed with local offset `o` and modifiers
-                *work = w * a +
-                        b * steps *
+            //NOTE: TODO: We don't have any complex conjugation here.
+            // Complete matrix multiplication step using 7 point central differenc
+            // TODO: Option for 3 or 5 point caclulation
+            Zip::indexed(&mut work)
+                .and(w)
+                .and(a)
+                .and(b)
+                .par_apply(|(i, j, k), work, &w, &a, &b| {
+                    // Offset indexes as we are already in a slice
+                    let lx = i as isize + 3;
+                    let ly = j as isize + 3;
+                    let lz = k as isize + 3;
+                    let o = 3;
+                    // get a slice which gives us our matrix of central difference points
+                    let l = params.phi
+                        .slice(s![lx - 3..lx + 4, ly - 3..ly + 4, lz - 3..lz + 4]);
+                    // l can now be indexed with local offset `o` and modifiers
+                    *work =
+                        w * a +
+                        b * config.grid.dt *
                         (2. * l[[o + 3, o, o]] - 27. * l[[o + 2, o, o]] + 270. * l[[o + 1, o, o]] +
                          270. * l[[o - 1, o, o]] - 27. * l[[o - 2, o, o]] +
                          2. * l[[o - 3, o, o]] + 2. * l[[o, o + 3, o]] -
@@ -326,13 +341,18 @@ fn evolve(config: &Config, params: &mut Params) {
                          270. * l[[o, o, o - 1]] - 27. * l[[o, o, o - 2]] +
                          2. * l[[o, o, o - 3]] - 1470. * w) /
                         (360. * config.grid.dn.powi(2) * config.mass);
-            });
-    }
-    let mut w_fill = params.phi
-        .slice_mut(s![3..(dims.0 as isize) - 3,
-                      3..(dims.1 as isize) - 3,
-                      3..(dims.2 as isize) - 3]);
-    for ((i, j, k), el) in w_fill.indexed_iter_mut() {
-        *el = work[[i, j, k]];
+                });
+        }
+        let mut w_fill = params.phi
+            .slice_mut(s![3..(dims.0 as isize) - 3,
+                          3..(dims.1 as isize) - 3,
+                          3..(dims.2 as isize) - 3]);
+        for ((i, j, k), el) in w_fill.indexed_iter_mut() {
+            *el = work[[i, j, k]];
+        }
+        steps += 1;
+        if steps >= config.output.screen_update {
+            break;
+        }
     }
 }
