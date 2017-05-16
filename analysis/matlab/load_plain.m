@@ -1,5 +1,5 @@
 %% Wavefunction
-fid = fopen('output/wavefunction_0.dat');
+fid = fopen('output/wavefunction_0.csv');
 
 data = textscan(fid, '%u, %u, %u, %f');
 fclose(fid);
@@ -17,7 +17,7 @@ pcolor(squeeze(abs(gs(:,mid,:))));
 shading flat
 
 %% Potential
-fid = fopen('output/potential.dat');
+fid = fopen('output/potential.csv');
 
 data = textscan(fid, '%u, %u, %u, %f');
 fclose(fid);
