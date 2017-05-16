@@ -67,7 +67,7 @@ fn load_potential_arrays(config: &Config) -> Potentials {
 pub fn solve(config: &Config, log: &Logger) {
 
     info!(log, "Loading potential arrays");
-    let params = Params {
+    let mut params = Params {
         potentials: load_potential_arrays(config),
         phi: &mut set_initial_conditions(config),
     };
@@ -84,25 +84,29 @@ pub fn solve(config: &Config, log: &Logger) {
     }
 
     //let params = Params::initialise(config, log);
-    let step = 0;
+    let mut step = 0.;
     //    let mut done = false;
     // while !done {
     //     //syncboundaries <- not needed until MPI
     info!(log, "Computing observables");
     let observables = compute_observables(config, &params);
     println!("{:?}", observables);
-    if step % config.output.snap_update == 0 {
-        //TODO: I think we can do away with SNAPUPDATE now. Kill this if.
-        info!(log, "snapupdate: symmetrise");
-        config::symmetrise_wavefunction(config, params.phi);
-        normalise_wavefunction(params.phi, observables.norm2);
-    }
+    //TODO: Need to do a floating point comparison here if we want steps to be more than 2^64 (~1e19)
+    //if step % config.output.snap_update == 0 {
+    //TODO: I think we can do away with SNAPUPDATE now. Kill this if.
+    info!(log, "snapupdate: symmetrise");
+    config::symmetrise_wavefunction(config, params.phi);
+    normalise_wavefunction(params.phi, observables.norm2);
+    //}
     //     //orthognalise_wavefunction (if wavenum>0)
     //     //output_measurements
-    //     if step < config.max_steps {
-    //         evolve(config.output.screen_update, &params.phi);
-    //     }
-    //     step += config.output.screen_update;
+    if step < config.max_steps {
+        info!(log, "Evolving {} steps", config.output.screen_update);
+        evolve(config, &mut params);
+    }
+    step += config.output.screen_update;
+    let observables2 = compute_observables(config, &params);
+    println!("{:?}", observables2);
     //     done = step <= config.max_steps;
     // }
 
@@ -211,10 +215,78 @@ fn wfnc_energy(config: &Config, params: &Params) -> f64 {
     work.scalar_sum()
 }
 
+/// Normalisation of the wavefunction
 fn normalise_wavefunction(w: &mut Array3<f64>, norm2: f64) {
     //TODO: This can be moved directly into the calculation for now. It's only here due to normalisationCollect
     let norm = norm2.sqrt();
     w.par_map_inplace(|el| *el /= norm);
 }
+
 /// Evolves the solution a number of `steps`
-fn evolve(steps: f64, w: &Array3<f64>) {}
+fn evolve(config: &Config, params: &mut Params) {
+    //without mpi, this is just update interior (which is really updaterule if we dont need W)
+
+    let dims = params.phi.dim();
+    let mut work_dims = params.phi.dim();
+    work_dims.0 -= 6;
+    work_dims.1 -= 6;
+    work_dims.2 -= 6;
+    let mut work = Array3::<f64>::zeros(work_dims);
+    //Scope so we can drop the borrow on params.phi
+    {
+        let steps = config.output.screen_update;
+        let w = params.phi
+            .slice(s![3..(dims.0 as isize) - 3,
+                      3..(dims.1 as isize) - 3,
+                      3..(dims.2 as isize) - 3]);
+        let a = params.potentials
+            .a
+            .slice(s![3..(dims.0 as isize) - 3,
+                      3..(dims.1 as isize) - 3,
+                      3..(dims.2 as isize) - 3]);
+        let b = params.potentials
+            .b
+            .slice(s![3..(dims.0 as isize) - 3,
+                      3..(dims.1 as isize) - 3,
+                      3..(dims.2 as isize) - 3]);
+
+
+        //NOTE: TODO: We don't have any complex conjugation here.
+        // Complete matrix multiplication step using 7 point central differenc
+        // TODO: Option for 3 or 5 point caclulation
+        Zip::indexed(&mut work)
+            .and(w)
+            .and(a)
+            .and(b)
+            .par_apply(|(i, j, k), work, &w, &a, &b| {
+                // Offset indexes as we are already in a slice
+                let lx = i as isize + 3;
+                let ly = j as isize + 3;
+                let lz = k as isize + 3;
+                let o = 3;
+                // get a slice which gives us our matrix of central difference points
+                let l = params.phi
+                    .slice(s![lx - 3..lx + 4, ly - 3..ly + 4, lz - 3..lz + 4]);
+                // l can now be indexed with local offset `o` and modifiers
+                *work = w * a +
+                        b * steps *
+                        (2. * l[[o + 3, o, o]] - 27. * l[[o + 2, o, o]] + 270. * l[[o + 1, o, o]] +
+                         270. * l[[o - 1, o, o]] - 27. * l[[o - 2, o, o]] +
+                         2. * l[[o - 3, o, o]] + 2. * l[[o, o + 3, o]] -
+                         27. * l[[o, o + 2, o]] + 270. * l[[o, o + 1, o]] +
+                         270. * l[[o, o - 1, o]] - 27. * l[[o, o - 2, o]] +
+                         2. * l[[o, o - 3, o]] + 2. * l[[o, o, o + 3]] -
+                         27. * l[[o, o, o + 2]] + 270. * l[[o, o, o + 1]] +
+                         270. * l[[o, o, o - 1]] - 27. * l[[o, o, o - 2]] +
+                         2. * l[[o, o, o - 3]] - 1470. * w) /
+                        (360. * config.grid.dn.powi(2) * config.mass);
+            });
+    }
+    let mut w_fill = params.phi
+        .slice_mut(s![3..(dims.0 as isize) - 3,
+                      3..(dims.1 as isize) - 3,
+                      3..(dims.2 as isize) - 3]);
+    for ((i, j, k), el) in w_fill.indexed_iter_mut() {
+        *el = work[[i, j, k]];
+    }
+}
