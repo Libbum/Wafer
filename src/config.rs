@@ -39,8 +39,8 @@ pub struct Index3 {
 /// well as toggling the output of wavefunction and potential data.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Output {
-    pub screen_update: f64,
-    pub snap_update: u32,
+    pub screen_update: u64,
+    pub snap_update: u64,
     save_wavefns: bool,
     pub save_potential: bool,
 }
@@ -140,8 +140,8 @@ impl fmt::Display for RunType {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Config {
     pub grid: Grid,
-    tolerance: f32,
-    pub max_steps: f64,
+    pub tolerance: f64,
+    pub max_steps: u64,
     pub wavenum: u8,
     wavemax: u8,
     clustrun: bool,
@@ -223,7 +223,7 @@ impl Config {
             println!("{:5}{:<width$}{:<width$}",
                      "",
                      format!("Energy covergence tolerance: {:e}", self.tolerance),
-                     format!("Maximum number of steps: {:e}", self.max_steps),
+                     format!("Maximum number of steps: {:e}", self.max_steps as f64),
                      width = dcolwidth);
             println!("{:5}{:<width$}{:<width$}",
                      "",
@@ -287,7 +287,7 @@ impl Config {
             println!("{:5}{:<width$}{:<width$}",
                      "",
                      format!("Energy covergence tolerance: {:e}", self.tolerance),
-                     format!("Maximum number of steps: {:e}", self.max_steps),
+                     format!("Maximum number of steps: {:e}", self.max_steps as f64),
                      width = colwidth);
             println!("{:5}{:<width$}{:<width$}",
                      "",

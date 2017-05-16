@@ -1,3 +1,4 @@
+use std::f64::MAX;
 use ndarray::{Array3, ArrayView3, Zip};
 use ndarray_parallel::prelude::*;
 use slog::Logger;
@@ -84,32 +85,46 @@ pub fn solve(config: &Config, log: &Logger) {
     }
 
     //let params = Params::initialise(config, log);
-    let mut step = 0.;
-    //    let mut done = false;
-    // while !done {
-    //     //syncboundaries <- not needed until MPI
-    info!(log, "Computing observables");
-    let observables = compute_observables(config, &params);
-    println!("{:?}", observables);
-    //TODO: Need to do a floating point comparison here if we want steps to be more than 2^64 (~1e19)
-    //if step % config.output.snap_update == 0 {
-    //TODO: I think we can do away with SNAPUPDATE now. Kill this if.
-    info!(log, "snapupdate: symmetrise");
-    config::symmetrise_wavefunction(config, params.phi);
-    normalise_wavefunction(params.phi, observables.norm2);
-    //}
-    //     //orthognalise_wavefunction (if wavenum>0)
-    //     //output_measurements
-    if step < config.max_steps {
-        info!(log, "Evolving {} steps", config.output.screen_update);
-        evolve(config, &mut params);
-    }
-    step += config.output.screen_update;
-    let observables2 = compute_observables(config, &params);
-    println!("{:?}", observables2);
-    //     done = step <= config.max_steps;
-    // }
+    let mut step = 0;
+    let mut done = false;
+    let mut converged = false;
+    let mut last_energy = MAX; //std::f64::MAX
+    while !done {
+        //     //syncboundaries <- not needed until MPI
+        //    info!(log, "Computing observables");
+        let observables = compute_observables(config, &params);
+        //NOTE: Need to do a floating point comparison here if we want steps to be more than 2^64 (~1e19)
+        // But I think it's just best to not have this option. 1e19 max.
+        if step % config.output.snap_update == 0 {
+            //TODO: I think we can do away with SNAPUPDATE now. Kill this if.
+            //          info!(log, "snapupdate: symmetrise");
+            config::symmetrise_wavefunction(config, params.phi);
+            normalise_wavefunction(params.phi, observables.norm2);
 
+            //     //orthognalise_wavefunction (if wavenum>0)
+            if (observables.energy - last_energy).abs() < config.tolerance {
+                println!("Final Values: {:?}", observables);
+                converged = true;
+                break;
+            } else {
+                last_energy = observables.energy;
+            }
+        }
+        //     //output_measurements
+        println!("{:?}", observables);
+        if step < config.max_steps {
+            //            info!(log, "Evolving {} steps", config.output.screen_update);
+            evolve(config, &mut params);
+        }
+        step += config.output.screen_update;
+        done = step > config.max_steps;
+    }
+
+    if converged {
+        info!(log, "Caluculation Converged");
+    } else {
+        info!(log, "Caluculation stopped due to maximum step limit.");
+    }
 }
 
 /// Computes observable values of the system, for example the energy
@@ -234,7 +249,7 @@ fn evolve(config: &Config, params: &mut Params) {
     let mut work = Array3::<f64>::zeros(work_dims);
     //Scope so we can drop the borrow on params.phi
     {
-        let steps = config.output.screen_update;
+        let steps = config.output.screen_update as f64;
         let w = params.phi
             .slice(s![3..(dims.0 as isize) - 3,
                       3..(dims.1 as isize) - 3,
