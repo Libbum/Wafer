@@ -1,13 +1,11 @@
 use ndarray::{Array3, ArrayView3, Zip};
 use ndarray_parallel::prelude::*;
 use slog::Logger;
-use std::path::Path;
 use std::f64::MAX;
-use std::fs::{create_dir, File};
-use std::io::prelude::*;
-use potential;
 use config;
 use config::*;
+use potential;
+use output;
 
 #[derive(Debug)]
 pub struct Potentials {
@@ -25,11 +23,11 @@ struct Params<'a> {
 }
 
 #[derive(Debug)]
-struct Observables {
-    energy: f64,
-    norm2: f64,
-    v_infinity: f64,
-    r2: f64,
+pub struct Observables {
+    pub energy: f64,
+    pub norm2: f64,
+    pub v_infinity: f64,
+    pub r2: f64,
 }
 
 fn load_potential_arrays(config: &Config) -> Potentials {
@@ -77,17 +75,22 @@ pub fn solve(config: &Config, log: &Logger) {
     };
     info!(log, "Setting initial conditions for wavefunction");
     if config.output.save_potential {
-        //TODO: Build output routine.
+        info!(log, "Saving potential to disk");
         //Not sure if we should use someting like messagepack as there are matlab
         //and python bindings, or try for hdf5. The rust bindings there are pretty
         //shonky. So not sure. We'll need a text only option anyhow, so build that fist.
+        match output::potential_plain(&params.potentials.v) {
+            Ok(_) => {}
+            Err(err) => crit!(log, "Could not write potential to disk: {}", err),
+        }
     }
 
     if config.wavenum > 0 {
         //TODO: We restart from an output file.
     }
 
-    //let params = Params::initialise(config, log);
+    output::print_observable_header();
+
     let mut step = 0;
     let mut done = false;
     let mut converged = false;
@@ -97,6 +100,7 @@ pub fn solve(config: &Config, log: &Logger) {
         //     //syncboundaries <- not needed until MPI
         //    info!(log, "Computing observables");
         let observables = compute_observables(config, &params);
+        let norm_energy = observables.energy/observables.norm2;
         //NOTE: Need to do a floating point comparison here if we want steps to be more than 2^64 (~1e19)
         // But I think it's just best to not have this option. 1e19 max.
         if step % config.output.snap_update == 0 {
@@ -106,18 +110,18 @@ pub fn solve(config: &Config, log: &Logger) {
             normalise_wavefunction(params.phi, observables.norm2);
 
             //     //orthognalise_wavefunction (if wavenum>0)
-            if (observables.energy - last_energy).abs() < config.tolerance {
-                println!("Final Values: {:?}", observables);
+            if (norm_energy - last_energy).abs() < config.tolerance {
+                output::summary(&observables, config.grid.size.x as f64); //TODO: Wavnum so we know for which sate we are outputting info.
                 converged = true;
                 break;
             } else {
                 display_energy = last_energy;
-                last_energy = observables.energy;
+                last_energy = norm_energy;
             }
         }
         let tau = (step as f64) * config.grid.dt;
-        let diff = (display_energy - observables.energy).abs();
-        output_measurements(tau, diff, &observables);
+        let diff = (display_energy - norm_energy).abs();
+        output::measurements(tau, diff, &observables);
         if step < config.max_steps {
             //            info!(log, "Evolving {} steps", config.output.screen_update);
             evolve(config, &mut params);
@@ -128,34 +132,6 @@ pub fn solve(config: &Config, log: &Logger) {
 
     if converged {
         info!(log, "Caluculation Converged");
-        if !Path::new("./output").exists() {
-            create_dir("./output").unwrap();
-        }
-        {
-            let mut buffer = File::create("output/wavefunction_0.dat").unwrap();
-            let dims = params.phi.dim();
-            let work = params.phi
-                .slice(s![3..(dims.0 as isize) - 3,
-                          3..(dims.1 as isize) - 3,
-                          3..(dims.2 as isize) - 3]);
-            for ((i, j, k), el) in work.indexed_iter() {
-                let output = format!("{}, {}, {}, {:e}\n", i, j, k, el);
-                buffer.write_all(output.as_bytes()).unwrap();
-            }
-        }
-        {
-            let mut buffer = File::create("output/potential.dat").unwrap();
-            let dims = params.potentials.v.dim();
-            let work = params.potentials
-                .v
-                .slice(s![3..(dims.0 as isize) - 3,
-                          3..(dims.1 as isize) - 3,
-                          3..(dims.2 as isize) - 3]);
-            for ((i, j, k), el) in work.indexed_iter() {
-                let output = format!("{}, {}, {}, {:e}\n", i, j, k, el);
-                buffer.write_all(output.as_bytes()).unwrap();
-            }
-        }
     } else {
         info!(log, "Caluculation stopped due to maximum step limit.");
     }
@@ -165,8 +141,11 @@ pub fn solve(config: &Config, log: &Logger) {
 fn compute_observables(config: &Config, params: &Params) -> Observables {
     let energy = wfnc_energy(config, params);
     let dims = params.phi.dim();
-    let work = params.phi
-        .slice(s![3..(dims.0 as isize) - 3, 3..(dims.1 as isize) - 3, 3..(dims.2 as isize) - 3]);
+    let work = params
+        .phi
+        .slice(s![3..(dims.0 as isize) - 3,
+                  3..(dims.1 as isize) - 3,
+                  3..(dims.2 as isize) - 3]);
 
     let norm2 = get_norm_squared(&work);
     let v_infinity = get_v_infinity_expectation_value(&work, config);
@@ -193,13 +172,13 @@ fn get_v_infinity_expectation_value(w: &ArrayView3<f64>, config: &Config) -> f64
     Zip::indexed(&mut work)
         .and(w)
         .par_apply(|(i, j, k), work, &w| {
-            let idx = Index3 { x: i, y: j, z: k };
-            let potsub = match potential::potential_sub(config, &idx) {
-                Ok(p) => p,
-                Err(err) => panic!("Error: {}", err),
-            };
-            *work = w * w * potsub;
-        });
+                       let idx = Index3 { x: i, y: j, z: k };
+                       let potsub = match potential::potential_sub(config, &idx) {
+                           Ok(p) => p,
+                           Err(err) => panic!("Error: {}", err),
+                       };
+                       *work = w * w * potsub;
+                   });
     work.scalar_sum()
 }
 
@@ -210,10 +189,10 @@ fn get_r_squared_expectation_value(w: &ArrayView3<f64>, grid: &Grid) -> f64 {
     Zip::indexed(&mut work)
         .and(w)
         .par_apply(|(i, j, k), work, &w| {
-            let idx = Index3 { x: i, y: j, z: k };
-            let r = potential::calculate_r(&idx, grid);
-            *work = w * w * r;
-        });
+                       let idx = Index3 { x: i, y: j, z: k };
+                       let r2 = potential::calculate_r2(&idx, grid);
+                       *work = w * w * r2;
+                   });
     work.scalar_sum()
 }
 
@@ -222,11 +201,17 @@ fn get_r_squared_expectation_value(w: &ArrayView3<f64>, grid: &Grid) -> f64 {
 fn wfnc_energy(config: &Config, params: &Params) -> f64 {
     let num = &config.grid.size; //NOTE: We could also obtain this by phi.dim() if other config values are not needed.
 
-    let w = params.phi
-        .slice(s![3..3 + num.x as isize, 3..3 + num.y as isize, 3..3 + num.z as isize]);
-    let v = params.potentials
+    let w = params
+        .phi
+        .slice(s![3..3 + num.x as isize,
+                  3..3 + num.y as isize,
+                  3..3 + num.z as isize]);
+    let v = params
+        .potentials
         .v
-        .slice(s![3..3 + num.x as isize, 3..3 + num.y as isize, 3..3 + num.z as isize]);
+        .slice(s![3..3 + num.x as isize,
+                  3..3 + num.y as isize,
+                  3..3 + num.z as isize]);
 
     let mut work = Array3::<f64>::zeros(w.dim());
     //NOTE: TODO: We don't have any complex conjugation here.
@@ -242,7 +227,8 @@ fn wfnc_energy(config: &Config, params: &Params) -> f64 {
             let lz = k as isize + 3;
             let o = 3;
             // get a slice which gives us our matrix of central difference points
-            let l = params.phi
+            let l = params
+                .phi
                 .slice(s![lx - 3..lx + 4, ly - 3..ly + 4, lz - 3..lz + 4]);
             // l can now be indexed with local offset `o` and modifiers
             *work = v * w * w -
@@ -271,15 +257,6 @@ fn normalise_wavefunction(w: &mut Array3<f64>, norm2: f64) {
     w.par_map_inplace(|el| *el /= norm);
 }
 
-/// Pretty prints measurments at current step to screen
-fn output_measurements(tau: f64, diff: f64, observables: &Observables) {
-    println!("{:.3} {:.3} {:.3} {:.3}",
-             tau,
-             observables.energy,
-             observables.r2,
-             diff);
-}
-
 /// Evolves the solution a number of `steps`
 fn evolve(config: &Config, params: &mut Params) {
     //without mpi, this is just update interior (which is really updaterule if we dont need W)
@@ -295,16 +272,19 @@ fn evolve(config: &Config, params: &mut Params) {
         let mut work = Array3::<f64>::zeros(work_dims);
         //Scope so we can drop the borrow on params.phi
         {
-            let w = params.phi
+            let w = params
+                .phi
                 .slice(s![3..(dims.0 as isize) - 3,
                           3..(dims.1 as isize) - 3,
                           3..(dims.2 as isize) - 3]);
-            let a = params.potentials
+            let a = params
+                .potentials
                 .a
                 .slice(s![3..(dims.0 as isize) - 3,
                           3..(dims.1 as isize) - 3,
                           3..(dims.2 as isize) - 3]);
-            let b = params.potentials
+            let b = params
+                .potentials
                 .b
                 .slice(s![3..(dims.0 as isize) - 3,
                           3..(dims.1 as isize) - 3,
@@ -325,7 +305,8 @@ fn evolve(config: &Config, params: &mut Params) {
                     let lz = k as isize + 3;
                     let o = 3;
                     // get a slice which gives us our matrix of central difference points
-                    let l = params.phi
+                    let l = params
+                        .phi
                         .slice(s![lx - 3..lx + 4, ly - 3..ly + 4, lz - 3..lz + 4]);
                     // l can now be indexed with local offset `o` and modifiers
                     *work =
@@ -343,7 +324,8 @@ fn evolve(config: &Config, params: &mut Params) {
                         (360. * config.grid.dn.powi(2) * config.mass);
                 });
         }
-        let mut w_fill = params.phi
+        let mut w_fill = params
+            .phi
             .slice_mut(s![3..(dims.0 as isize) - 3,
                           3..(dims.1 as isize) - 3,
                           3..(dims.2 as isize) - 3]);

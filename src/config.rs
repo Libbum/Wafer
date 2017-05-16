@@ -192,7 +192,7 @@ impl Config {
     /// * `w` - width of display. This is limited from 70 to 100 characters before being accessed
     /// here, but no such restriction is required inside this function.
     pub fn print(&self, w: usize) {
-        println!("{:=^width$}", " Configuration ", width = w);
+        println!("{:═^width$}", " Configuration ", width = w);
         let mid = w - 10;
         if w > 95 {
             let colwidth = mid / 4;
@@ -322,7 +322,7 @@ impl Config {
                          format!("Symmetry Constraints: {}", self.init_symmetry));
             }
         }
-        println!("{:=^width$}", "=", width = w);
+        println!("{:═^width$}", "", width = w);
     }
 }
 

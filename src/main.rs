@@ -34,7 +34,6 @@ extern crate slog_async;
 extern crate slog_term;
 extern crate term_size;
 
-use ansi_term::Colour::Blue;
 use slog::Drain;
 use std::time::Instant;
 use config::Config;
@@ -46,48 +45,22 @@ include!(concat!(env!("OUT_DIR"), "/version.rs"));
 /// instance of the application.
 pub mod config;
 mod grid;
+mod output;
 mod potential;
-
-/// Uses `term_size` to pull in the terminal width and from there sets the output
-/// pretty printing value to an appropreate value (between 70-100). Also sets the
-/// sha length for the banner output.
-fn get_term_size() -> (usize, String) {
-    let mut sha = sha();
-    let mut term_width = 100;
-    if let Some((width, _)) = term_size::dimensions() {
-        if width <= 97 {
-            sha = short_sha();
-        }
-        if width <= 70 {
-            term_width = 70;
-        } else if width < term_width {
-            term_width = width;
-        }
-    }
-    (term_width, sha.to_string())
-}
-
-/// Simply prints the Wafer banner with current commit info and thread count.
-fn print_banner(sha: &str) {
-    println!("                    {}", Blue.paint("___"));
-    println!("   __      ____ _  {}__ _ __", Blue.paint("/ __\\"));
-    println!("   \\ \\ /\\ / / _` |{} / _ \\ '__|", Blue.paint("/ /"));
-    println!("    \\ V  V / (_| {}|  __/ |    Current build SHA1: {}",
-             Blue.paint("/ _\\"),
-             sha);
-    println!("     \\_/\\_/ \\__,{}   \\___|_|    Parallel tasks running on {} threads.",
-             Blue.paint("/ /"),
-             rayon::current_num_threads());
-    println!("              {}", Blue.paint("\\__/"));
-    println!("");
-}
 
 fn main() {
 
     let start_time = Instant::now();
 
-    let (term_width, sha) = get_term_size();
-    print_banner(&sha);
+    let term_width = output::get_term_size();
+
+    let sha = if term_width <= 97 {
+        short_sha()
+    } else {
+        sha()
+    };
+
+    output::print_banner(sha);
 
     let decorator = slog_term::TermDecorator::new().build();
     let drain = slog_term::FullFormat::new(decorator).build().fuse();
@@ -98,6 +71,9 @@ fn main() {
     info!(log, "Loading Configuation from disk");
     let config = Config::load();
     config.print(term_width);
+
+    info!(log, "Checking/creating output directory");
+    output::check_output_dir();
 
     info!(log, "Starting calculation");
     grid::solve(&config, &log);
