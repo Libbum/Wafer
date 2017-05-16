@@ -1,7 +1,10 @@
-use std::f64::MAX;
 use ndarray::{Array3, ArrayView3, Zip};
 use ndarray_parallel::prelude::*;
 use slog::Logger;
+use std::path::Path;
+use std::f64::MAX;
+use std::fs::{create_dir, File};
+use std::io::prelude::*;
 use potential;
 use config;
 use config::*;
@@ -122,6 +125,34 @@ pub fn solve(config: &Config, log: &Logger) {
 
     if converged {
         info!(log, "Caluculation Converged");
+        if !Path::new("./output").exists() {
+            create_dir("./output").unwrap();
+        }
+        {
+            let mut buffer = File::create("output/wavefunction_0.dat").unwrap();
+            let dims = params.phi.dim();
+            let work = params.phi
+                .slice(s![3..(dims.0 as isize) - 3,
+                          3..(dims.1 as isize) - 3,
+                          3..(dims.2 as isize) - 3]);
+            for ((i, j, k), el) in work.indexed_iter() {
+                let output = format!("{}, {}, {}, {:e}\n", i, j, k, el);
+                buffer.write(output.as_bytes()).unwrap();
+            }
+        }
+        {
+            let mut buffer = File::create("output/potential.dat").unwrap();
+            let dims = params.potentials.v.dim();
+            let work = params.potentials
+                .v
+                .slice(s![3..(dims.0 as isize) - 3,
+                          3..(dims.1 as isize) - 3,
+                          3..(dims.2 as isize) - 3]);
+            for ((i, j, k), el) in work.indexed_iter() {
+                let output = format!("{}, {}, {}, {:e}\n", i, j, k, el);
+                buffer.write(output.as_bytes()).unwrap();
+            }
+        }
     } else {
         info!(log, "Caluculation stopped due to maximum step limit.");
     }
