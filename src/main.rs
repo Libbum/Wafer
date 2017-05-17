@@ -76,13 +76,8 @@ fn main() {
     output::check_output_dir();
 
     info!(log, "Starting calculation");
-    //for wnum in 0..config.wavemax {
-    grid::solve(&config, &log);
-    //wnum++
-    //reInitSolver()
-    //}
-    // done with main calculation.
-    // solve finalise
+    grid::run(&config, &log);
+
     let elapsed = start_time.elapsed();
     let time_taken = (elapsed.as_secs() as f64) + (elapsed.subsec_nanos() as f64 / 1000_000_000.0);
     println!("Elapsed time: {} seconds.", time_taken);

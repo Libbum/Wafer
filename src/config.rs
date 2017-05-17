@@ -144,7 +144,7 @@ pub struct Config {
     pub tolerance: f64,
     pub max_steps: u64,
     pub wavenum: u8,
-    wavemax: u8,
+    pub wavemax: u8,
     clustrun: bool,
     al_clust: Point3,
     pub output: Output,

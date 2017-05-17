@@ -77,9 +77,20 @@ fn load_potential_arrays(config: &Config, log: &Logger) -> Potentials {
     }
 }
 
-/// Runs the actual computation once system is setup and ready.
-pub fn solve(config: &Config, log: &Logger) {
+/// Runs the calculation and holds long term (system time) wavefunction storage
+pub fn run(config: &Config, log: &Logger) {
+    for wnum in config.wavenum..config.wavemax {
+        let converged = solve(config, log, wnum);
+        //match converged and save it.
+        //reInitSolver()
+    }
+    // done with main calculation.
+    // solve finalise
+}
 
+/// Runs the actual computation once system is setup and ready.
+fn solve(config: &Config, log: &Logger, wnum: u8) -> Option<Array3<f64>> {
+//TODO: This is bad since we'll load the potentials each time. This should be pulled out to run.
     let mut params = Params {
         potentials: load_potential_arrays(config, log),
         phi: &mut config::set_initial_conditions(config, log),
@@ -128,7 +139,7 @@ pub fn solve(config: &Config, log: &Logger) {
 
     if config.output.save_wavefns {
         //NOTE: This wil save regardless of whether it is converged or not, so we flag it if that's the case.
-        match output::wavefunction_plain(&params.phi, 0, converged) { //TODO: This is giving 0 for wavenum atm.
+        match output::wavefunction_plain(&params.phi, wnum, converged) {
             Ok(_) => {}
             Err(err) => crit!(log, "Could not write wavefunction to disk: {}", err),
         }
@@ -136,10 +147,12 @@ pub fn solve(config: &Config, log: &Logger) {
 
     if converged {
         info!(log, "Caluculation Converged");
+        Some(*params.phi)
         //store_converged() //Saves the converged wavefunction for higher state calculations
     } else {
         warn!(log, "Caluculation stopped due to maximum step limit.");
         //TODO: Decide on logic here.
+        None
     }
 }
 
