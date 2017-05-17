@@ -1,4 +1,5 @@
 use ndarray::Array3;
+use ordinal::Ordinal;
 use rayon;
 use std::fs::{create_dir, File};
 use std::io::Error;
@@ -34,9 +35,8 @@ pub fn print_banner(sha: &str) {
 pub fn potential_plain(v: &Array3<f64>) -> Result<bool, Error> {
     let mut buffer = File::create("output/potential.csv")?;
     let dims = v.dim();
-    let work = v.slice(s![3..(dims.0 as isize) - 3,
-                          3..(dims.1 as isize) - 3,
-                          3..(dims.2 as isize) - 3]);
+    let work =
+        v.slice(s![3..(dims.0 as isize) - 3, 3..(dims.1 as isize) - 3, 3..(dims.2 as isize) - 3]);
     for ((i, j, k), el) in work.indexed_iter() {
         let output = format!("{}, {}, {}, {:e}\n", i, j, k, el);
         buffer.write_all(output.as_bytes())?;
@@ -56,12 +56,13 @@ pub fn potential_plain(v: &Array3<f64>) -> Result<bool, Error> {
 /// * A result type with a `std::io::Error`. The result value is a true bool
 /// as we really only want to error check the result.
 pub fn wavefunction_plain(phi: &Array3<f64>, num: u8, converged: bool) -> Result<bool, Error> {
-    let filename = format!("output/wavefunction_{}{}.csv", num, if converged {""} else {"_partial"});
+    let filename = format!("output/wavefunction_{}{}.csv",
+                           num,
+                           if converged { "" } else { "_partial" });
     let mut buffer = File::create(filename)?;
     let dims = phi.dim();
-    let work = phi.slice(s![3..(dims.0 as isize) - 3,
-                            3..(dims.1 as isize) - 3,
-                            3..(dims.2 as isize) - 3]);
+    let work =
+        phi.slice(s![3..(dims.0 as isize) - 3, 3..(dims.1 as isize) - 3, 3..(dims.2 as isize) - 3]);
     for ((i, j, k), el) in work.indexed_iter() {
         let output = format!("{}, {}, {}, {:e}\n", i, j, k, el);
         buffer.write_all(output.as_bytes())?;
@@ -70,9 +71,47 @@ pub fn wavefunction_plain(phi: &Array3<f64>, num: u8, converged: bool) -> Result
 }
 
 /// Pretty prints a header for the subsequent observable data
-pub fn print_observable_header() {
+pub fn print_observable_header(wnum: u8) {
     let width = get_term_size();
     let spacer = (width - 69) / 2;
+    let col2 = 37; //Energy+rrms+1
+    println!("");
+    match wnum {
+        0 => {
+            println!("{:═^lspace$}╤{:═^twidth$}╤{:═^w$}╤{:═^width$}╤{:═^rspace$}",
+                     "",
+                     "",
+                     " Ground state caclulation ",
+                     "",
+                     "",
+                     twidth = 12,
+                     width = 16,
+                     w = col2,
+                     lspace = spacer,
+                     rspace = if 2 * spacer + 69 < width {
+                         spacer + 1
+                     } else {
+                         spacer
+                     });
+        },
+        _ => {
+            println!("{:═^lspace$}╤{:═^twidth$}╤{:═^w$}╤{:═^width$}╤{:═^rspace$}",
+                     "",
+                     "",
+                     format!(" {} excited state caclulation ", Ordinal::from(wnum)),
+                     "",
+                     "",
+                     twidth = 12,
+                     width = 16,
+                     w = col2,
+                     lspace = spacer,
+                     rspace = if 2 * spacer + 69 < width {
+                         spacer + 1
+                     } else {
+                         spacer
+                     });
+        },
+    }
     println!("{:^space$}│{:^twidth$}│{:^ewidth$}│{:^width$}│{:^width$}│",
              "",
              "Time",
@@ -109,8 +148,8 @@ pub fn measurements(tau: f64, diff: f64, observables: &grid::Observables) {
     println!("{:^space$}│{:>11.3} │{:>19.10e} │{:15.5} │{:15.5e} │",
              "",
              tau,
-             observables.energy/observables.norm2,
-             (observables.r2/observables.norm2).sqrt(),
+             observables.energy / observables.norm2,
+             (observables.r2 / observables.norm2).sqrt(),
              diff,
              space = spacer);
 }
@@ -119,9 +158,9 @@ pub fn measurements(tau: f64, diff: f64, observables: &grid::Observables) {
 pub fn summary(observables: &grid::Observables, numx: f64) {
     let width = get_term_size();
     let spacer = (width - 69) / 2;
-    let energy = observables.energy/observables.norm2;
-    let binding = observables.energy-observables.v_infinity/observables.norm2;
-    let r_norm = (observables.r2/observables.norm2).sqrt();
+    let energy = observables.energy / observables.norm2;
+    let binding = observables.energy - observables.v_infinity / observables.norm2;
+    let r_norm = (observables.r2 / observables.norm2).sqrt();
     println!("{:═^lspace$}╧{:═^twidth$}╧{:═^ewidth$}╧{:═^width$}╧{:═^width$}╧{:═^rspace$}",
              "",
              "",
@@ -138,10 +177,11 @@ pub fn summary(observables: &grid::Observables, numx: f64) {
              } else {
                  spacer
              });
-    println!("⟹ Ground state energy = {}", energy);
-    println!("⟹ Ground state binding energy = {}", binding);
-    println!("⟹ rᵣₘₛ = {}", r_norm);
-    println!("⟹ L/rᵣₘₛ = {}", numx/r_norm);
+    println!("══▶ Ground state energy = {}", energy);
+    println!("══▶ Ground state binding energy = {}", binding);
+    println!("══▶ rᵣₘₛ = {}", r_norm);
+    println!("══▶ L/rᵣₘₛ = {}", numx / r_norm);
+    println!("");
 }
 
 /// Checks that the folder `output` exists. If not, creates it.
