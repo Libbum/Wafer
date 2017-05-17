@@ -93,7 +93,7 @@ fn potential(config: &Config, idx: &Index3) -> Result<f64, PotentialError> {
             }
         }
         PotentialType::ComplexCoulomb => {
-            let r = config.grid.dn*(calculate_r2(idx, &config.grid)).sqrt();
+            let r = config.grid.dn * (calculate_r2(idx, &config.grid)).sqrt();
             if r < config.grid.dn {
                 Ok(-1. / config.grid.dn)
             } else {

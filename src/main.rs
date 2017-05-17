@@ -55,11 +55,7 @@ fn main() {
 
     let term_width = output::get_term_size();
 
-    let sha = if term_width <= 97 {
-        short_sha()
-    } else {
-        sha()
-    };
+    let sha = if term_width <= 97 { short_sha() } else { sha() };
 
     output::print_banner(sha);
 
@@ -81,7 +77,7 @@ fn main() {
 
     let elapsed = start_time.elapsed();
     let time_taken = (elapsed.as_secs() as f64) + (elapsed.subsec_nanos() as f64 / 1000_000_000.0);
-    println!("Elapsed time: {} seconds.", time_taken);
+    println!("Simulation complete. Elapsed time: {} seconds.", time_taken);
 }
 
 #[cfg(test)]

@@ -83,11 +83,14 @@ pub fn run(config: &Config, log: &Logger) {
 
     let mut w_store: Vec<Array3<f64>> = Vec::new();
     //for wnum in config.wavenum..config.wavemax {
-    for wnum in 0..1 {
+    for wnum in 0..2 {
         //TODO: This error probably isn't the best way of handling this situation.
-        match solve(config, log, &potentials, wnum) {
+        match solve(config, log, &potentials, wnum, &w_store) {
             Some(w) => w_store.push(w),
-            None => panic!("Wavefunction is not converged. Cannot continue until convergence is reached."),
+            None => {
+                panic!("Wavefunction is not converged. Cannot continue until convergence is \
+                        reached.")
+            }
         }
         //reInitSolver()
     }
@@ -96,7 +99,12 @@ pub fn run(config: &Config, log: &Logger) {
 }
 
 /// Runs the actual computation once system is setup and ready.
-fn solve(config: &Config, log: &Logger, pots: &Potentials, wnum: u8) -> Option<Array3<f64>> {
+fn solve(config: &Config,
+         log: &Logger,
+         pots: &Potentials,
+         wnum: u8,
+         w_store: &Vec<Array3<f64>>)
+         -> Option<Array3<f64>> {
 
     let mut params = Params {
         potentials: pots,
@@ -113,6 +121,7 @@ fn solve(config: &Config, log: &Logger, pots: &Potentials, wnum: u8) -> Option<A
     while !done {
         //     //syncboundaries <- not needed until MPI
         //    info!(log, "Computing observables");
+
         let observables = compute_observables(config, &params);
         let norm_energy = observables.energy / observables.norm2;
         //NOTE: Need to do a floating point comparison here if we want steps to be more than 2^64 (~1e19)
@@ -123,9 +132,16 @@ fn solve(config: &Config, log: &Logger, pots: &Potentials, wnum: u8) -> Option<A
             config::symmetrise_wavefunction(config, params.phi);
             normalise_wavefunction(params.phi, observables.norm2);
 
-            //     //orthognalise_wavefunction (if wavenum>0)
+
+            //TODO: Perhaps implement a GS update variable similar to snapupdate, so we don't do this all the time.
+            // Orthoganalise wavefunction
+            if wnum > 0 {
+                orthogonalise_wavefunction(wnum, params.phi, w_store);
+                //config::symmetrise_wavefunction(config, params.phi);
+                //normalise_wavefunction(params.phi, observables.norm2);
+            }
             if (norm_energy - last_energy).abs() < config.tolerance {
-                output::summary(&observables, config.grid.size.x as f64); //TODO: Wavnum so we know for which sate we are outputting info.
+                output::summary(&observables, wnum, config.grid.size.x as f64);
                 converged = true;
                 break;
             } else {
@@ -146,6 +162,7 @@ fn solve(config: &Config, log: &Logger, pots: &Potentials, wnum: u8) -> Option<A
 
     if config.output.save_wavefns {
         //NOTE: This wil save regardless of whether it is converged or not, so we flag it if that's the case.
+        info!(log, "Saving wavefunction {} to disk", wnum);
         match output::wavefunction_plain(&params.phi, wnum, converged) {
             Ok(_) => {}
             Err(err) => crit!(log, "Could not write wavefunction to disk: {}", err),
@@ -271,6 +288,30 @@ fn normalise_wavefunction(w: &mut Array3<f64>, norm2: f64) {
     //TODO: This can be moved directly into the calculation for now. It's only here due to normalisationCollect
     let norm = norm2.sqrt();
     w.par_map_inplace(|el| *el /= norm);
+}
+
+/// Uses Gram Schmit orthogonalisation to identify the next excited state's wavefunction, even if it's degenerate
+fn orthogonalise_wavefunction(wnum: u8, w: &mut Array3<f64>, w_store: &Vec<Array3<f64>>) {
+    //TODO: This needs to be generalised. For the moment this is just hacked together for one excited state.
+    //let gs: Array3<f64> = w_store[0];
+    let wfn = wnum as usize;
+    let gs = &w_store[wfn - 1];
+
+    let overlap_gs: f64;
+    {
+        let phi = &w.view();
+        overlap_gs = (gs * phi).scalar_sum();
+    }
+
+    //let mut work = Array3::<f64>::zeros(w.dims());
+    //Zip::indexed(w).and(gs_star)
+    //    .par_apply(|(i, j, k), w, gs| {
+    //        *w -= gs[[i,j,k]]*overlap_gs;
+    //    });
+    //w -= gs_star*overlap_gs;
+    for ((i, j, k), el) in w.indexed_iter_mut() {
+        *el -= gs[[i, j, k]] * overlap_gs;
+    }
 }
 
 /// Evolves the solution a number of `steps`

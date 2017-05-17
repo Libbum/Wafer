@@ -93,7 +93,7 @@ pub fn print_observable_header(wnum: u8) {
                      } else {
                          spacer
                      });
-        },
+        }
         _ => {
             println!("{:═^lspace$}╤{:═^twidth$}╤{:═^w$}╤{:═^width$}╤{:═^rspace$}",
                      "",
@@ -110,7 +110,7 @@ pub fn print_observable_header(wnum: u8) {
                      } else {
                          spacer
                      });
-        },
+        }
     }
     println!("{:^space$}│{:^twidth$}│{:^ewidth$}│{:^width$}│{:^width$}│",
              "",
@@ -155,7 +155,7 @@ pub fn measurements(tau: f64, diff: f64, observables: &grid::Observables) {
 }
 
 /// Pretty print final summary
-pub fn summary(observables: &grid::Observables, numx: f64) {
+pub fn summary(observables: &grid::Observables, wnum: u8, numx: f64) {
     let width = get_term_size();
     let spacer = (width - 69) / 2;
     let energy = observables.energy / observables.norm2;
@@ -177,8 +177,17 @@ pub fn summary(observables: &grid::Observables, numx: f64) {
              } else {
                  spacer
              });
-    println!("══▶ Ground state energy = {}", energy);
-    println!("══▶ Ground state binding energy = {}", binding);
+    match wnum {
+        0 => {
+            println!("══▶ Ground state energy = {}", energy);
+            println!("══▶ Ground state binding energy = {}", binding);
+        }
+        _ => {
+            let state = Ordinal::from(wnum);
+            println!("══▶ {} excited state energy = {}", state, energy);
+            println!("══▶ {} excited state binding energy = {}", state, binding);
+        }
+    }
     println!("══▶ rᵣₘₛ = {}", r_norm);
     println!("══▶ L/rᵣₘₛ = {}", numx / r_norm);
     println!("");
