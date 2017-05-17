@@ -47,14 +47,16 @@ pub fn potential_plain(v: &Array3<f64>) -> Result<bool, Error> {
 /// Outputs a wavefunction to disk in a plain, csv format
 ///
 /// # Arguments
-/// *`phi` - The wavefunction to output
+/// * `phi` - The wavefunction to output
 /// * `num` - The wavefunction's excited state value for file naming.
+/// * `converged` - a bool advising the state of the wavefunction. If false, the filename
+/// will have `_partial` appended to it to indicate a restart is required.
 ///
 /// # Returns
 /// * A result type with a `std::io::Error`. The result value is a true bool
 /// as we really only want to error check the result.
-pub fn wavefunction_plain(phi: &Array3<f64>, num: u8) -> Result<bool, Error> {
-    let filename = format!("output/wavefunnction_{}.csv", num);
+pub fn wavefunction_plain(phi: &Array3<f64>, num: u8, converged: bool) -> Result<bool, Error> {
+    let filename = format!("output/wavefunction_{}{}.csv", num, if converged {""} else {"_partial"});
     let mut buffer = File::create(filename)?;
     let dims = phi.dim();
     let work = phi.slice(s![3..(dims.0 as isize) - 3,

@@ -2,6 +2,7 @@ use ndarray::{Array3, Zip};
 use ndarray_parallel::prelude::*;
 use rand::distributions::{Normal, IndependentSample};
 use rand;
+use slog::Logger;
 use std::fmt;
 use std::io::Error;
 use std::fs::OpenOptions;
@@ -41,7 +42,7 @@ pub struct Index3 {
 pub struct Output {
     pub screen_update: u64,
     pub snap_update: u64,
-    save_wavefns: bool,
+    pub save_wavefns: bool,
     pub save_potential: bool,
 }
 
@@ -359,7 +360,8 @@ fn read_file<P: AsRef<Path>>(file_path: P) -> Result<String, Error> {
 /// # Arguments
 ///
 /// * `config` - a reference to the confguration struct
-pub fn set_initial_conditions(config: &Config) -> Array3<f64> {
+pub fn set_initial_conditions(config: &Config, log: &Logger) -> Array3<f64> {
+    info!(log, "Setting initial conditions for wavefunction");
     let num = &config.grid.size;
     //NOTE: Don't forget that sizes are non inclusive. We want num.n + 5 to be our last value, so we need num.n + 6 here.
     let init_size: [usize; 3] = [(num.x + 6) as usize, (num.y + 6) as usize, (num.z + 6) as usize];

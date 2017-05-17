@@ -3,7 +3,7 @@ use ndarray_parallel::prelude::*;
 use slog::Logger;
 use std::f64::MAX;
 use config;
-use config::*;
+use config::{Config, Grid, Index3, PotentialType};
 use potential;
 use output;
 
@@ -30,8 +30,9 @@ pub struct Observables {
     pub r2: f64,
 }
 
-fn load_potential_arrays(config: &Config) -> Potentials {
-    let mut minima: f64 = 1e20;
+fn load_potential_arrays(config: &Config, log: &Logger) -> Potentials {
+    info!(log, "Loading potential arrays");
+    let mut minima: f64 = MAX;
 
     let result = match config.potential {
         PotentialType::FromFile => potential::from_file(),
@@ -57,6 +58,17 @@ fn load_potential_arrays(config: &Config) -> Potentials {
     //Get 2*abs(min(potential)) for offset of beta
     let epsilon = 2. * minima.abs();
 
+    if config.output.save_potential {
+        info!(log, "Saving potential to disk");
+        //Not sure if we should use someting like messagepack as there are matlab
+        //and python bindings, or try for hdf5. The rust bindings there are pretty
+        //shonky. So not sure. We'll need a text only option anyhow, so build that fist.
+        match output::potential_plain(&v) {
+            Ok(_) => {}
+            Err(err) => crit!(log, "Could not write potential to disk: {}", err),
+        }
+    }
+
     Potentials {
         v: v,
         a: a,
@@ -68,26 +80,10 @@ fn load_potential_arrays(config: &Config) -> Potentials {
 /// Runs the actual computation once system is setup and ready.
 pub fn solve(config: &Config, log: &Logger) {
 
-    info!(log, "Loading potential arrays");
     let mut params = Params {
-        potentials: load_potential_arrays(config),
-        phi: &mut set_initial_conditions(config),
+        potentials: load_potential_arrays(config, log),
+        phi: &mut config::set_initial_conditions(config, log),
     };
-    info!(log, "Setting initial conditions for wavefunction");
-    if config.output.save_potential {
-        info!(log, "Saving potential to disk");
-        //Not sure if we should use someting like messagepack as there are matlab
-        //and python bindings, or try for hdf5. The rust bindings there are pretty
-        //shonky. So not sure. We'll need a text only option anyhow, so build that fist.
-        match output::potential_plain(&params.potentials.v) {
-            Ok(_) => {}
-            Err(err) => crit!(log, "Could not write potential to disk: {}", err),
-        }
-    }
-
-    if config.wavenum > 0 {
-        //TODO: We restart from an output file.
-    }
 
     output::print_observable_header();
 
@@ -130,10 +126,20 @@ pub fn solve(config: &Config, log: &Logger) {
         done = step > config.max_steps;
     }
 
+    if config.output.save_wavefns {
+        //NOTE: This wil save regardless of whether it is converged or not, so we flag it if that's the case.
+        match output::wavefunction_plain(&params.phi, 0, converged) { //TODO: This is giving 0 for wavenum atm.
+            Ok(_) => {}
+            Err(err) => crit!(log, "Could not write wavefunction to disk: {}", err),
+        }
+    }
+
     if converged {
         info!(log, "Caluculation Converged");
+        //store_converged() //Saves the converged wavefunction for higher state calculations
     } else {
-        info!(log, "Caluculation stopped due to maximum step limit.");
+        warn!(log, "Caluculation stopped due to maximum step limit.");
+        //TODO: Decide on logic here.
     }
 }
 
