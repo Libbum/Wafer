@@ -22,6 +22,7 @@ extern crate ansi_term;
 extern crate ndarray;
 extern crate ndarray_parallel;
 extern crate num;
+extern crate ordinal;
 extern crate rand;
 extern crate rayon;
 extern crate serde;
