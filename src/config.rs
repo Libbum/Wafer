@@ -204,8 +204,8 @@ impl Config {
                              self.grid.size.x,
                              self.grid.size.y,
                              self.grid.size.z),
-                     format!("Δ{{x,y,z}}: {:e}", self.grid.dn),
-                     format!("Δt: {:e}", self.grid.dt),
+                     format!("Δ{{x,y,z}}: {:.3e}", self.grid.dn),
+                     format!("Δt: {:.3e}", self.grid.dt),
                      dwidth = dcolwidth,
                      width = colwidth);
             println!("{:5}{:<width$}{:<width$}{:<width$}{:<width$}",
@@ -223,8 +223,8 @@ impl Config {
                      width = colwidth);
             println!("{:5}{:<width$}{:<width$}",
                      "",
-                     format!("Energy covergence tolerance: {:e}", self.tolerance),
-                     format!("Maximum number of steps: {:e}", self.max_steps as f64),
+                     format!("Energy covergence tolerance: {:.3e}", self.tolerance),
+                     format!("Maximum number of steps: {:.3e}", self.max_steps as f64),
                      width = dcolwidth);
             println!("{:5}{:<width$}{:<width$}",
                      "",
@@ -266,8 +266,8 @@ impl Config {
                              self.grid.size.z));
             println!("{:5}{:<width$}{:<width$}",
                      "",
-                     format!("Δ{{x,y,z}}: {:e}", self.grid.dn),
-                     format!("Δt: {:e}", self.grid.dt),
+                     format!("Δ{{x,y,z}}: {:.3e}", self.grid.dn),
+                     format!("Δt: {:.3e}", self.grid.dt),
                      width = colwidth);
             println!("{:5}{:<width$}{:<width$}",
                      "",
@@ -287,8 +287,8 @@ impl Config {
                      width = mid / 4);
             println!("{:5}{:<width$}{:<width$}",
                      "",
-                     format!("Energy covergence tolerance: {:e}", self.tolerance),
-                     format!("Maximum number of steps: {:e}", self.max_steps as f64),
+                     format!("Energy covergence tolerance: {:.3e}", self.tolerance),
+                     format!("Maximum number of steps: {:.3e}", self.max_steps as f64),
                      width = colwidth);
             println!("{:5}{:<width$}{:<width$}",
                      "",
