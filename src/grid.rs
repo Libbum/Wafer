@@ -106,9 +106,15 @@ fn solve(config: &Config,
          w_store: &Vec<Array3<f64>>)
          -> Option<Array3<f64>> {
 
+    // Initial conditions from config file if ground state,
+    // but start from previously converged wfn if we're an excited state.
     let mut params = Params {
         potentials: pots,
-        phi: &mut config::set_initial_conditions(config, log),
+        phi: &mut if wnum > 0 {
+            w_store[wnum as usize - 1].clone()
+        } else {
+            config::set_initial_conditions(config, log)
+        },
     };
 
     output::print_observable_header(wnum);
@@ -119,27 +125,21 @@ fn solve(config: &Config,
     let mut last_energy = MAX; //std::f64::MAX
     let mut display_energy = MAX;
     while !done {
-        //     //syncboundaries <- not needed until MPI
-        //    info!(log, "Computing observables");
 
         let observables = compute_observables(config, &params);
         let norm_energy = observables.energy / observables.norm2;
+        // Orthoganalise wavefunction
+        if wnum > 0 {
+            normalise_wavefunction(params.phi, observables.norm2);
+            orthogonalise_wavefunction(wnum, params.phi, w_store);
+        }
         //NOTE: Need to do a floating point comparison here if we want steps to be more than 2^64 (~1e19)
         // But I think it's just best to not have this option. 1e19 max.
         if step % config.output.snap_update == 0 {
             //TODO: I think we can do away with SNAPUPDATE now. Kill this if.
-            //          info!(log, "snapupdate: symmetrise");
             config::symmetrise_wavefunction(config, params.phi);
             normalise_wavefunction(params.phi, observables.norm2);
 
-
-            //TODO: Perhaps implement a GS update variable similar to snapupdate, so we don't do this all the time.
-            // Orthoganalise wavefunction
-            if wnum > 0 {
-                orthogonalise_wavefunction(wnum, params.phi, w_store);
-                //config::symmetrise_wavefunction(config, params.phi);
-                //normalise_wavefunction(params.phi, observables.norm2);
-            }
             if (norm_energy - last_energy).abs() < config.tolerance {
                 output::summary(&observables, wnum, config.grid.size.x as f64);
                 converged = true;
@@ -153,8 +153,7 @@ fn solve(config: &Config,
         let diff = (display_energy - norm_energy).abs();
         output::measurements(tau, diff, &observables);
         if step < config.max_steps {
-            //            info!(log, "Evolving {} steps", config.output.screen_update);
-            evolve(config, &mut params);
+            evolve(wnum, config, &mut params, w_store);
         }
         step += config.output.screen_update;
         done = step > config.max_steps;
@@ -172,10 +171,8 @@ fn solve(config: &Config,
     if converged {
         info!(log, "Caluculation Converged");
         Some(params.phi.clone())
-        //store_converged() //Saves the converged wavefunction for higher state calculations
     } else {
         warn!(log, "Caluculation stopped due to maximum step limit.");
-        //TODO: Decide on logic here.
         None
     }
 }
@@ -315,7 +312,7 @@ fn orthogonalise_wavefunction(wnum: u8, w: &mut Array3<f64>, w_store: &Vec<Array
 }
 
 /// Evolves the solution a number of `steps`
-fn evolve(config: &Config, params: &mut Params) {
+fn evolve(wnum: u8, config: &Config, params: &mut Params, w_store: &Vec<Array3<f64>>) {
     //without mpi, this is just update interior (which is really updaterule if we dont need W)
 
     let dims = params.phi.dim();
@@ -377,12 +374,26 @@ fn evolve(config: &Config, params: &mut Params) {
                         (360. * config.grid.dn.powi(2) * config.mass);
                 });
         }
-        let mut w_fill = params.phi
-            .slice_mut(s![3..(dims.0 as isize) - 3,
-                          3..(dims.1 as isize) - 3,
-                          3..(dims.2 as isize) - 3]);
-        for ((i, j, k), el) in w_fill.indexed_iter_mut() {
-            *el = work[[i, j, k]];
+        {
+            let mut w_fill = params.phi
+                .slice_mut(s![3..(dims.0 as isize) - 3,
+                              3..(dims.1 as isize) - 3,
+                              3..(dims.2 as isize) - 3]);
+            for ((i, j, k), el) in w_fill.indexed_iter_mut() {
+                *el = work[[i, j, k]];
+            }
+        }
+        if wnum > 0 {
+            let norm2: f64;
+            {
+                let work = params.phi
+                    .slice(s![3..(dims.0 as isize) - 3,
+                              3..(dims.1 as isize) - 3,
+                              3..(dims.2 as isize) - 3]);
+                norm2 = get_norm_squared(&work);
+            }
+            normalise_wavefunction(params.phi, norm2);
+            orthogonalise_wavefunction(wnum, params.phi, w_store);
         }
         steps += 1;
         if steps >= config.output.screen_update {
