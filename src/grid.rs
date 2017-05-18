@@ -1,4 +1,4 @@
-use ndarray::{Array3, ArrayView3, Zip};
+use ndarray::{Array3, ArrayView3, ArrayViewMut3, Zip};
 use ndarray_parallel::prelude::*;
 use slog::Logger;
 use std::f64::MAX;
@@ -108,13 +108,15 @@ fn solve(config: &Config,
 
     // Initial conditions from config file if ground state,
     // but start from previously converged wfn if we're an excited state.
+    // NOTE: This may not alwans be the sane choice. If we have a converged
+    // low resolution version on file we'll want that instead
     let mut params = Params {
         potentials: pots,
         phi: &mut if wnum > 0 {
-            w_store[wnum as usize - 1].clone()
-        } else {
-            config::set_initial_conditions(config, log)
-        },
+                      w_store[wnum as usize - 1].clone()
+                  } else {
+                      config::set_initial_conditions(config, log)
+                  },
     };
 
     output::print_observable_header(wnum);
@@ -180,10 +182,7 @@ fn solve(config: &Config,
 /// Computes observable values of the system, for example the energy
 fn compute_observables(config: &Config, params: &Params) -> Observables {
     let energy = wfnc_energy(config, params);
-    let dims = params.phi.dim();
-    let work = params.phi
-        .slice(s![3..(dims.0 as isize) - 3, 3..(dims.1 as isize) - 3, 3..(dims.2 as isize) - 3]);
-
+    let work = get_work_area(params.phi);
     let norm2 = get_norm_squared(&work);
     let v_infinity = get_v_infinity_expectation_value(&work, config);
     let r2 = get_r_squared_expectation_value(&work, &config.grid);
@@ -199,7 +198,7 @@ fn compute_observables(config: &Config, params: &Params) -> Observables {
 /// Normalisation of wavefunction
 fn get_norm_squared(w: &ArrayView3<f64>) -> f64 {
     //NOTE: No complex conjugation due to all real input for now
-    (w * w).scalar_sum()
+    w.into_par_iter().map(|&el| el * el).sum()
 }
 
 /// Get v infinity
@@ -209,13 +208,13 @@ fn get_v_infinity_expectation_value(w: &ArrayView3<f64>, config: &Config) -> f64
     Zip::indexed(&mut work)
         .and(w)
         .par_apply(|(i, j, k), work, &w| {
-            let idx = Index3 { x: i, y: j, z: k };
-            let potsub = match potential::potential_sub(config, &idx) {
-                Ok(p) => p,
-                Err(err) => panic!("Error: {}", err),
-            };
-            *work = w * w * potsub;
-        });
+                       let idx = Index3 { x: i, y: j, z: k };
+                       let potsub = match potential::potential_sub(config, &idx) {
+                           Ok(p) => p,
+                           Err(err) => panic!("Error: {}", err),
+                       };
+                       *work = w * w * potsub;
+                   });
     work.scalar_sum()
 }
 
@@ -226,23 +225,19 @@ fn get_r_squared_expectation_value(w: &ArrayView3<f64>, grid: &Grid) -> f64 {
     Zip::indexed(&mut work)
         .and(w)
         .par_apply(|(i, j, k), work, &w| {
-            let idx = Index3 { x: i, y: j, z: k };
-            let r2 = potential::calculate_r2(&idx, grid);
-            *work = w * w * r2;
-        });
+                       let idx = Index3 { x: i, y: j, z: k };
+                       let r2 = potential::calculate_r2(&idx, grid);
+                       *work = w * w * r2;
+                   });
     work.scalar_sum()
 }
 
 /// Gets energy of the corresponding wavefunction
 //TODO: We can probably drop the config requirement and replace it with a grid modifier of dn*mass
 fn wfnc_energy(config: &Config, params: &Params) -> f64 {
-    let num = &config.grid.size; //NOTE: We could also obtain this by phi.dim() if other config values are not needed.
 
-    let w = params.phi
-        .slice(s![3..3 + num.x as isize, 3..3 + num.y as isize, 3..3 + num.z as isize]);
-    let v = params.potentials
-        .v
-        .slice(s![3..3 + num.x as isize, 3..3 + num.y as isize, 3..3 + num.z as isize]);
+    let w = get_work_area(params.phi);
+    let v = get_work_area(&params.potentials.v);
 
     let mut work = Array3::<f64>::zeros(w.dim());
     //NOTE: TODO: We don't have any complex conjugation here.
@@ -258,7 +253,8 @@ fn wfnc_energy(config: &Config, params: &Params) -> f64 {
             let lz = k as isize + 3;
             let o = 3;
             // get a slice which gives us our matrix of central difference points
-            let l = params.phi
+            let l = params
+                .phi
                 .slice(s![lx - 3..lx + 4, ly - 3..ly + 4, lz - 3..lz + 4]);
             // l can now be indexed with local offset `o` and modifiers
             *work = v * w * w -
@@ -311,11 +307,26 @@ fn orthogonalise_wavefunction(wnum: u8, w: &mut Array3<f64>, w_store: &Vec<Array
     }
 }
 
+fn get_work_area(w: &Array3<f64>) -> ArrayView3<f64> {
+    // TODO: This is hardcoded to a 7 point stencil
+    let dims = w.dim();
+    w.slice(s![3..(dims.0 as isize) - 3,
+               3..(dims.1 as isize) - 3,
+               3..(dims.2 as isize) - 3])
+}
+
+fn get_mut_work_area(w: &mut Array3<f64>) -> ArrayViewMut3<f64> {
+    // TODO: This is hardcoded to a 7 point stencil
+    let dims = w.dim();
+    w.slice_mut(s![3..(dims.0 as isize) - 3,
+                   3..(dims.1 as isize) - 3,
+                   3..(dims.2 as isize) - 3])
+}
+
 /// Evolves the solution a number of `steps`
 fn evolve(wnum: u8, config: &Config, params: &mut Params, w_store: &Vec<Array3<f64>>) {
     //without mpi, this is just update interior (which is really updaterule if we dont need W)
 
-    let dims = params.phi.dim();
     let mut work_dims = params.phi.dim();
     work_dims.0 -= 6;
     work_dims.1 -= 6;
@@ -326,21 +337,9 @@ fn evolve(wnum: u8, config: &Config, params: &mut Params, w_store: &Vec<Array3<f
         let mut work = Array3::<f64>::zeros(work_dims);
         //Scope so we can drop the borrow on params.phi
         {
-            let w = params.phi
-                .slice(s![3..(dims.0 as isize) - 3,
-                          3..(dims.1 as isize) - 3,
-                          3..(dims.2 as isize) - 3]);
-            let a = params.potentials
-                .a
-                .slice(s![3..(dims.0 as isize) - 3,
-                          3..(dims.1 as isize) - 3,
-                          3..(dims.2 as isize) - 3]);
-            let b = params.potentials
-                .b
-                .slice(s![3..(dims.0 as isize) - 3,
-                          3..(dims.1 as isize) - 3,
-                          3..(dims.2 as isize) - 3]);
-
+            let w = get_work_area(params.phi);
+            let a = get_work_area(&params.potentials.a);
+            let b = get_work_area(&params.potentials.b);
 
             //NOTE: TODO: We don't have any complex conjugation here.
             // Complete matrix multiplication step using 7 point central differenc
@@ -356,7 +355,8 @@ fn evolve(wnum: u8, config: &Config, params: &mut Params, w_store: &Vec<Array3<f
                     let lz = k as isize + 3;
                     let o = 3;
                     // get a slice which gives us our matrix of central difference points
-                    let l = params.phi
+                    let l = params
+                        .phi
                         .slice(s![lx - 3..lx + 4, ly - 3..ly + 4, lz - 3..lz + 4]);
                     // l can now be indexed with local offset `o` and modifiers
                     *work =
@@ -375,10 +375,8 @@ fn evolve(wnum: u8, config: &Config, params: &mut Params, w_store: &Vec<Array3<f
                 });
         }
         {
-            let mut w_fill = params.phi
-                .slice_mut(s![3..(dims.0 as isize) - 3,
-                              3..(dims.1 as isize) - 3,
-                              3..(dims.2 as isize) - 3]);
+            //TODO: This is horrible. See if there's a better way to fill.
+            let mut w_fill = get_mut_work_area(params.phi);
             for ((i, j, k), el) in w_fill.indexed_iter_mut() {
                 *el = work[[i, j, k]];
             }
@@ -386,10 +384,7 @@ fn evolve(wnum: u8, config: &Config, params: &mut Params, w_store: &Vec<Array3<f
         if wnum > 0 {
             let norm2: f64;
             {
-                let work = params.phi
-                    .slice(s![3..(dims.0 as isize) - 3,
-                              3..(dims.1 as isize) - 3,
-                              3..(dims.2 as isize) - 3]);
+                let work = get_work_area(params.phi);
                 norm2 = get_norm_squared(&work);
             }
             normalise_wavefunction(params.phi, norm2);
