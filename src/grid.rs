@@ -82,8 +82,7 @@ pub fn run(config: &Config, log: &Logger) {
     let potentials = load_potential_arrays(config, log);
 
     let mut w_store: Vec<Array3<f64>> = Vec::new();
-    //for wnum in config.wavenum..config.wavemax {
-    for wnum in 0..2 {
+    for wnum in config.wavenum..config.wavemax+1 {
         //TODO: This error probably isn't the best way of handling this situation.
         match solve(config, log, &potentials, wnum, &w_store) {
             Some(w) => w_store.push(w),
@@ -285,25 +284,21 @@ fn normalise_wavefunction(w: &mut Array3<f64>, norm2: f64) {
 
 /// Uses Gram Schmit orthogonalisation to identify the next excited state's wavefunction, even if it's degenerate
 fn orthogonalise_wavefunction(wnum: u8, w: &mut Array3<f64>, w_store: &Vec<Array3<f64>>) {
-    //TODO: This needs to be generalised. For the moment this is just hacked together for one excited state.
-    //let gs: Array3<f64> = w_store[0];
-    let wfn = wnum as usize;
-    let gs = &w_store[wfn - 1];
 
-    let overlap_gs: f64;
+    let mut overlaps: Vec<f64> = Vec::new();
     {
         let phi = &w.view();
-        overlap_gs = (gs * phi).scalar_sum();
+        for wfn in w_store {
+            let overlap = (wfn * phi).scalar_sum();
+            overlaps.push(overlap);
+        }
     }
 
-    //let mut work = Array3::<f64>::zeros(w.dims());
-    //Zip::indexed(w).and(gs_star)
-    //    .par_apply(|(i, j, k), w, gs| {
-    //        *w -= gs[[i,j,k]]*overlap_gs;
-    //    });
-    //w -= gs_star*overlap_gs;
-    for ((i, j, k), el) in w.indexed_iter_mut() {
-        *el -= gs[[i, j, k]] * overlap_gs;
+    for idx in 0..wnum as usize {
+        for ((i, j, k), el) in w.indexed_iter_mut() {
+            let lower = &w_store[idx];
+            *el -= lower[[i, j, k]] * overlaps[idx];
+        }
     }
 }
 
