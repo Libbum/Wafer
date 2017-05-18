@@ -82,7 +82,7 @@ pub fn run(config: &Config, log: &Logger) {
     let potentials = load_potential_arrays(config, log);
 
     let mut w_store: Vec<Array3<f64>> = Vec::new();
-    for wnum in config.wavenum..config.wavemax+1 {
+    for wnum in config.wavenum..config.wavemax + 1 {
         //TODO: This error probably isn't the best way of handling this situation.
         match solve(config, log, &potentials, wnum, &w_store) {
             Some(w) => w_store.push(w),
@@ -238,14 +238,18 @@ fn wfnc_energy(config: &Config, params: &Params) -> f64 {
     let w = get_work_area(params.phi);
     let v = get_work_area(&params.potentials.v);
 
+    // Simplify what we can here. There are some repeated calculations
+    let denominator = 360. * config.grid.dn.powi(2) * config.mass;
+    let vww = &v * &w * &w; //TODO: Conjugation with complex numbers
+
     let mut work = Array3::<f64>::zeros(w.dim());
     //NOTE: TODO: We don't have any complex conjugation here.
     // Complete matrix multiplication step using 7 point central differenc
     // TODO: Option for 3 or 5 point caclulation
     Zip::indexed(&mut work)
-        .and(v)
+        .and(vww.view())
         .and(w)
-        .par_apply(|(i, j, k), work, &v, &w| {
+        .par_apply(|(i, j, k), work, &vww, &w| {
             // Offset indexes as we are already in a slice
             let lx = i as isize + 3;
             let ly = j as isize + 3;
@@ -256,7 +260,7 @@ fn wfnc_energy(config: &Config, params: &Params) -> f64 {
                 .phi
                 .slice(s![lx - 3..lx + 4, ly - 3..ly + 4, lz - 3..lz + 4]);
             // l can now be indexed with local offset `o` and modifiers
-            *work = v * w * w -
+            *work = vww -
                     w *
                     (2. * l[[o + 3, o, o]] - 27. * l[[o + 2, o, o]] + 270. * l[[o + 1, o, o]] +
                      270. * l[[o - 1, o, o]] -
@@ -269,7 +273,7 @@ fn wfnc_energy(config: &Config, params: &Params) -> f64 {
                      270. * l[[o, o, o + 1]] +
                      270. * l[[o, o, o - 1]] -
                      27. * l[[o, o, o - 2]] + 2. * l[[o, o, o - 3]] -
-                     1470. * w) / (360. * config.grid.dn.powi(2) * config.mass);
+                     1470. * w) / denominator;
         });
     // Sum result for total energy.
     work.scalar_sum()
@@ -282,7 +286,7 @@ fn normalise_wavefunction(w: &mut Array3<f64>, norm2: f64) {
     w.par_map_inplace(|el| *el /= norm);
 }
 
-/// Uses Gram Schmit orthogonalisation to identify the next excited state's wavefunction, even if it's degenerate
+/// Uses Gram Schmidt orthogonalisation to identify the next excited state's wavefunction, even if it's degenerate
 fn orthogonalise_wavefunction(wnum: u8, w: &mut Array3<f64>, w_store: &Vec<Array3<f64>>) {
 
     let mut overlaps: Vec<f64> = Vec::new();
@@ -336,14 +340,19 @@ fn evolve(wnum: u8, config: &Config, params: &mut Params, w_store: &Vec<Array3<f
             let a = get_work_area(&params.potentials.a);
             let b = get_work_area(&params.potentials.b);
 
+            // Simplify what we can here. There are some repeated calculations
+            let denominator = 360. * config.grid.dn.powi(2) * config.mass;
+            let wa = &w * &a;
+            let bdt = &b * config.grid.dt;
+
             //NOTE: TODO: We don't have any complex conjugation here.
             // Complete matrix multiplication step using 7 point central differenc
             // TODO: Option for 3 or 5 point caclulation
             Zip::indexed(&mut work)
+                .and(wa.view())
+                .and(bdt.view())
                 .and(w)
-                .and(a)
-                .and(b)
-                .par_apply(|(i, j, k), work, &w, &a, &b| {
+                .par_apply(|(i, j, k), work, &wa, &bdt, &w| {
                     // Offset indexes as we are already in a slice
                     let lx = i as isize + 3;
                     let ly = j as isize + 3;
@@ -355,8 +364,8 @@ fn evolve(wnum: u8, config: &Config, params: &mut Params, w_store: &Vec<Array3<f
                         .slice(s![lx - 3..lx + 4, ly - 3..ly + 4, lz - 3..lz + 4]);
                     // l can now be indexed with local offset `o` and modifiers
                     *work =
-                        w * a +
-                        b * config.grid.dt *
+                        wa +
+                        bdt *
                         (2. * l[[o + 3, o, o]] - 27. * l[[o + 2, o, o]] + 270. * l[[o + 1, o, o]] +
                          270. * l[[o - 1, o, o]] - 27. * l[[o - 2, o, o]] +
                          2. * l[[o - 3, o, o]] + 2. * l[[o, o + 3, o]] -
@@ -365,8 +374,7 @@ fn evolve(wnum: u8, config: &Config, params: &mut Params, w_store: &Vec<Array3<f
                          2. * l[[o, o - 3, o]] + 2. * l[[o, o, o + 3]] -
                          27. * l[[o, o, o + 2]] + 270. * l[[o, o, o + 1]] +
                          270. * l[[o, o, o - 1]] - 27. * l[[o, o, o - 2]] +
-                         2. * l[[o, o, o - 3]] - 1470. * w) /
-                        (360. * config.grid.dn.powi(2) * config.mass);
+                         2. * l[[o, o, o - 3]] - 1470. * w) / denominator;
                 });
         }
         {
