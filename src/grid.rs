@@ -238,18 +238,17 @@ fn wfnc_energy(config: &Config, params: &Params) -> f64 {
     let w = get_work_area(params.phi);
     let v = get_work_area(&params.potentials.v);
 
-    // Simplify what we can here. There are some repeated calculations
+    // Simplify what we can here.
     let denominator = 360. * config.grid.dn.powi(2) * config.mass;
-    let vww = &v * &w * &w; //TODO: Conjugation with complex numbers
 
     let mut work = Array3::<f64>::zeros(w.dim());
     //NOTE: TODO: We don't have any complex conjugation here.
     // Complete matrix multiplication step using 7 point central differenc
     // TODO: Option for 3 or 5 point caclulation
     Zip::indexed(&mut work)
-        .and(vww.view())
+        .and(v)
         .and(w)
-        .par_apply(|(i, j, k), work, &vww, &w| {
+        .par_apply(|(i, j, k), work, &v, &w| {
             // Offset indexes as we are already in a slice
             let lx = i as isize + 3;
             let ly = j as isize + 3;
@@ -260,7 +259,7 @@ fn wfnc_energy(config: &Config, params: &Params) -> f64 {
                 .phi
                 .slice(s![lx - 3..lx + 4, ly - 3..ly + 4, lz - 3..lz + 4]);
             // l can now be indexed with local offset `o` and modifiers
-            *work = vww -
+            *work = v * w * w -
                     w *
                     (2. * l[[o + 3, o, o]] - 27. * l[[o + 2, o, o]] + 270. * l[[o + 1, o, o]] +
                      270. * l[[o - 1, o, o]] -
@@ -340,19 +339,16 @@ fn evolve(wnum: u8, config: &Config, params: &mut Params, w_store: &Vec<Array3<f
             let a = get_work_area(&params.potentials.a);
             let b = get_work_area(&params.potentials.b);
 
-            // Simplify what we can here. There are some repeated calculations
             let denominator = 360. * config.grid.dn.powi(2) * config.mass;
-            let wa = &w * &a;
-            let bdt = &b * config.grid.dt;
 
             //NOTE: TODO: We don't have any complex conjugation here.
             // Complete matrix multiplication step using 7 point central differenc
             // TODO: Option for 3 or 5 point caclulation
             Zip::indexed(&mut work)
-                .and(wa.view())
-                .and(bdt.view())
+                .and(a)
+                .and(b)
                 .and(w)
-                .par_apply(|(i, j, k), work, &wa, &bdt, &w| {
+                .par_apply(|(i, j, k), work, &a, &b, &w| {
                     // Offset indexes as we are already in a slice
                     let lx = i as isize + 3;
                     let ly = j as isize + 3;
@@ -364,8 +360,8 @@ fn evolve(wnum: u8, config: &Config, params: &mut Params, w_store: &Vec<Array3<f
                         .slice(s![lx - 3..lx + 4, ly - 3..ly + 4, lz - 3..lz + 4]);
                     // l can now be indexed with local offset `o` and modifiers
                     *work =
-                        wa +
-                        bdt *
+                        w * a +
+                        b * config.grid.dt *
                         (2. * l[[o + 3, o, o]] - 27. * l[[o + 2, o, o]] + 270. * l[[o + 1, o, o]] +
                          270. * l[[o - 1, o, o]] - 27. * l[[o - 2, o, o]] +
                          2. * l[[o - 3, o, o]] + 2. * l[[o, o + 3, o]] -
