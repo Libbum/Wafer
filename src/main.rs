@@ -22,6 +22,7 @@ extern crate ansi_term;
 extern crate ndarray;
 extern crate ndarray_parallel;
 extern crate num;
+extern crate num_cpus;
 extern crate ordinal;
 extern crate rand;
 extern crate rayon;
@@ -52,6 +53,12 @@ mod potential;
 fn main() {
 
     let start_time = Instant::now();
+
+    //Override rayon's defaults of threads (including HT cores) to physical cores
+    match rayon::initialize(rayon::Configuration::new().num_threads(num_cpus::get_physical())) {
+        Ok(_) => {},
+        Err(err) => panic!("Failed to initialise thread pool: {}", err),
+    };
 
     let term_width = output::get_term_size();
 
