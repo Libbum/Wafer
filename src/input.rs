@@ -16,6 +16,21 @@ pub fn wavefunction_plain(wnum: u8) -> Result<Array3<f64>, csv::Error> {
     } else {
         None
     };
+    parse_csv_to_array3(file)
+}
+
+/// Loads a potential from a csv file on disk.
+pub fn potential_plain() -> Result<Array3<f64>, csv::Error> {
+    let filename = "./output/potential.csv";
+    let file = if Path::new(&filename).exists() {
+        Some(filename.to_string())
+    } else {
+        None
+    };
+    parse_csv_to_array3(file)
+}
+
+fn parse_csv_to_array3(file: Option<String>) -> Result<Array3<f64>, csv::Error> {
     match file {
         Some(f) => {
             let mut rdr = csv::Reader::from_file(f)?.has_headers(false);

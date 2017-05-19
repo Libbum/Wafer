@@ -377,7 +377,7 @@ pub fn set_initial_conditions(config: &Config, log: &Logger) -> Array3<f64> {
                                 requested dimensions in the configuration file.");
                     }
                 }
-                Err(err) => panic!("Cannot load wafunction file: {}", err),
+                Err(err) => panic!("Cannot load wavefunction file: {}", err),
             }
         }
         InitialCondition::Gaussian => generate_gaussian(config, init_size),

@@ -5,6 +5,7 @@ use std::f64::MAX;
 use config;
 use config::{Config, Grid, Index3, PotentialType};
 use potential;
+use input;
 use output;
 
 #[derive(Debug)]
@@ -35,7 +36,21 @@ fn load_potential_arrays(config: &Config, log: &Logger) -> Potentials {
     let mut minima: f64 = MAX;
 
     let result = match config.potential {
-        PotentialType::FromFile => potential::from_file(),
+        PotentialType::FromFile => {
+            match input::potential_plain() {
+                Ok(pot) => {
+                    let num = &config.grid.size;
+                    let init_size: [usize; 3] = [(num.x + 6) as usize, (num.y + 6) as usize, (num.z + 6) as usize];
+                    if pot.shape() == init_size {
+                        Ok(pot)
+                    } else {
+                        panic!("Potential on disk has different dimensionality to the \
+                                requested dimensions in the configuration file.");
+                    }
+                }
+                Err(err) => panic!("Cannot load potential file: {}", err),
+            }
+        },
         PotentialType::FromScript => potential::from_script(),
         _ => potential::generate(config),
     };

@@ -50,15 +50,6 @@ pub fn generate(config: &Config) -> Result<Array3<f64>, PotentialError> {
     Ok(v)
 }
 
-/// Loads a pre-calculated potential from a user defined file.
-pub fn from_file() -> Result<Array3<f64>, PotentialError> {
-    //TODO: This is currently just a placeholder.
-    let mut v = Array3::<f64>::zeros((2, 2, 2));
-
-    Zip::from(&mut v).par_apply(|x| *x = 7.);
-    Ok(v)
-}
-
 /// Loads a pre-calculated potential from a user defined script.
 pub fn from_script() -> Result<Array3<f64>, PotentialError> {
     //TODO: This is currently just a placeholder.
@@ -107,14 +98,17 @@ fn potential(config: &Config, idx: &Index3) -> Result<f64, PotentialError> {
 
 
 //TODO: For now we're dropping complex all together, but this is needed.
+//TODO: We need potential_sub file outputs for those which require it.
+// Then here from_file can be treated differently.
 pub fn potential_sub(config: &Config, idx: &Index3) -> Result<f64, PotentialError> {
     //    let num = &config.grid.size;
+    let _idx = idx; //Supress index warning until we implement this.
     match config.potential {
         PotentialType::NoPotential |
         PotentialType::Cube |
         PotentialType::QuadWell |
-        PotentialType::ComplexCoulomb => Ok(0.0),
         PotentialType::FromFile |
+        PotentialType::ComplexCoulomb => Ok(0.0),
         PotentialType::FromScript => Err(PotentialError::NotAvailable), //TODO: Script may not need to error.
     }
 }
