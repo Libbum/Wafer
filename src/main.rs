@@ -39,6 +39,7 @@ extern crate slog_term;
 extern crate term_size;
 
 use slog::Drain;
+use std::fs::OpenOptions;
 use std::time::Instant;
 use config::Config;
 
@@ -69,12 +70,22 @@ fn main() {
 
     output::print_banner(sha);
 
-    let decorator = slog_term::TermDecorator::new().build();
+    let log_path = "simulation.log";
+    let log_file = OpenOptions::new()
+      .create(true)
+      .write(true)
+      .truncate(true)
+      .open(log_path)
+      .unwrap();
+
+    let decorator = slog_term::PlainDecorator::new(log_file);
+    //let decorator = slog_term::TermDecorator::new().build();
     let drain = slog_term::FullFormat::new(decorator).build().fuse();
     let drain = slog_async::Async::new(drain).build().fuse();
 
     let log = slog::Logger::root(drain, o!());
 
+    log!(log, "Sup?");
     info!(log, "Loading Configuation from disk");
     let config = Config::load();
     config.print(term_width);

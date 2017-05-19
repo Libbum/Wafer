@@ -1,4 +1,4 @@
-use indicatif::ProgressBar;
+use indicatif::{ProgressBar, ProgressStyle};
 use ndarray::{Array3, ArrayView3, ArrayViewMut3, Zip};
 use ndarray_parallel::prelude::*;
 use slog::Logger;
@@ -131,6 +131,9 @@ fn solve(config: &Config,
     };
 
     let bar = ProgressBar::new(1000);
+    bar.set_style(ProgressStyle::default_bar()
+    .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}")
+    .progress_chars("##-"));
     //output::print_observable_header(wnum);
     let mut pos = 0;
     let mut step = 0;
