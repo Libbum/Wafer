@@ -78,8 +78,9 @@ fn main() {
     let config = Config::load();
     config.print(term_width);
 
-    info!(log, "Checking/creating output directory");
+    info!(log, "Checking/creating directories");
     output::check_output_dir();
+    input::check_input_dir();
 
     info!(log, "Starting calculation");
     grid::run(&config, &log);

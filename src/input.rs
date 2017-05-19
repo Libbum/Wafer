@@ -1,4 +1,5 @@
 use csv;
+use std::fs::create_dir;
 use std::io::{Error, ErrorKind};
 use std::path::Path;
 use ndarray::{Array3, Zip};
@@ -7,8 +8,8 @@ use grid;
 
 /// Loads a wafefunction from a csv file on disk.
 pub fn wavefunction_plain(wnum: u8) -> Result<Array3<f64>, csv::Error> {
-    let filename = format!("./output/wavefunction_{}.csv", wnum);
-    let filename_parital = format!("./output/wavefunction_{}_partial.csv", wnum);
+    let filename = format!("./input/wavefunction_{}.csv", wnum);
+    let filename_parital = format!("./input/wavefunction_{}_partial.csv", wnum);
     let file = if Path::new(&filename).exists() {
         Some(filename)
     } else if Path::new(&filename_parital).exists() {
@@ -21,13 +22,29 @@ pub fn wavefunction_plain(wnum: u8) -> Result<Array3<f64>, csv::Error> {
 
 /// Loads a potential from a csv file on disk.
 pub fn potential_plain() -> Result<Array3<f64>, csv::Error> {
-    let filename = "./output/potential.csv";
+    let filename = "./input/potential.csv";
     let file = if Path::new(&filename).exists() {
         Some(filename.to_string())
     } else {
         None
     };
     parse_csv_to_array3(file)
+}
+
+/// Checks that the folder `input` exists. If not, creates it.
+/// This doesn't specifically need to happen for all instances,
+/// but we may want to put restart values in there later on.
+///
+/// # Panics
+/// * If directory can not be created. Gives `std::io::Error`.
+pub fn check_input_dir() {
+    if !Path::new("./input").exists() {
+        let result = create_dir("./input");
+        match result {
+            Ok(_) => {}
+            Err(err) => panic!("Cannot create input directory: {}", err),
+        }
+    }
 }
 
 fn parse_csv_to_array3(file: Option<String>) -> Result<Array3<f64>, csv::Error> {
