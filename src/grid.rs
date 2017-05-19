@@ -287,21 +287,12 @@ fn normalise_wavefunction(w: &mut Array3<f64>, norm2: f64) {
 
 /// Uses Gram Schmidt orthogonalisation to identify the next excited state's wavefunction, even if it's degenerate
 fn orthogonalise_wavefunction(wnum: u8, w: &mut Array3<f64>, w_store: &Vec<Array3<f64>>) {
-
-    let mut overlaps: Vec<f64> = Vec::new();
-    {
-        let phi = &w.view();
-        for wfn in w_store {
-            let overlap = (wfn * phi).scalar_sum();
-            overlaps.push(overlap);
-        }
-    }
-
     for idx in 0..wnum as usize {
-        for ((i, j, k), el) in w.indexed_iter_mut() {
-            let lower = &w_store[idx];
-            *el -= lower[[i, j, k]] * overlaps[idx];
-        }
+        let lower = &w_store[idx];
+        let overlap = (lower * &w.view()).scalar_sum(); //TODO: par this multiplication if possible. A temp work array and par_applied zip is slower, even with an unassigned array
+        Zip::from(w.view_mut())
+            .and(lower)
+            .par_apply(|w, &lower| *w -= lower * overlap);
     }
 }
 
@@ -333,7 +324,6 @@ fn evolve(wnum: u8, config: &Config, params: &mut Params, w_store: &Vec<Array3<f
     loop {
 
         let mut work = Array3::<f64>::zeros(work_dims);
-        //Scope so we can drop the borrow on params.phi
         {
             let w = get_work_area(params.phi);
             let a = get_work_area(&params.potentials.a);
@@ -342,7 +332,7 @@ fn evolve(wnum: u8, config: &Config, params: &mut Params, w_store: &Vec<Array3<f
             let denominator = 360. * config.grid.dn.powi(2) * config.mass;
 
             //NOTE: TODO: We don't have any complex conjugation here.
-            // Complete matrix multiplication step using 7 point central differenc
+            // Complete matrix multiplication step using 7 point central difference
             // TODO: Option for 3 or 5 point caclulation
             Zip::indexed(&mut work)
                 .and(a)
@@ -374,11 +364,10 @@ fn evolve(wnum: u8, config: &Config, params: &mut Params, w_store: &Vec<Array3<f
                 });
         }
         {
-            //TODO: This is horrible. See if there's a better way to fill.
             let mut w_fill = get_mut_work_area(params.phi);
-            for ((i, j, k), el) in w_fill.indexed_iter_mut() {
-                *el = work[[i, j, k]];
-            }
+            Zip::from(&mut w_fill)
+                .and(&work)
+                .par_apply(|w_fill, &work| { *w_fill = work; });
         }
         if wnum > 0 {
             let norm2: f64;
