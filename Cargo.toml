@@ -20,6 +20,7 @@ ansi_term = "0.9"
 blas-sys = { version = "0.6", default-features = false, features = ["openblas"] }
 clippy = {git = "https://github.com/Manishearth/rust-clippy", optional = true}
 csv = "0.15"
+indicatif = "0.5"
 ndarray = { version = "0.9", features = ["blas"] }
 ndarray-parallel = "0.3"
 num = "0.1"

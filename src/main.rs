@@ -19,6 +19,7 @@
 
 extern crate ansi_term;
 extern crate csv;
+extern crate indicatif;
 #[macro_use(s)]
 extern crate ndarray;
 extern crate ndarray_parallel;

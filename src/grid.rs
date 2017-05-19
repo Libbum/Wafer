@@ -1,3 +1,4 @@
+use indicatif::ProgressBar;
 use ndarray::{Array3, ArrayView3, ArrayViewMut3, Zip};
 use ndarray_parallel::prelude::*;
 use slog::Logger;
@@ -28,6 +29,26 @@ pub struct Observables {
     pub norm2: f64,
     pub v_infinity: f64,
     pub r2: f64,
+}
+
+/// Runs the calculation and holds long term (system time) wavefunction storage
+pub fn run(config: &Config, log: &Logger) {
+    let potentials = load_potential_arrays(config, log);
+
+    let mut w_store: Vec<Array3<f64>> = Vec::new();
+    for wnum in config.wavenum..config.wavemax + 1 {
+        //TODO: This error probably isn't the best way of handling this situation.
+        //Perhaps instead of returning an option we return a converged bool as well.
+        //Then we can use a warn/crit stating that the excited state will not be
+        //completely valid. Then we have a _partial to restart from and can go from there.
+        match solve(config, log, &potentials, wnum, &w_store) {
+            Some(w) => w_store.push(w),
+            None => {
+                panic!("Wavefunction is not converged. Cannot continue until convergence is \
+                        reached.")
+            }
+        }
+    }
 }
 
 fn load_potential_arrays(config: &Config, log: &Logger) -> Potentials {
@@ -88,29 +109,6 @@ fn load_potential_arrays(config: &Config, log: &Logger) -> Potentials {
     }
 }
 
-/// Runs the calculation and holds long term (system time) wavefunction storage
-pub fn run(config: &Config, log: &Logger) {
-    let potentials = load_potential_arrays(config, log);
-
-    let mut w_store: Vec<Array3<f64>> = Vec::new();
-    for wnum in config.wavenum..config.wavemax + 1 {
-        //TODO: This error probably isn't the best way of handling this situation.
-        //Perhaps instead of returning an option we return a converged bool as well.
-        //Then we can use a warn/crit stating that the excited state will not be
-        //completely valid. Then we have a _partial to restart from and can go from there.
-        match solve(config, log, &potentials, wnum, &w_store) {
-            Some(w) => w_store.push(w),
-            None => {
-                panic!("Wavefunction is not converged. Cannot continue until convergence is \
-                        reached.")
-            }
-        }
-        //reInitSolver()
-    }
-    // done with main calculation.
-    // solve finalise
-}
-
 /// Runs the actual computation once system is setup and ready.
 fn solve(config: &Config,
          log: &Logger,
@@ -132,8 +130,9 @@ fn solve(config: &Config,
         },
     };
 
-    output::print_observable_header(wnum);
-
+    let bar = ProgressBar::new(1000);
+    //output::print_observable_header(wnum);
+    let mut pos = 0;
     let mut step = 0;
     let mut done = false;
     let mut converged = false;
@@ -166,13 +165,17 @@ fn solve(config: &Config,
         }
         let tau = (step as f64) * config.grid.dt;
         let diff = (display_energy - norm_energy).abs();
-        output::measurements(tau, diff, &observables);
+        pos += 20;
+        bar.set_position(pos);
+        // output::measurements(tau, diff, &observables);
         if step < config.max_steps {
             evolve(wnum, config, &mut params, w_store);
         }
         step += config.output.screen_update;
         done = step > config.max_steps;
     }
+
+    bar.finish();
 
     if config.output.save_wavefns {
         //NOTE: This wil save regardless of whether it is converged or not, so we flag it if that's the case.
