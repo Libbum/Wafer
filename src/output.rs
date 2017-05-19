@@ -146,21 +146,21 @@ pub fn measurements(tau: f64, diff: f64, observables: &grid::Observables) {
     let width = get_term_size();
     let spacer = (width - 69) / 2;
     if tau > 0.0 {
-    println!("{:^space$}│{:>11.3} │{:>19.10e} │{:15.5} │{:15.5e} │",
-             "",
-             tau,
-             observables.energy / observables.norm2,
-             (observables.r2 / observables.norm2).sqrt(),
-             diff,
-             space = spacer);
+        println!("{:^space$}│{:>11.3} │{:>19.10e} │{:15.5} │{:15.5e} │",
+                 "",
+                 tau,
+                 observables.energy / observables.norm2,
+                 (observables.r2 / observables.norm2).sqrt(),
+                 diff,
+                 space = spacer);
     } else {
-    println!("{:^space$}│{:>11.3} │{:>19.10e} │{:15.5} │{:>15} │",
-             "",
-             tau,
-             observables.energy / observables.norm2,
-             (observables.r2 / observables.norm2).sqrt(),
-             "--   ",
-             space = spacer);
+        println!("{:^space$}│{:>11.3} │{:>19.10e} │{:15.5} │{:>15} │",
+                 "",
+                 tau,
+                 observables.energy / observables.norm2,
+                 (observables.r2 / observables.norm2).sqrt(),
+                 "--   ",
+                 space = spacer);
 
     }
 }
@@ -196,7 +196,9 @@ pub fn summary(observables: &grid::Observables, wnum: u8, numx: f64) {
         _ => {
             let state = Ordinal::from(wnum);
             println!("══▶ {} excited state energy = {}", state, energy);
-            println!("══▶ {} excited state binding energy = {}", state, binding);
+            println!("══▶ {} excited state binding energy = {}",
+                     state,
+                     binding);
         }
     }
     println!("══▶ rᵣₘₛ = {}", r_norm);

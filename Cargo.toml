@@ -17,18 +17,19 @@ name = "wafer"
 
 [dependencies]
 ansi_term = "0.9"
-blas-sys = { version = "0.6.7", default-features = false, features = ["openblas"] }
+blas-sys = { version = "0.6", default-features = false, features = ["openblas"] }
 clippy = {git = "https://github.com/Manishearth/rust-clippy", optional = true}
-ndarray = { version = "0.9.1", features = ["blas"] }
-ndarray-parallel = "0.3.0"
+csv = "0.15"
+ndarray = { version = "0.9", features = ["blas"] }
+ndarray-parallel = "0.3"
 num = "0.1"
 num_cpus = "1.4"
 ordinal = "0.1"
 rand = "0.3"
 rayon = "0.7.0"
 serde = "1.0.2"
-serde_derive = "1.0.2"
-serde_json = "1.0.1"
+serde_derive = "1.0"
+serde_json = "1.0"
 slog = "2"
 slog-async = "2"
 slog-term = "2"

@@ -18,6 +18,7 @@
 #![cfg_attr(feature="clippy", plugin(clippy))]
 
 extern crate ansi_term;
+extern crate csv;
 #[macro_use(s)]
 extern crate ndarray;
 extern crate ndarray_parallel;
@@ -47,6 +48,7 @@ include!(concat!(env!("OUT_DIR"), "/version.rs"));
 /// instance of the application.
 pub mod config;
 mod grid;
+mod input;
 mod output;
 mod potential;
 
@@ -56,7 +58,7 @@ fn main() {
 
     //Override rayon's defaults of threads (including HT cores) to physical cores
     match rayon::initialize(rayon::Configuration::new().num_threads(num_cpus::get_physical())) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(err) => panic!("Failed to initialise thread pool: {}", err),
     };
 
@@ -85,18 +87,26 @@ fn main() {
     let elapsed = start_time.elapsed();
     let time_taken = (elapsed.as_secs() as f64) + (elapsed.subsec_nanos() as f64 / 1000_000_000.0);
     match time_taken {
-        0.0 ... 60.0 => println!("Simulation complete. Elapsed time: {:.3} seconds.", time_taken),
-        60.0 ... 3600.0 => {
-            let minutes = (time_taken/60.).floor();
-            let seconds = time_taken - 60.*minutes;
-            println!("Simulation complete. Elapsed time: {} minutes, {:.3} seconds.", minutes, seconds);
-        },
+        0.0...60.0 => {
+            println!("Simulation complete. Elapsed time: {:.3} seconds.",
+                     time_taken)
+        }
+        60.0...3600.0 => {
+            let minutes = (time_taken / 60.).floor();
+            let seconds = time_taken - 60. * minutes;
+            println!("Simulation complete. Elapsed time: {} minutes, {:.3} seconds.",
+                     minutes,
+                     seconds);
+        }
         _ => {
-            let hours = (time_taken/3600.).floor();
-            let minutes = ((time_taken - 3600.*hours)/60.).floor();
-            let seconds = time_taken - 3600.*hours - 60.*minutes;
-            println!("Simulation complete. Elapsed time: {} hours, {} minutes, {:.3} seconds.", hours, minutes, seconds);
-        },
+            let hours = (time_taken / 3600.).floor();
+            let minutes = ((time_taken - 3600. * hours) / 60.).floor();
+            let seconds = time_taken - 3600. * hours - 60. * minutes;
+            println!("Simulation complete. Elapsed time: {} hours, {} minutes, {:.3} seconds.",
+                     hours,
+                     minutes,
+                     seconds);
+        }
     }
 }
 

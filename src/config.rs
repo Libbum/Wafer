@@ -9,7 +9,7 @@ use std::fs::OpenOptions;
 use std::io::prelude::*;
 use std::path::Path;
 use serde_json;
-
+use input;
 /// Grid size information. `size` is an **Index3** for now, but maybe could just
 /// be tuple. `dn` is the grid size, i.e. Δ{x,y,z}.
 #[derive(Serialize, Deserialize, Debug)]
@@ -89,7 +89,7 @@ enum InitialCondition {
 impl fmt::Display for InitialCondition {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            InitialCondition::FromFile => write!(f, "From wavefunction_*.dat on disk"),
+            InitialCondition::FromFile => write!(f, "From file on disk"),
             InitialCondition::Gaussian => write!(f, "Random Gaussian"),
             InitialCondition::Coulomb => write!(f, "Coulomb-like"),
             InitialCondition::Constant => write!(f, "Constant of 0.1 in interior"),
@@ -366,7 +366,20 @@ pub fn set_initial_conditions(config: &Config, log: &Logger) -> Array3<f64> {
     //NOTE: Don't forget that sizes are non inclusive. We want num.n + 5 to be our last value, so we need num.n + 6 here.
     let init_size: [usize; 3] = [(num.x + 6) as usize, (num.y + 6) as usize, (num.z + 6) as usize];
     let mut w: Array3<f64> = match config.init_condition {
-        InitialCondition::FromFile => Array3::<f64>::zeros((1, 1, 1)), //TODO.
+        InitialCondition::FromFile => {
+            //TODO: Selection of csv or messagepack
+            match input::wavefunction_plain(config.wavenum) {
+                Ok(wfn) => {
+                    if wfn.shape() == init_size {
+                        wfn
+                    } else {
+                        panic!("Wavefunction on disk has different dimensionality to the \
+                                requested dimensions in the configuration file.");
+                    }
+                }
+                Err(err) => panic!("Cannot load wafunction file: {}", err),
+            }
+        }
         InitialCondition::Gaussian => generate_gaussian(config, init_size),
         InitialCondition::Coulomb => generate_coulomb(config, init_size),
         InitialCondition::Constant => Array3::<f64>::from_elem(init_size, 0.1),
