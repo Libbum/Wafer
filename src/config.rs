@@ -368,15 +368,8 @@ pub fn set_initial_conditions(config: &Config, log: &Logger) -> Array3<f64> {
     let mut w: Array3<f64> = match config.init_condition {
         InitialCondition::FromFile => {
             //TODO: Selection of csv or messagepack
-            match input::wavefunction_plain(config.wavenum) {
-                Ok(wfn) => {
-                    if wfn.shape() == init_size {
-                        wfn
-                    } else {
-                        panic!("Wavefunction on disk has different dimensionality to the \
-                                requested dimensions in the configuration file.");
-                    }
-                }
+            match input::wavefunction_plain(config.wavenum, init_size) {
+                Ok(wfn) => wfn,
                 Err(err) => panic!("Cannot load wavefunction file: {}", err),
             }
         }

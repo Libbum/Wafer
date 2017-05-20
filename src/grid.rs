@@ -36,10 +36,10 @@ fn load_potential_arrays(config: &Config, log: &Logger) -> Potentials {
 
     let result = match config.potential {
         PotentialType::FromFile => {
-            match input::potential_plain() {
+            let num = &config.grid.size;
+            let init_size: [usize; 3] = [(num.x + 6) as usize, (num.y + 6) as usize, (num.z + 6) as usize];
+            match input::potential_plain(init_size) {
                 Ok(pot) => {
-                    let num = &config.grid.size;
-                    let init_size: [usize; 3] = [(num.x + 6) as usize, (num.y + 6) as usize, (num.z + 6) as usize];
                     if pot.shape() == init_size {
                         Ok(pot)
                     } else {

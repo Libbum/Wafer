@@ -7,7 +7,7 @@ use ndarray_parallel::prelude::*;
 use grid;
 
 /// Loads a wafefunction from a csv file on disk.
-pub fn wavefunction_plain(wnum: u8) -> Result<Array3<f64>, csv::Error> {
+pub fn wavefunction_plain(wnum: u8, target_size: [usize; 3]) -> Result<Array3<f64>, csv::Error> {
     let filename = format!("./input/wavefunction_{}.csv", wnum);
     let filename_parital = format!("./input/wavefunction_{}_partial.csv", wnum);
     let file = if Path::new(&filename).exists() {
@@ -17,18 +17,18 @@ pub fn wavefunction_plain(wnum: u8) -> Result<Array3<f64>, csv::Error> {
     } else {
         None
     };
-    parse_csv_to_array3(file)
+    parse_csv_to_array3(file, target_size)
 }
 
 /// Loads a potential from a csv file on disk.
-pub fn potential_plain() -> Result<Array3<f64>, csv::Error> {
+pub fn potential_plain(target_size: [usize; 3]) -> Result<Array3<f64>, csv::Error> {
     let filename = "./input/potential.csv";
     let file = if Path::new(&filename).exists() {
         Some(filename.to_string())
     } else {
         None
     };
-    parse_csv_to_array3(file)
+    parse_csv_to_array3(file, target_size)
 }
 
 /// Checks that the folder `input` exists. If not, creates it.
@@ -47,7 +47,7 @@ pub fn check_input_dir() {
     }
 }
 
-fn parse_csv_to_array3(file: Option<String>) -> Result<Array3<f64>, csv::Error> {
+fn parse_csv_to_array3(file: Option<String>, target_size: [usize; 3]) -> Result<Array3<f64>, csv::Error> {
     match file {
         Some(f) => {
             let mut rdr = csv::Reader::from_file(f)?.has_headers(false);
@@ -74,20 +74,36 @@ fn parse_csv_to_array3(file: Option<String>) -> Result<Array3<f64>, csv::Error> 
             match Array3::<f64>::from_shape_vec((numx, numy, numz), data) {
                 Ok(result) => {
                     //result is now a parsed Array3 with the work area inside.
-                    //We must fill this into an array with CD boundaries.
+                    //We must fill this into an array with CD boundaries, provided
+                    //it is the correct size. If not, we must scale it.
                     let init_size: [usize; 3] = [numx + 6, numy + 6, numz + 6];
-                    let mut complete = Array3::<f64>::zeros(init_size);
+                    let mut complete = Array3::<f64>::zeros(target_size);
                     {
                         let mut work = grid::get_mut_work_area(&mut complete);
-                        Zip::from(&mut work)
-                            .and(result.view())
-                            .par_apply(|work, &result| *work = result);
+                        let same: bool = init_size.iter().zip(target_size.iter()).all(|(a,b)| a == b);
+                        let smaller: bool = init_size.iter().zip(target_size.iter()).all(|(a,b)| a < b);
+                        let larger: bool = init_size.iter().zip(target_size.iter()).all(|(a,b)| a > b);
+                        if same {
+                            // Input is the same size, copy down.
+                            Zip::from(&mut work)
+                                .and(result.view())
+                                .par_apply(|work, &result| *work = result);
+                        } else if smaller {
+                            //TODO: Input has lower resolution. Spread it out.
+                            panic!("Wavefunction is lower in resolution than requested");
+                        } else if larger {
+                            //TODO: Input has higer resolution. Sample it.
+                            panic!("Wavefunction is higher in resolution than requested");
+                        } else {
+                            //TODO: Dimensons are all over the shop. Sample and interp
+                            panic!("Wavefunction differs in resolution from requested");
+                        }
                     }
                     Ok(complete)
                 }
                 Err(err) => panic!("Error parsing file into array: {}", err),
             }
         }
-        None => Err(csv::Error::Io(Error::from((ErrorKind::NotFound)))),
+        None => Err(csv::Error::Io(Error::from(ErrorKind::NotFound))),
     }
 }
