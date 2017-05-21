@@ -131,13 +131,12 @@ fn solve(config: &Config,
     output::print_observable_header(wnum);
     let bar = ProgressBar::new(100);
     bar.set_style(ProgressStyle::default_bar()
-                      .template("{msg}\n\n[{elapsed_precise}] [{wide_bar:.cyan/blue}] {spinner:.green} ETA: {eta:>3}")
+                      .template("{msg}\n\n[{elapsed_precise}] |{wide_bar:.cyan/blue}| {spinner:.green} ETA: {eta:>3}")
                       .progress_chars("█▓░")
                       .tick_chars("⣾⣽⣻⢿⡿⣟⣯⣷ "));
     bar.set_position(0);
 
     let mut arrival = 0.;
-    let mut display_ready = false;
 
     let mut step = 0;
     let mut done = false;
@@ -178,18 +177,12 @@ fn solve(config: &Config,
         // Output status to screen
         if let Some(estimate) = eta(step, diff_old, diff, config) {
             if estimate > arrival {
-                //We're in the unstable region
+                //We have a better estimate
                 arrival = estimate;
-            } else {
-                let percent = (100.-(estimate/arrival)*100.).floor();
-                if percent.is_finite() {
-                    if display_ready {
-                        bar.set_position(percent as u64);
-                    } else {
-                        // We're on the other side of the unstable region
-                        if percent < 1. { display_ready = true; }
-                    }
-                }
+            }
+            let percent = (100.-(estimate/arrival)*100.).floor();
+            if percent.is_finite() {
+                bar.set_position(percent as u64);
             }
         }
         bar.set_message(&output::measurements(tau, diff, &observables));
