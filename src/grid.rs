@@ -128,16 +128,20 @@ fn solve(config: &Config,
                   },
     };
 
-    let bar = ProgressBar::new(1000);
+    let bar = ProgressBar::new(100);
     bar.set_style(ProgressStyle::default_bar()
-                      .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}",)
-                      .progress_chars("##-"));
+                      .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")
+                      .progress_chars("#>-"));
+    bar.set_position(0);
     //output::print_observable_header(wnum);
-    let mut pos = 0;
+    let mut arrival = 0.;
+    let mut display_ready = false;
+
     let mut step = 0;
     let mut done = false;
     let mut converged = false;
     let mut last_energy = MAX; //std::f64::MAX
+    let mut diff_old = MAX;
     let mut display_energy = MAX;
     while !done {
 
@@ -166,17 +170,39 @@ fn solve(config: &Config,
         }
         let tau = (step as f64) * config.grid.dt;
         let diff = (display_energy - norm_energy).abs();
-        pos += 20;
-        bar.set_position(pos);
         // output::measurements(tau, diff, &observables);
+
+        // Output status to screen
+        let mut not_updated = true;
+        if let Some(estimate) = eta(step, diff_old, diff, config) {
+            if estimate > arrival {
+                //We're in the unstable region
+                arrival = estimate;
+            } else {
+                let percent = (100.-(estimate/arrival)*100.).floor();
+                if percent.is_finite() {
+                    if display_ready {
+                        bar.set_position(percent as u64);
+                        not_updated = false;
+                    } else {
+                        // We're on the other side of the unstable region
+                        if percent < 1. { display_ready = true; }
+                    }
+                }
+            }
+        }
+        if not_updated { bar.tick(); } //This keeps us responsive when not ready.
+
+        // Evolve solution until next screen update
         if step < config.max_steps {
             evolve(wnum, config, &mut params, w_store);
         }
+        diff_old = diff;
         step += config.output.screen_update;
         done = step > config.max_steps;
     }
 
-    bar.finish();
+    //bar.finish_with_message("Converged");
 
     if config.output.save_wavefns {
         //NOTE: This wil save regardless of whether it is converged or not, so we flag it if that's the case.
@@ -192,6 +218,37 @@ fn solve(config: &Config,
         Some(params.phi.clone())
     } else {
         warn!(log, "Caluculation stopped due to maximum step limit.");
+        None
+    }
+}
+
+/// Estamates completion time for the convergence of the current wavefunction.
+///
+/// # Returns
+///
+/// An estimate of the numer of screen_update cycles to go until convergece.
+/// Uses an option as it may not be finite.
+fn eta(step: u64, diff_old: f64, diff_new: f64, config: &Config) -> Option<f64> {
+    //Convergenge is done in exponential time after a short stabilisation stage.
+    //So we can use the point slope form of a linear equation to find an estimate to hit the tolerance on a semilogy scale.
+    //y - y1 = m(x-x1); where here we use (x1,y1) as (step,diff_new), y is tolerance, find m then solve for x
+    let x1 = step as f64;
+    let y1 = diff_new.log10();
+    let rise = y1 - diff_old.log10();
+    let run = config.output.screen_update as f64;
+    let m = rise/run;
+
+    //Step at which we estimate reaching tolerance.
+    let x = ((config.tolerance.log10() - y1)/m)+x1;
+
+    //Now to return an expectation
+    // Initially, we obtain a -inf which needs to be treated, and we can't correctly estimate the runtime until
+    // the unstable region has been crossed. Luckily, we can use a previous estimate to identify this region.
+    // We'll handle the second issue outside though and just return the estimate here.
+    if x.is_finite() {
+        let estimate = ((x-x1)/run).floor();
+        Some(estimate)
+    } else {
         None
     }
 }

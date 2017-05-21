@@ -77,9 +77,6 @@ fn main() {
                            o!());
 
     info!(log, "Starting Wafer solver"; "version" => env!("CARGO_PKG_VERSION"), "build-id" => short_sha());
-    warn!(log, "warn");
-    crit!(log, "crit");
-    error!(log, "error");
     //Override rayon's defaults of threads (including HT cores) to physical cores
     match rayon::initialize(rayon::Configuration::new().num_threads(num_cpus::get_physical())) {
         Ok(_) => {}
@@ -127,6 +124,7 @@ fn main() {
                      seconds);
         }
     }
+    info!(log, "Simulation completed");
 }
 
 #[cfg(test)]
