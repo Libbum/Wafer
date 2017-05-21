@@ -47,7 +47,9 @@ pub fn check_input_dir() {
     }
 }
 
-fn parse_csv_to_array3(file: Option<String>, target_size: [usize; 3]) -> Result<Array3<f64>, csv::Error> {
+fn parse_csv_to_array3(file: Option<String>,
+                       target_size: [usize; 3])
+                       -> Result<Array3<f64>, csv::Error> {
     match file {
         Some(f) => {
             let mut rdr = csv::Reader::from_file(f)?.has_headers(false);
@@ -80,9 +82,14 @@ fn parse_csv_to_array3(file: Option<String>, target_size: [usize; 3]) -> Result<
                     let mut complete = Array3::<f64>::zeros(target_size);
                     {
                         let mut work = grid::get_mut_work_area(&mut complete);
-                        let same: bool = init_size.iter().zip(target_size.iter()).all(|(a,b)| a == b);
-                        let smaller: bool = init_size.iter().zip(target_size.iter()).all(|(a,b)| a < b);
-                        let larger: bool = init_size.iter().zip(target_size.iter()).all(|(a,b)| a > b);
+                        let same: bool = init_size
+                            .iter()
+                            .zip(target_size.iter())
+                            .all(|(a, b)| a == b);
+                        let smaller: bool =
+                            init_size.iter().zip(target_size.iter()).all(|(a, b)| a < b);
+                        let larger: bool =
+                            init_size.iter().zip(target_size.iter()).all(|(a, b)| a > b);
                         if same {
                             // Input is the same size, copy down.
                             Zip::from(&mut work)

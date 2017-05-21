@@ -1,3 +1,4 @@
+use indicatif::{ProgressBar, ProgressStyle};
 use ndarray::{Array3, ArrayView3, ArrayViewMut3, Zip};
 use ndarray_parallel::prelude::*;
 use slog::Logger;
@@ -30,6 +31,26 @@ pub struct Observables {
     pub r2: f64,
 }
 
+/// Runs the calculation and holds long term (system time) wavefunction storage
+pub fn run(config: &Config, log: &Logger) {
+    let potentials = load_potential_arrays(config, log);
+
+    let mut w_store: Vec<Array3<f64>> = Vec::new();
+    for wnum in config.wavenum..config.wavemax + 1 {
+        //TODO: This error probably isn't the best way of handling this situation.
+        //Perhaps instead of returning an option we return a converged bool as well.
+        //Then we can use a warn/crit stating that the excited state will not be
+        //completely valid. Then we have a _partial to restart from and can go from there.
+        match solve(config, log, &potentials, wnum, &w_store) {
+            Some(w) => w_store.push(w),
+            None => {
+                panic!("Wavefunction is not converged. Cannot continue until convergence is \
+                        reached.")
+            }
+        }
+    }
+}
+
 fn load_potential_arrays(config: &Config, log: &Logger) -> Potentials {
     info!(log, "Loading potential arrays");
     let mut minima: f64 = MAX;
@@ -37,7 +58,9 @@ fn load_potential_arrays(config: &Config, log: &Logger) -> Potentials {
     let result = match config.potential {
         PotentialType::FromFile => {
             let num = &config.grid.size;
-            let init_size: [usize; 3] = [(num.x + 6) as usize, (num.y + 6) as usize, (num.z + 6) as usize];
+            let init_size: [usize; 3] = [(num.x + 6) as usize,
+                                         (num.y + 6) as usize,
+                                         (num.z + 6) as usize];
             match input::potential_plain(init_size) {
                 Ok(pot) => {
                     if pot.shape() == init_size {
@@ -49,7 +72,7 @@ fn load_potential_arrays(config: &Config, log: &Logger) -> Potentials {
                 }
                 Err(err) => panic!("Cannot load potential file: {}", err),
             }
-        },
+        }
         PotentialType::FromScript => potential::from_script(),
         _ => potential::generate(config),
     };
@@ -81,34 +104,7 @@ fn load_potential_arrays(config: &Config, log: &Logger) -> Potentials {
         }
     }
 
-    Potentials {
-        v: v,
-        a: a,
-        b: b,
-    }
-}
-
-/// Runs the calculation and holds long term (system time) wavefunction storage
-pub fn run(config: &Config, log: &Logger) {
-    let potentials = load_potential_arrays(config, log);
-
-    let mut w_store: Vec<Array3<f64>> = Vec::new();
-    for wnum in config.wavenum..config.wavemax + 1 {
-        //TODO: This error probably isn't the best way of handling this situation.
-        //Perhaps instead of returning an option we return a converged bool as well.
-        //Then we can use a warn/crit stating that the excited state will not be
-        //completely valid. Then we have a _partial to restart from and can go from there.
-        match solve(config, log, &potentials, wnum, &w_store) {
-            Some(w) => w_store.push(w),
-            None => {
-                panic!("Wavefunction is not converged. Cannot continue until convergence is \
-                        reached.")
-            }
-        }
-        //reInitSolver()
-    }
-    // done with main calculation.
-    // solve finalise
+    Potentials { v: v, a: a, b: b }
 }
 
 /// Runs the actual computation once system is setup and ready.
@@ -126,14 +122,18 @@ fn solve(config: &Config,
     let mut params = Params {
         potentials: pots,
         phi: &mut if wnum > 0 {
-            w_store[wnum as usize - 1].clone()
-        } else {
-            config::set_initial_conditions(config, log)
-        },
+                      w_store[wnum as usize - 1].clone()
+                  } else {
+                      config::set_initial_conditions(config, log)
+                  },
     };
 
-    output::print_observable_header(wnum);
-
+    let bar = ProgressBar::new(1000);
+    bar.set_style(ProgressStyle::default_bar()
+                      .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}",)
+                      .progress_chars("##-"));
+    //output::print_observable_header(wnum);
+    let mut pos = 0;
     let mut step = 0;
     let mut done = false;
     let mut converged = false;
@@ -166,13 +166,17 @@ fn solve(config: &Config,
         }
         let tau = (step as f64) * config.grid.dt;
         let diff = (display_energy - norm_energy).abs();
-        output::measurements(tau, diff, &observables);
+        pos += 20;
+        bar.set_position(pos);
+        // output::measurements(tau, diff, &observables);
         if step < config.max_steps {
             evolve(wnum, config, &mut params, w_store);
         }
         step += config.output.screen_update;
         done = step > config.max_steps;
     }
+
+    bar.finish();
 
     if config.output.save_wavefns {
         //NOTE: This wil save regardless of whether it is converged or not, so we flag it if that's the case.
@@ -221,13 +225,13 @@ fn get_v_infinity_expectation_value(w: &ArrayView3<f64>, config: &Config) -> f64
     Zip::indexed(&mut work)
         .and(w)
         .par_apply(|(i, j, k), work, &w| {
-            let idx = Index3 { x: i, y: j, z: k };
-            let potsub = match potential::potential_sub(config, &idx) {
-                Ok(p) => p,
-                Err(err) => panic!("Error: {}", err),
-            };
-            *work = w * w * potsub;
-        });
+                       let idx = Index3 { x: i, y: j, z: k };
+                       let potsub = match potential::potential_sub(config, &idx) {
+                           Ok(p) => p,
+                           Err(err) => panic!("Error: {}", err),
+                       };
+                       *work = w * w * potsub;
+                   });
     work.scalar_sum()
 }
 
@@ -238,10 +242,10 @@ fn get_r_squared_expectation_value(w: &ArrayView3<f64>, grid: &Grid) -> f64 {
     Zip::indexed(&mut work)
         .and(w)
         .par_apply(|(i, j, k), work, &w| {
-            let idx = Index3 { x: i, y: j, z: k };
-            let r2 = potential::calculate_r2(&idx, grid);
-            *work = w * w * r2;
-        });
+                       let idx = Index3 { x: i, y: j, z: k };
+                       let r2 = potential::calculate_r2(&idx, grid);
+                       *work = w * w * r2;
+                   });
     work.scalar_sum()
 }
 
@@ -269,7 +273,8 @@ fn wfnc_energy(config: &Config, params: &Params) -> f64 {
             let lz = k as isize + 3;
             let o = 3;
             // get a slice which gives us our matrix of central difference points
-            let l = params.phi
+            let l = params
+                .phi
                 .slice(s![lx - 3..lx + 4, ly - 3..ly + 4, lz - 3..lz + 4]);
             // l can now be indexed with local offset `o` and modifiers
             *work = v * w * w -
@@ -312,13 +317,17 @@ fn orthogonalise_wavefunction(wnum: u8, w: &mut Array3<f64>, w_store: &Vec<Array
 fn get_work_area(w: &Array3<f64>) -> ArrayView3<f64> {
     // TODO: This is hardcoded to a 7 point stencil
     let dims = w.dim();
-    w.slice(s![3..(dims.0 as isize) - 3, 3..(dims.1 as isize) - 3, 3..(dims.2 as isize) - 3])
+    w.slice(s![3..(dims.0 as isize) - 3,
+               3..(dims.1 as isize) - 3,
+               3..(dims.2 as isize) - 3])
 }
 
 pub fn get_mut_work_area(w: &mut Array3<f64>) -> ArrayViewMut3<f64> {
     // TODO: This is hardcoded to a 7 point stencil
     let dims = w.dim();
-    w.slice_mut(s![3..(dims.0 as isize) - 3, 3..(dims.1 as isize) - 3, 3..(dims.2 as isize) - 3])
+    w.slice_mut(s![3..(dims.0 as isize) - 3,
+                   3..(dims.1 as isize) - 3,
+                   3..(dims.2 as isize) - 3])
 }
 
 /// Evolves the solution a number of `steps`
@@ -354,7 +363,8 @@ fn evolve(wnum: u8, config: &Config, params: &mut Params, w_store: &Vec<Array3<f
                     let lz = k as isize + 3;
                     let o = 3;
                     // get a slice which gives us our matrix of central difference points
-                    let l = params.phi
+                    let l = params
+                        .phi
                         .slice(s![lx - 3..lx + 4, ly - 3..ly + 4, lz - 3..lz + 4]);
                     // l can now be indexed with local offset `o` and modifiers
                     *work =

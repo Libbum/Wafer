@@ -35,8 +35,9 @@ pub fn print_banner(sha: &str) {
 pub fn potential_plain(v: &Array3<f64>) -> Result<bool, Error> {
     let mut buffer = File::create("output/potential.csv")?;
     let dims = v.dim();
-    let work =
-        v.slice(s![3..(dims.0 as isize) - 3, 3..(dims.1 as isize) - 3, 3..(dims.2 as isize) - 3]);
+    let work = v.slice(s![3..(dims.0 as isize) - 3,
+                          3..(dims.1 as isize) - 3,
+                          3..(dims.2 as isize) - 3]);
     for ((i, j, k), el) in work.indexed_iter() {
         let output = format!("{}, {}, {}, {:e}\n", i, j, k, el);
         buffer.write_all(output.as_bytes())?;
@@ -61,8 +62,9 @@ pub fn wavefunction_plain(phi: &Array3<f64>, num: u8, converged: bool) -> Result
                            if converged { "" } else { "_partial" });
     let mut buffer = File::create(filename)?;
     let dims = phi.dim();
-    let work =
-        phi.slice(s![3..(dims.0 as isize) - 3, 3..(dims.1 as isize) - 3, 3..(dims.2 as isize) - 3]);
+    let work = phi.slice(s![3..(dims.0 as isize) - 3,
+                            3..(dims.1 as isize) - 3,
+                            3..(dims.2 as isize) - 3]);
     for ((i, j, k), el) in work.indexed_iter() {
         let output = format!("{}, {}, {}, {:e}\n", i, j, k, el);
         buffer.write_all(output.as_bytes())?;

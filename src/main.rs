@@ -19,6 +19,7 @@
 
 extern crate ansi_term;
 extern crate csv;
+extern crate indicatif;
 #[macro_use(s)]
 extern crate ndarray;
 extern crate ndarray_parallel;
@@ -37,7 +38,8 @@ extern crate slog_async;
 extern crate slog_term;
 extern crate term_size;
 
-use slog::Drain;
+use slog::{Drain, Duplicate, Logger, Fuse, LevelFilter, Level};
+use std::fs::OpenOptions;
 use std::time::Instant;
 use config::Config;
 
@@ -56,6 +58,28 @@ fn main() {
 
     let start_time = Instant::now();
 
+    let log_file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open("simulation.log")
+        .expect("Cannot connect to log file");
+    let syslog = slog_term::PlainDecorator::new(log_file);
+    let sys_drain = slog_term::FullFormat::new(syslog).build().fuse();
+    let sys_drain = slog_async::Async::new(sys_drain).build().fuse();
+    let screen = slog_term::TermDecorator::new().build();
+    let screen_drain = slog_term::FullFormat::new(screen).build().fuse();
+    let screen_drain = slog_async::Async::new(screen_drain).build().fuse();
+
+    let log = Logger::root(Fuse::new(Duplicate::new(LevelFilter::new(screen_drain,
+                                                                     Level::Warning),
+                                                    sys_drain)),
+                           o!());
+
+    info!(log, "Starting Wafer solver"; "version" => env!("CARGO_PKG_VERSION"), "build-id" => short_sha());
+    warn!(log, "warn");
+    crit!(log, "crit");
+    error!(log, "error");
     //Override rayon's defaults of threads (including HT cores) to physical cores
     match rayon::initialize(rayon::Configuration::new().num_threads(num_cpus::get_physical())) {
         Ok(_) => {}
@@ -67,12 +91,6 @@ fn main() {
     let sha = if term_width <= 97 { short_sha() } else { sha() };
 
     output::print_banner(sha);
-
-    let decorator = slog_term::TermDecorator::new().build();
-    let drain = slog_term::FullFormat::new(decorator).build().fuse();
-    let drain = slog_async::Async::new(drain).build().fuse();
-
-    let log = slog::Logger::root(drain, o!());
 
     info!(log, "Loading Configuation from disk");
     let config = Config::load();
