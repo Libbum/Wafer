@@ -176,7 +176,6 @@ fn solve(config: &Config,
         let diff = (display_energy - norm_energy).abs();
 
         // Output status to screen
-        let mut not_updated = true;
         if let Some(estimate) = eta(step, diff_old, diff, config) {
             if estimate > arrival {
                 //We're in the unstable region
@@ -186,8 +185,6 @@ fn solve(config: &Config,
                 if percent.is_finite() {
                     if display_ready {
                         bar.set_position(percent as u64);
-                        bar.set_message(&output::measurements(tau, diff, &observables));
-                        not_updated = false;
                     } else {
                         // We're on the other side of the unstable region
                         if percent < 1. { display_ready = true; }
@@ -195,7 +192,7 @@ fn solve(config: &Config,
                 }
             }
         }
-        if not_updated { bar.tick(); } //This keeps us responsive when not ready.
+        bar.set_message(&output::measurements(tau, diff, &observables));
 
         // Evolve solution until next screen update
         if step < config.max_steps {
