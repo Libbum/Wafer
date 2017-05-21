@@ -143,26 +143,26 @@ pub fn print_observable_header(wnum: u8) {
 }
 
 /// Pretty prints measurements at current step to screen
-pub fn measurements(tau: f64, diff: f64, observables: &grid::Observables) {
+pub fn measurements(tau: f64, diff: f64, observables: &grid::Observables) -> String {
     //TODO: This is going to be called every output. Maybe generate a lazy_static value?
     let width = get_term_size();
     let spacer = (width - 69) / 2;
     if tau > 0.0 {
-        println!("{:^space$}│{:>11.3} │{:>19.10e} │{:15.5} │{:15.5e} │",
+        format!("{:^space$}│{:>11.3} │{:>19.10e} │{:15.5} │{:15.5e} │",
                  "",
                  tau,
                  observables.energy / observables.norm2,
                  (observables.r2 / observables.norm2).sqrt(),
                  diff,
-                 space = spacer);
+                 space = spacer)
     } else {
-        println!("{:^space$}│{:>11.3} │{:>19.10e} │{:15.5} │{:>15} │",
+        format!("{:^space$}│{:>11.3} │{:>19.10e} │{:15.5} │{:>15} │",
                  "",
                  tau,
                  observables.energy / observables.norm2,
                  (observables.r2 / observables.norm2).sqrt(),
                  "--   ",
-                 space = spacer);
+                 space = spacer)
 
     }
 }

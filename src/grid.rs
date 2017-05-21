@@ -128,12 +128,14 @@ fn solve(config: &Config,
                   },
     };
 
+    output::print_observable_header(wnum);
     let bar = ProgressBar::new(100);
     bar.set_style(ProgressStyle::default_bar()
-                      .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")
-                      .progress_chars("#>-"));
+                      .template("{msg}\n\n[{elapsed_precise}] [{wide_bar:.cyan/blue}] {spinner:.green} ETA: {eta:>3}")
+                      .progress_chars("█▓░")
+                      .tick_chars("⣾⣽⣻⢿⡿⣟⣯⣷ "));
     bar.set_position(0);
-    //output::print_observable_header(wnum);
+
     let mut arrival = 0.;
     let mut display_ready = false;
 
@@ -147,6 +149,7 @@ fn solve(config: &Config,
 
         let observables = compute_observables(config, &params);
         let norm_energy = observables.energy / observables.norm2;
+        let tau = (step as f64) * config.grid.dt;
         // Orthoganalise wavefunction
         if wnum > 0 {
             normalise_wavefunction(params.phi, observables.norm2);
@@ -158,8 +161,10 @@ fn solve(config: &Config,
             //TODO: I think we can do away with SNAPUPDATE now. Kill this if.
             config::symmetrise_wavefunction(config, params.phi);
             normalise_wavefunction(params.phi, observables.norm2);
-
-            if (norm_energy - last_energy).abs() < config.tolerance {
+            let diff = (norm_energy - last_energy).abs();
+            if  diff < config.tolerance {
+                bar.finish_and_clear();
+                println!("{}", output::measurements(tau, diff, &observables));
                 output::summary(&observables, wnum, config.grid.size.x as f64);
                 converged = true;
                 break;
@@ -168,9 +173,7 @@ fn solve(config: &Config,
                 last_energy = norm_energy;
             }
         }
-        let tau = (step as f64) * config.grid.dt;
         let diff = (display_energy - norm_energy).abs();
-        // output::measurements(tau, diff, &observables);
 
         // Output status to screen
         let mut not_updated = true;
@@ -183,6 +186,7 @@ fn solve(config: &Config,
                 if percent.is_finite() {
                     if display_ready {
                         bar.set_position(percent as u64);
+                        bar.set_message(&output::measurements(tau, diff, &observables));
                         not_updated = false;
                     } else {
                         // We're on the other side of the unstable region
@@ -201,8 +205,6 @@ fn solve(config: &Config,
         step += config.output.screen_update;
         done = step > config.max_steps;
     }
-
-    //bar.finish_with_message("Converged");
 
     if config.output.save_wavefns {
         //NOTE: This wil save regardless of whether it is converged or not, so we flag it if that's the case.
