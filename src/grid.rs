@@ -437,11 +437,10 @@ fn evolve(wnum: u8, config: &Config, params: &mut Params, w_store: &Vec<Array3<f
                 .par_apply(|w_fill, &work| { *w_fill = work; });
         }
         if wnum > 0 {
-            let norm2: f64;
-            {
+            let norm2 = {
                 let work = get_work_area(params.phi);
-                norm2 = get_norm_squared(&work);
-            }
+                get_norm_squared(&work)
+            };
             normalise_wavefunction(params.phi, norm2);
             orthogonalise_wavefunction(wnum, params.phi, w_store);
         }
