@@ -98,7 +98,7 @@ fn load_potential_arrays(config: &Config, log: &Logger) -> Potentials {
         //Not sure if we should use someting like messagepack as there are matlab
         //and python bindings, or try for hdf5. The rust bindings there are pretty
         //shonky. So not sure. We'll need a text only option anyhow, so build that fist.
-        match output::potential_plain(&v) {
+        match output::potential_plain(&v, &config.project_name) {
             Ok(_) => {}
             Err(err) => crit!(log, "Could not write potential to disk: {}", err),
         }
@@ -199,7 +199,7 @@ fn solve(config: &Config,
     if config.output.save_wavefns {
         //NOTE: This wil save regardless of whether it is converged or not, so we flag it if that's the case.
         info!(log, "Saving wavefunction {} to disk", wnum);
-        match output::wavefunction_plain(&params.phi, wnum, converged) {
+        match output::wavefunction_plain(&params.phi, wnum, converged, &config.project_name) {
             Ok(_) => {}
             Err(err) => crit!(log, "Could not write wavefunction to disk: {}", err),
         }

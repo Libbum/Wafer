@@ -140,6 +140,7 @@ impl fmt::Display for RunType {
 /// The main struct which all input data from `wafer.cfg` is pushed into.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Config {
+    pub project_name: String,
     pub grid: Grid,
     pub tolerance: f64,
     pub max_steps: u64,
@@ -193,7 +194,7 @@ impl Config {
     /// * `w` - width of display. This is limited from 70 to 100 characters before being accessed
     /// here, but no such restriction is required inside this function.
     pub fn print(&self, w: usize) {
-        println!("{:═^width$}", " Configuration ", width = w);
+        println!("{:═^width$}", format!(" {} - Configuration ", self.project_name), width = w);
         let mid = w - 10;
         if w > 95 {
             let colwidth = mid / 4;

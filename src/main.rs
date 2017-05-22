@@ -18,8 +18,11 @@
 #![cfg_attr(feature="clippy", plugin(clippy))]
 
 extern crate ansi_term;
+extern crate chrono;
 extern crate csv;
 extern crate indicatif;
+#[macro_use]
+extern crate lazy_static;
 #[macro_use(s)]
 extern crate ndarray;
 extern crate ndarray_parallel;
@@ -58,11 +61,14 @@ fn main() {
 
     let start_time = Instant::now();
 
+    let config = Config::load();
+    output::check_output_dir(&config.project_name);
+
     let log_file = OpenOptions::new()
         .create(true)
         .write(true)
         .truncate(true)
-        .open("simulation.log")
+        .open(output::get_project_dir(&config.project_name) + "/simulation.log")
         .expect("Cannot connect to log file");
     let syslog = slog_term::PlainDecorator::new(log_file);
     let sys_drain = slog_term::FullFormat::new(syslog).build().fuse();
@@ -77,6 +83,10 @@ fn main() {
                            o!());
 
     info!(log, "Starting Wafer solver"; "version" => env!("CARGO_PKG_VERSION"), "build-id" => short_sha());
+
+    info!(log, "Checking/creating directories");
+    input::check_input_dir();
+
     //Override rayon's defaults of threads (including HT cores) to physical cores
     match rayon::initialize(rayon::Configuration::new().num_threads(num_cpus::get_physical())) {
         Ok(_) => {}
@@ -90,12 +100,8 @@ fn main() {
     output::print_banner(sha);
 
     info!(log, "Loading Configuation from disk");
-    let config = Config::load();
     config.print(term_width);
-
-    info!(log, "Checking/creating directories");
-    output::check_output_dir();
-    input::check_input_dir();
+    output::copy_config(&config.project_name); //TODO: Input from CLI if non-default config file
 
     info!(log, "Starting calculation");
     grid::run(&config, &log);

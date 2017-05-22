@@ -1,14 +1,21 @@
+use chrono::Local;
 use ndarray::Array3;
 use ordinal::Ordinal;
 use rayon;
-use std::fs::{create_dir, File};
+use std::fs::{copy, create_dir_all, File};
 use std::io::Error;
 use std::io::prelude::*;
-use std::path::Path;
 use term_size;
 use ansi_term::Colour::Blue;
 
 use grid;
+
+lazy_static! {
+    static ref PROJDATE: String = Local::now().format("%Y-%m-%d_%H:%M:%S").to_string();
+}
+
+
+
 /// Simply prints the Wafer banner with current commit info and thread count.
 pub fn print_banner(sha: &str) {
     println!("                    {}", Blue.paint("___"));
@@ -32,8 +39,8 @@ pub fn print_banner(sha: &str) {
 /// # Returns
 /// * A result type with a `std::io::Error`. The result value is a true bool
 /// as we really only want to error check the result.
-pub fn potential_plain(v: &Array3<f64>) -> Result<bool, Error> {
-    let mut buffer = File::create("output/potential.csv")?;
+pub fn potential_plain(v: &Array3<f64>, project: &str) -> Result<bool, Error> {
+    let mut buffer = File::create(get_project_dir(project) + "/potential.csv")?;
     let dims = v.dim();
     let work = v.slice(s![3..(dims.0 as isize) - 3,
                           3..(dims.1 as isize) - 3,
@@ -56,8 +63,9 @@ pub fn potential_plain(v: &Array3<f64>) -> Result<bool, Error> {
 /// # Returns
 /// * A result type with a `std::io::Error`. The result value is a true bool
 /// as we really only want to error check the result.
-pub fn wavefunction_plain(phi: &Array3<f64>, num: u8, converged: bool) -> Result<bool, Error> {
-    let filename = format!("output/wavefunction_{}{}.csv",
+pub fn wavefunction_plain(phi: &Array3<f64>, num: u8, converged: bool, project: &str) -> Result<bool, Error> {
+    let filename = format!("{}/wavefunction_{}{}.csv",
+                           get_project_dir(project),
                            num,
                            if converged { "" } else { "_partial" });
     let mut buffer = File::create(filename)?;
@@ -208,17 +216,28 @@ pub fn summary(observables: &grid::Observables, wnum: u8, numx: f64) {
     println!("");
 }
 
-/// Checks that the folder `output` exists. If not, creates it.
+/// Generates a unique folder inside an `output` directory for the current simulation.
 ///
 /// # Panics
 /// * If directory can not be created. Gives `std::io::Error`.
-pub fn check_output_dir() {
-    if !Path::new("./output").exists() {
-        let result = create_dir("./output");
-        match result {
-            Ok(_) => {}
-            Err(err) => panic!("Cannot create output directory: {}", err),
-        }
+pub fn check_output_dir(project: &str) {
+    let proj_dir = create_dir_all(get_project_dir(project));
+    match proj_dir {
+        Ok(_) => {}
+        Err(err) => panic!("Cannot create project directory: {}", err),
+    }
+}
+
+pub fn get_project_dir(project: &str) -> String {
+     format!("./output/{}_{}", sanitize_string(project), &**PROJDATE)
+}
+
+/// Copies the current configuration file to the project folder
+pub fn copy_config(project: &str) {
+    let result = copy("./wafer.cfg", get_project_dir(project) + "/wafer.cfg");
+    match result {
+        Ok(_) => {}
+        Err(err) => panic!("Error copying configuration file to project directory: {}", err),
     }
 }
 
@@ -234,4 +253,32 @@ pub fn get_term_size() -> usize {
         }
     }
     term_width
+}
+
+/// Sanitizes strings such that they will create safe filenames.
+/// For now, only used with the `project_name` variable in the configuration.
+fn sanitize_string(component: &str) -> String {
+    let mut buffer = String::with_capacity(component.len());
+    for (i, c) in component.chars().enumerate() {
+        let is_lower = 'a' <= c && c <= 'z';
+        let is_upper = 'A' <= c && c <= 'Z';
+        let is_letter = is_upper || is_lower;
+        let is_number = '0' <= c && c <= '9';
+        let is_space = c == ' ';
+        let is_hyphen = c == '-';
+        let is_underscore = c == '_';
+        let is_period = c == '.' && i != 0; // Disallow accidentally hidden folders
+        let is_valid = is_letter || is_number || is_hyphen || is_underscore ||
+                       is_period;
+        if is_valid {
+            buffer.push(c);
+        } else {
+            if is_space {
+                buffer.push('_'); //Convert spaces to underscores.
+            } else {
+                buffer.push_str(&format!(",{},", c as u32));
+            }
+        }
+    }
+    buffer
 }
