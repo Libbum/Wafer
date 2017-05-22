@@ -1,8 +1,6 @@
 %% Load configuration file
 
-%addpath('/path/to/matlab-json/')
-json.startup
-config = json.read('wafer.cfg');
+config = loadjson('wafer.cfg');
 
 num = config.grid.size;
 dn = config.grid.dn;
