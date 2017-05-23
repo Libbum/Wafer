@@ -135,8 +135,6 @@ fn solve(config: &Config,
                       .tick_chars("⣾⣽⣻⢿⡿⣟⣯⣷ "));
     bar.set_position(0);
 
-    let mut arrival = 0.;
-
     let mut step = 0;
     let mut done = false;
     let mut converged = false;
@@ -175,11 +173,7 @@ fn solve(config: &Config,
 
         // Output status to screen
         if let Some(estimate) = eta(step, diff_old, diff, config) {
-            if estimate > arrival {
-                //We have a better estimate
-                arrival = estimate;
-            }
-            let percent = (100.-(estimate/arrival)*100.).floor();
+            let percent = (100.-(estimate/((step as f64/config.output.screen_update as f64)+estimate)*100.)).floor();
             if percent.is_finite() {
                 bar.set_position(percent as u64);
             }
