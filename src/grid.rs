@@ -127,7 +127,6 @@ fn solve(config: &Config,
                       config::set_initial_conditions(config, log)
                   },
     };
-
     output::print_observable_header(wnum);
     let bar = ProgressBar::new(100);
     bar.set_style(ProgressStyle::default_bar()
@@ -239,10 +238,12 @@ fn eta(step: u64, diff_old: f64, diff_new: f64, config: &Config) -> Option<f64> 
     // We'll handle the second issue outside though and just return the estimate here.
     if x.is_finite() {
         let estimate = ((x-x1)/run).floor();
-        Some(estimate)
-    } else {
-        None
+        //This catch stops our percentage from going above 100% and making indicatif throw a memory error.
+        if estimate > 0. {
+            return Some(estimate);
+        }
     }
+    None
 }
 
 /// Computes observable values of the system, for example the energy
