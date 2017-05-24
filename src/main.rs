@@ -103,7 +103,6 @@ fn main() {
     config.print(term_width);
     output::copy_config(&config.project_name); //TODO: Input from CLI if non-default config file
 
-    info!(log, "Starting calculation");
     grid::run(&config, &log);
 
     let elapsed = start_time.elapsed();

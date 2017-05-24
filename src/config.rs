@@ -199,7 +199,10 @@ impl Config {
     fn parse(&self) {
         if self.grid.dt > self.grid.dn.powi(2) / 3. {
             panic!("Config Error: Temporal step (grid.dt) must be less than or equal to \
-                    grid.dn^2/3");
+                    grid.dn²/3");
+        }
+        if self.wavenum > self.wavemax {
+            panic!("Config Error: wavenum can not be larger than wavemax");
         }
     }
 

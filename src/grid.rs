@@ -33,9 +33,18 @@ pub struct Observables {
 
 /// Runs the calculation and holds long term (system time) wavefunction storage
 pub fn run(config: &Config, log: &Logger) {
+
     let potentials = load_potential_arrays(config, log);
 
     let mut w_store: Vec<Array3<f64>> = Vec::new();
+    if config.wavenum > 0 {
+        //We require wavefunctions from disk, even if initial condition is not `FromFile`
+        //The wavenum = 0 case is handled later
+        input::load_wavefunctions(config, log, &mut w_store);
+    }
+
+    info!(log, "Starting calculation");
+
     for wnum in config.wavenum..config.wavemax + 1 {
         //TODO: This error probably isn't the best way of handling this situation.
         //Perhaps instead of returning an option we return a converged bool as well.
@@ -52,7 +61,6 @@ pub fn run(config: &Config, log: &Logger) {
 }
 
 fn load_potential_arrays(config: &Config, log: &Logger) -> Potentials {
-    info!(log, "Loading potential arrays");
     let mut minima: f64 = MAX;
 
     let result = match config.potential {
@@ -64,6 +72,7 @@ fn load_potential_arrays(config: &Config, log: &Logger) -> Potentials {
             match input::potential_plain(init_size) {
                 Ok(pot) => {
                     if pot.shape() == init_size {
+                        info!(log, "Loaded potential array from disk");
                         Ok(pot)
                     } else {
                         panic!("Potential on disk has different dimensionality to the \
@@ -74,7 +83,10 @@ fn load_potential_arrays(config: &Config, log: &Logger) -> Potentials {
             }
         }
         PotentialType::FromScript => potential::from_script(),
-        _ => potential::generate(config),
+        _ => {
+            info!(log, "Calculating potential array");
+            potential::generate(config)
+        }
     };
     let v: Array3<f64> = match result {
         Ok(r) => r,
@@ -122,8 +134,15 @@ fn solve(config: &Config,
     let mut params = Params {
         potentials: pots,
         phi: &mut if wnum > 0 {
-                      w_store[wnum as usize - 1].clone()
+                      //Fisrt, check if we have the current wavefunction in the store.
+                      //If so, use it; if not, load one down.
+                      if w_store.len() == wnum as usize+1 {
+                          w_store[wnum as usize].clone()
+                      } else {
+                          w_store[wnum as usize - 1].clone()
+                      }
                   } else {
+                      //This sorts out loading from disk if we are on wavefunction 0.
                       config::set_initial_conditions(config, log)
                   },
     };
