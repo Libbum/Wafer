@@ -37,11 +37,10 @@ pub fn potential_plain(target_size: [usize; 3]) -> Result<Array3<f64>, csv::Erro
 /// Loads previously computed wavefunctions from disk.
 pub fn load_wavefunctions(config: &Config, log: &Logger, w_store: &mut Vec<Array3<f64>>) {
     let num = &config.grid.size;
-    //NOTE: Don't forget that sizes are non inclusive. We want num.n + 5 to be our last value, so we need num.n + 6 here.
     let init_size: [usize; 3] = [(num.x + 6) as usize,
                                  (num.y + 6) as usize,
                                  (num.z + 6) as usize];
-    // Load required wavefunctions
+    // Load required wavefunctions. If the current state resides on disk as well, we load that later.
     for wnum in 0..config.wavenum {
         let wfn = wavefunction_plain(wnum, init_size);
         match wfn {
@@ -49,11 +48,6 @@ pub fn load_wavefunctions(config: &Config, log: &Logger, w_store: &mut Vec<Array
             Err(err) => panic!("Cannot load any wavefunction_{}* file from input folder: {}", wnum, err),
         }
         info!(log, "Loaded (previous) wavefunction {} from disk", wnum);
-    }
-    // Try to load current wavefunction also, but it is fine to fail on this one
-    if let Ok(w) = wavefunction_plain(config.wavenum, init_size) {
-        w_store.push(w);
-        info!(log, "Loaded (current) wavefunction {} from disk", config.wavenum);
     }
 }
 
