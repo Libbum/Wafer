@@ -11,7 +11,7 @@ use ansi_term::Colour::Blue;
 use grid;
 
 lazy_static! {
-    /// Date & time at which the simulation was started. Used as a unique identifier for 
+    /// Date & time at which the simulation was started. Used as a unique identifier for
     /// the output directory of a run.
     static ref PROJDATE: String = Local::now().format("%Y-%m-%d_%H:%M:%S").to_string();
 }
@@ -283,8 +283,7 @@ fn sanitize_string(component: &str) -> String {
         let is_valid = is_letter || is_number || is_hyphen || is_underscore || is_period;
         if is_valid {
             buffer.push(c);
-        }
-        if is_space {
+        } else if is_space {
             buffer.push('_'); //Convert spaces to underscores.
         } else {
             buffer.push_str(&format!(",{},", c as u32));
