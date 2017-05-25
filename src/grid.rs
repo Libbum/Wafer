@@ -4,7 +4,7 @@ use ndarray_parallel::prelude::*;
 use slog::Logger;
 use std::f64::MAX;
 use config;
-use config::{Config, Grid, Index3};
+use config::{Config, Grid, Index3, InitialCondition};
 use potential;
 use potential::Potentials;
 use input;
@@ -64,6 +64,16 @@ fn solve(config: &Config,
         // If not, we start with the previously converged function
         if let Ok(wfn) = input::wavefunction_plain(wnum, init_size) {
             info!(log, "Loaded (current) wavefunction {} from disk", wnum);
+            // If people are lazy or forget, their input files may contaminate
+            // the run here.
+            // For example: starting wfn = 0 with random gaussian, max = 3.
+            // User has wavefunction_{0,1}.csv in `input` from old run.
+            // System will generate the random ground state and calculate it fine,
+            // then try to load the old excited state 1 from disk, which is most likely
+            // something completely irrelevant. Throw a warning for this scenario.
+            if config.init_condition != InitialCondition::FromFile && wnum > config.wavenum {
+                warn!(log, "Loaded a higher order wavefunction from disk although Initial conditions are set to '{}'.", config.init_condition);
+            }
             wfn
         } else {
             info!(log,

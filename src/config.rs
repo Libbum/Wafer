@@ -125,7 +125,7 @@ impl fmt::Display for PotentialType {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 /// Defines the type of initial condition, or first guess, given to the wavefunction.
-enum InitialCondition {
+pub enum InitialCondition {
     /// Data will be pulled from file. This could be pre-calculated data from some
     /// inferior wavefunction solver, or more likely than not one of two other options.
     ///
@@ -238,7 +238,7 @@ pub struct Config {
     /// A first guess at the wavefunction. Can range from Gaussian noise to a low resolution,
     /// pre-calculated solution which will be scaled up to enable a faster convergence at high
     /// resolution.
-    init_condition: InitialCondition,
+    pub init_condition: InitialCondition,
     /// Standard deviation. This sets sigma for the Gaussian initial condition if used and is also
     /// required for the Cornell potential types.
     pub sig: f64,
