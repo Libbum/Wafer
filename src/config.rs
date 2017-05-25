@@ -10,29 +10,38 @@ use std::io::prelude::*;
 use std::path::Path;
 use serde_json;
 use input;
-/// Grid size information. `size` is an **Index3** for now, but maybe could just
-/// be tuple. `dn` is the grid size, i.e. Δ{x,y,z}.
+
+/// Grid size information.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Grid {
+    /// Number of grid points (cartesian coordinates).
     pub size: Index3,
+    /// The spatial grid size, i.e. Δ{x,y,z}.
     pub dn: f64,
+    /// The temporal step size, i.e. Δτ.
     pub dt: f64,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+/// A data point in 3D space.
 struct Point3 {
+    /// Position in *x*.
     x: f64,
+    /// Position in *y*.
     y: f64,
+    /// Position in *z*.
     z: f64,
 }
 
+// TODO: In the future it may be a good idea to cast/imply an `ndarray::NdIndex` from/to this.
 /// A simple index struct to identify an {x,y,z} position.
-/// In the future it may be a good idea to cast/imply an
-/// `ndarray::NdIndex` from/to this.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Index3 {
+    /// Index in *x*.
     pub x: usize,
+    /// Index in *y*.
     pub y: usize,
+    /// Index in *z*.
     pub z: usize,
 }
 
@@ -40,13 +49,17 @@ pub struct Index3 {
 /// well as toggling the output of wavefunction and potential data.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Output {
+    /// How many steps should the system evolve before outputting information to the screen.
     pub screen_update: u64,
+    /// How many steps should the system evolve before saving a partially converged wavefunction.
     pub snap_update: u64,
+    /// Should wavefunctions be saved at all? Not necessary if energy values are the only interest.
+    /// Each excited state is saved once it is converged or if `max_steps` is reached.
     pub save_wavefns: bool,
+    /// Should the potential be saved for reference? This is output at the start of the simulation.
     pub save_potential: bool,
 }
 
-//TODO: This is not a complete list
 /// Type of potential the user wishes to invoke. There are many potientials
 /// built in, or the user can opt for two (three) external possibilites:
 ///
@@ -56,19 +69,34 @@ pub struct Output {
 /// inclusion to the built in selection.
 #[derive(Serialize, Deserialize, Debug)]
 pub enum PotentialType {
+    /// V = 0, no potential at all.
     NoPotential,
+    /// A 3D square (i.e. cubic) well.
     Cube,
+    /// Quad well, with short side along the *z*-axis.
     QuadWell,
+    /// Periodic (sin squared).
     Periodic,
+    /// Standard Coulomb.
     Coulomb,
+    /// Complex Coulomb.
     ComplexCoulomb,
+    /// Eliptical Coulomb.
     ElipticalCoulomb,
+    /// Cornell with no corrections.
     SimpleCornell,
+    /// Fully anisotropic screened Cornell + spin correction.
     FullCornell,
+    /// Harmonic oscillator.
     Harmonic,
+    /// Complex harmonic oscillator.
     ComplexHarmonic,
+    /// Dodecahedron, because this totally exists in nature.
     Dodecahedron,
+    /// Pull data from file. Good to save a little startup time on restart runs,
+    /// or a more complex potential in generated from an external tool.
     FromFile,
+    /// Calls a python script the user can implement.
     FromScript,
 }
 
@@ -83,7 +111,9 @@ impl fmt::Display for PotentialType {
             PotentialType::ComplexCoulomb => write!(f, "Complex coulomb"),
             PotentialType::ElipticalCoulomb => write!(f, "Eliptical coulomb"),
             PotentialType::SimpleCornell => write!(f, "Cornell"),
-            PotentialType::FullCornell => write!(f, "Fully anisotropic screened Cornell + spin correction"),
+            PotentialType::FullCornell => {
+                write!(f, "Fully anisotropic screened Cornell + spin correction")
+            }
             PotentialType::Harmonic => write!(f, "Harmonic oscillator"),
             PotentialType::ComplexHarmonic => write!(f, "Complex harmonic oscillator"),
             PotentialType::Dodecahedron => write!(f, "Dodecahedron"),
@@ -94,11 +124,23 @@ impl fmt::Display for PotentialType {
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
+/// Defines the type of initial condition, or first guess, given to the wavefunction.
 enum InitialCondition {
+    /// Data will be pulled from file. This could be pre-calculated data from some
+    /// inferior wavefunction solver, or more likely than not one of two other options.
+    ///
+    /// 1. A converged excited state lower than the requested start state: e.g. `wavenum` is
+    /// set to 2, and a converged excited state 1 is in the `input` directory.
+    /// 2. A converged, low resolution version of the current state is in the `input` directory,
+    /// which dramatically assists in the calculation time of high resolution runs.
     FromFile,
+    /// A random value from the Gaussian distribution, using the standard deviation `sig`.
     Gaussian,
+    /// Coulomb-like.
     Coulomb,
+    /// A constant value of 0.1.
     Constant,
+    /// A Boolean test grid, good for benchmarks.
     Boolean,
 }
 
@@ -115,11 +157,17 @@ impl fmt::Display for InitialCondition {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+/// Symmetry of the wavefunction can be constrained to assist calculation.
 enum SymmetryConstraint {
+    /// Don't constrain system at all.
     NotConstrained,
+    /// Symmetric about *z*-axis.
     AboutZ,
+    /// Antisymmetric about *z*-axis.
     AntisymAboutZ,
+    /// Symmetric about *y*-axis.
     AboutY,
+    /// Antisymmetric about *y*-axis.
     AntisymAboutY,
 }
 
@@ -137,9 +185,13 @@ impl fmt::Display for SymmetryConstraint {
 
 //TODO: This isn't implimented at all yet. May not be needed.
 #[derive(Serialize, Deserialize, Debug)]
+/// Sets the type of run Wafer will execute.
 enum RunType {
+    /// A grid based run.
     Grid,
+    /// A cluster input.
     Cluster,
+    /// Uses magic.
     Auto,
 }
 
@@ -156,19 +208,41 @@ impl fmt::Display for RunType {
 /// The main struct which all input data from `wafer.cfg` is pushed into.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Config {
+    /// A name for the current project for easy identification of output files.
     pub project_name: String,
+    /// Information about the required grid to calculate on.
     pub grid: Grid,
+    /// A convergence value, how accurate the total energy needs to be.
     pub tolerance: f64,
+    /// The maximum amount of steps the solver should attempt before giving up.
     pub max_steps: u64,
+    /// A starting number pertaining to an excited state energy level. To start
+    /// at the ground state, this number should be 0. If it is higher, the solver
+    /// expects converged states in the `input` directory before calculating anything.
     pub wavenum: u8,
+    /// The maxixum number of excited states to calculate. For example, if this value is
+    /// 2, the solver will calculate the ground state (E_0), first excited (E_1) and second
+    /// excited (E_2) states.
     pub wavemax: u8,
+    /// Set to true if you require atomic positions to generate a potential. Default is *false*.
     clustrun: bool,
+    /// Bounding box of cluster data if used.
     al_clust: Point3,
+    /// Information about the requested output data.
     pub output: Output,
+    /// The type of potential required for the simulation. This can be from the internal list,
+    /// directly from a pre-calculated file or from a python script.
     pub potential: PotentialType,
+    /// Atomic mass if required by the selected potential.
     pub mass: f64,
+    /// A first guess at the wavefunction. Can range from Gaussian noise to a low resolution,
+    /// pre-calculated solution which will be scaled up to enable a faster convergence at high
+    /// resolution.
     init_condition: InitialCondition,
+    /// Standard deviation. This sets sigma for the Gaussian initial condition if used and is also
+    /// required for the Cornell potential types.
     pub sig: f64,
+    /// Symmetry contitions forced upon the wavefuntion.
     init_symmetry: SymmetryConstraint,
 }
 
@@ -196,6 +270,8 @@ impl Config {
         decoded_config
     }
 
+    /// Additional checks to the configuration file that cannot be done implicily
+    /// by the type checker.
     fn parse(&self) {
         if self.grid.dt > self.grid.dn.powi(2) / 3. {
             panic!("Config Error: Temporal step (grid.dt) must be less than or equal to \
@@ -213,7 +289,9 @@ impl Config {
     /// * `w` - width of display. This is limited from 70 to 100 characters before being accessed
     /// here, but no such restriction is required inside this function.
     pub fn print(&self, w: usize) {
-        println!("{:═^width$}", format!(" {} - Configuration ", self.project_name), width = w);
+        println!("{:═^width$}",
+                 format!(" {} - Configuration ", self.project_name),
+                 width = w);
         let mid = w - 10;
         if w > 95 {
             let colwidth = mid / 4;

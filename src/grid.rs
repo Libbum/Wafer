@@ -4,30 +4,32 @@ use ndarray_parallel::prelude::*;
 use slog::Logger;
 use std::f64::MAX;
 use config;
-use config::{Config, Grid, Index3, PotentialType};
+use config::{Config, Grid, Index3};
 use potential;
+use potential::Potentials;
 use input;
 use output;
 
-#[derive(Debug)]
-pub struct Potentials {
-    pub v: Array3<f64>,
-    a: Array3<f64>,
-    b: Array3<f64>,
-}
 
 #[derive(Debug)]
+/// Holds all computed observables for the current wavefunction.
 pub struct Observables {
+    /// Normalised total energy.
     pub energy: f64,
+    /// A squared normalisation. Squareroot occurs later when needed to apply a complete
+    /// normalisation condition. This needs to be separate as we include other adjutsments
+    /// from time to time.
     pub norm2: f64,
+    /// The value of the potential at infinity. This is used to calculate the binding energy.
     pub v_infinity: f64,
+    /// Coefficient of determination
     pub r2: f64,
 }
 
 /// Runs the calculation and holds long term (system time) wavefunction storage
 pub fn run(config: &Config, log: &Logger) {
 
-    let potentials = load_potential_arrays(config, log);
+    let potentials = potential::load_arrays(config, log);
 
     let mut w_store: Vec<Array3<f64>> = Vec::new();
     if config.wavenum > 0 {
@@ -43,64 +45,6 @@ pub fn run(config: &Config, log: &Logger) {
     }
 }
 
-fn load_potential_arrays(config: &Config, log: &Logger) -> Potentials {
-    let mut minima: f64 = MAX;
-
-    let result = match config.potential {
-        PotentialType::FromFile => {
-            let num = &config.grid.size;
-            let init_size: [usize; 3] = [(num.x + 6) as usize,
-                                         (num.y + 6) as usize,
-                                         (num.z + 6) as usize];
-            match input::potential_plain(init_size) {
-                Ok(pot) => {
-                    if pot.shape() == init_size {
-                        info!(log, "Loaded potential array from disk");
-                        Ok(pot)
-                    } else {
-                        panic!("Potential on disk has different dimensionality to the \
-                                requested dimensions in the configuration file.");
-                    }
-                }
-                Err(err) => panic!("Cannot load potential file: {}", err),
-            }
-        }
-        PotentialType::FromScript => potential::from_script(),
-        _ => {
-            info!(log, "Calculating potential array");
-            potential::generate(config)
-        }
-    };
-    let v: Array3<f64> = match result {
-        Ok(r) => r,
-        Err(err) => panic!("Error: {}", err),
-    };
-
-
-    let b = 1. / (1. + config.grid.dt * &v / 2.);
-    let a = (1. - config.grid.dt * &v / 2.) * &b;
-
-    // We can't do this in a par.
-    // AFAIK, this is the safest way to work with the float here.
-    for el in v.iter() {
-        if el.is_finite() {
-            minima = minima.min(*el);
-        }
-    }
-
-    if config.output.save_potential {
-        info!(log, "Saving potential to disk");
-        //Not sure if we should use someting like messagepack as there are matlab
-        //and python bindings, or try for hdf5. The rust bindings there are pretty
-        //shonky. So not sure. We'll need a text only option anyhow, so build that fist.
-        match output::potential_plain(&v, &config.project_name) {
-            Ok(_) => {}
-            Err(err) => crit!(log, "Could not write potential to disk: {}", err),
-        }
-    }
-
-    Potentials { v: v, a: a, b: b }
-}
 
 /// Runs the actual computation once system is setup and ready.
 fn solve(config: &Config,
@@ -112,24 +56,23 @@ fn solve(config: &Config,
     // Initial conditions from config file if ground state,
     // but start from previously converged wfn if we're an excited state.
     let mut phi: Array3<f64> = if wnum > 0 {
-            let num = &config.grid.size;
-            let init_size: [usize; 3] = [(num.x + 6) as usize,
-                                         (num.y + 6) as usize,
-                                         (num.z + 6) as usize];
+        let num = &config.grid.size;
+        let init_size: [usize; 3] = [(num.x + 6) as usize,
+                                     (num.y + 6) as usize,
+                                     (num.z + 6) as usize];
         // Try to load current wavefunction from disk.
         // If not, we start with the previously converged function
-        match input::wavefunction_plain(wnum, init_size) {
-            Ok(wfn) => {
-                info!(log, "Loaded (current) wavefunction {} from disk", wnum);
-                wfn
-            }
-            Err(_) => {
-                info!(log, "Loaded wavefunction {} from memory as initial condition", wnum-1);
-                // If we fail to load due to a error or missing, we just start from the previous
-                // stored wavefunction.
-                // We have to clone here, otherwise we cannot borrow w_store for the GS routines.
-                w_store[wnum as usize - 1].clone()
-            }
+        if let Ok(wfn) = input::wavefunction_plain(wnum, init_size) {
+            info!(log, "Loaded (current) wavefunction {} from disk", wnum);
+            wfn
+        } else {
+            info!(log,
+                  "Loaded wavefunction {} from memory as initial condition",
+                  wnum - 1);
+            // If we fail to load due to a error or missing, we just start from the previous
+            // stored wavefunction.
+            // We have to clone here, otherwise we cannot borrow w_store for the GS routines.
+            w_store[wnum as usize - 1].clone()
         }
     } else {
         //This sorts out loading from disk if we are on wavefunction 0.
@@ -137,12 +80,12 @@ fn solve(config: &Config,
     };
 
     output::print_observable_header(wnum);
-    let bar = ProgressBar::new(100);
-    bar.set_style(ProgressStyle::default_bar()
+    let prog_bar = ProgressBar::new(100);
+    prog_bar.set_style(ProgressStyle::default_bar()
                       .template("{msg}\n\n[{elapsed_precise}] |{wide_bar:.cyan/blue}| {spinner:.green} ETA: {eta:>3}")
                       .progress_chars("█▓░")
                       .tick_chars("⣾⣽⣻⢿⡿⣟⣯⣷ "));
-    bar.set_position(0);
+    prog_bar.set_position(0);
 
     let mut step = 0;
     let mut done = false;
@@ -167,8 +110,8 @@ fn solve(config: &Config,
             config::symmetrise_wavefunction(config, &mut phi);
             normalise_wavefunction(&mut phi, observables.norm2);
             let diff = (norm_energy - last_energy).abs();
-            if  diff < config.tolerance {
-                bar.finish_and_clear();
+            if diff < config.tolerance {
+                prog_bar.finish_and_clear();
                 println!("{}", output::measurements(tau, diff, &observables));
                 output::summary(&observables, wnum, config.grid.size.x as f64);
                 converged = true;
@@ -182,12 +125,16 @@ fn solve(config: &Config,
 
         // Output status to screen
         if let Some(estimate) = eta(step, diff_old, diff, config) {
-            let percent = (100.-(estimate/((step as f64/config.output.screen_update as f64)+estimate)*100.)).floor();
+            let percent = (100. -
+                           (estimate /
+                            ((step as f64 / config.output.screen_update as f64) + estimate) *
+                            100.))
+                    .floor();
             if percent.is_finite() {
-                bar.set_position(percent as u64);
+                prog_bar.set_position(percent as u64);
             }
         }
-        bar.set_message(&output::measurements(tau, diff, &observables));
+        prog_bar.set_message(&output::measurements(tau, diff, &observables));
 
         // Evolve solution until next screen update
         if step < config.max_steps {
@@ -220,7 +167,7 @@ fn solve(config: &Config,
 ///
 /// # Returns
 ///
-/// An estimate of the numer of screen_update cycles to go until convergece.
+/// An estimate of the numer of `screen_update` cycles to go until convergece.
 /// Uses an option as it may not be finite.
 fn eta(step: u64, diff_old: f64, diff_new: f64, config: &Config) -> Option<f64> {
     //Convergenge is done in exponential time after a short stabilisation stage.
@@ -230,17 +177,17 @@ fn eta(step: u64, diff_old: f64, diff_new: f64, config: &Config) -> Option<f64> 
     let y1 = diff_new.log10();
     let rise = y1 - diff_old.log10();
     let run = config.output.screen_update as f64;
-    let m = rise/run;
+    let m = rise / run;
 
     //Step at which we estimate reaching tolerance.
-    let x = ((config.tolerance.log10() - y1)/m)+x1;
+    let x = ((config.tolerance.log10() - y1) / m) + x1;
 
     //Now to return an expectation
     // Initially, we obtain a -inf which needs to be treated, and we can't correctly estimate the runtime until
     // the unstable region has been crossed. Luckily, we can use a previous estimate to identify this region.
     // We'll handle the second issue outside though and just return the estimate here.
     if x.is_finite() {
-        let estimate = ((x-x1)/run).floor();
+        let estimate = ((x - x1) / run).floor();
         //This catch stops our percentage from going above 100% and making indicatif throw a memory error.
         if estimate > 0. {
             return Some(estimate);
@@ -310,7 +257,7 @@ fn wfnc_energy(config: &Config, potentials: &Potentials, phi: &Array3<f64>) -> f
     let v = get_work_area(&potentials.v);
 
     // Simplify what we can here.
-    let denominator = 360. * config.grid.dn*config.grid.dn * config.mass;
+    let denominator = 360. * config.grid.dn * config.grid.dn * config.mass;
 
     let mut work = Array3::<f64>::zeros(w.dim());
     //NOTE: TODO: We don't have any complex conjugation here.
@@ -326,8 +273,7 @@ fn wfnc_energy(config: &Config, potentials: &Potentials, phi: &Array3<f64>) -> f
             let lz = k as isize + 3;
             let o = 3;
             // get a slice which gives us our matrix of central difference points
-            let l = phi
-                .slice(s![lx - 3..lx + 4, ly - 3..ly + 4, lz - 3..lz + 4]);
+            let l = phi.slice(s![lx - 3..lx + 4, ly - 3..ly + 4, lz - 3..lz + 4]);
             // l can now be indexed with local offset `o` and modifiers
             *work = v * w * w -
                     w *
@@ -356,9 +302,8 @@ fn normalise_wavefunction(w: &mut Array3<f64>, norm2: f64) {
 }
 
 /// Uses Gram Schmidt orthogonalisation to identify the next excited state's wavefunction, even if it's degenerate
-fn orthogonalise_wavefunction(wnum: u8, w: &mut Array3<f64>, w_store: &Vec<Array3<f64>>) {
-    for idx in 0..wnum as usize {
-        let lower = &w_store[idx];
+fn orthogonalise_wavefunction(wnum: u8, w: &mut Array3<f64>, w_store: &[Array3<f64>]) {
+    for lower in w_store.iter().take(wnum as usize) {
         let overlap = (lower * &w.view()).scalar_sum(); //TODO: par this multiplication if possible. A temp work array and par_applied zip is slower, even with an unassigned array
         Zip::from(w.view_mut())
             .and(lower)
@@ -366,24 +311,48 @@ fn orthogonalise_wavefunction(wnum: u8, w: &mut Array3<f64>, w_store: &Vec<Array
     }
 }
 
-fn get_work_area(w: &Array3<f64>) -> ArrayView3<f64> {
+/// Shortcut to getting a slice of the workable area of the current array.
+/// In other words, the finite element only cells are removed
+///
+/// # Arguments
+///
+/// * `arr` - A reference to the array which requires slicing.
+///
+/// # Returns
+///
+/// An arrav view containing only the workable area of the array.
+fn get_work_area(arr: &Array3<f64>) -> ArrayView3<f64> {
     // TODO: This is hardcoded to a 7 point stencil
-    let dims = w.dim();
-    w.slice(s![3..(dims.0 as isize) - 3,
-               3..(dims.1 as isize) - 3,
-               3..(dims.2 as isize) - 3])
+    let dims = arr.dim();
+    arr.slice(s![3..(dims.0 as isize) - 3,
+                 3..(dims.1 as isize) - 3,
+                 3..(dims.2 as isize) - 3])
 }
 
-pub fn get_mut_work_area(w: &mut Array3<f64>) -> ArrayViewMut3<f64> {
+/// Shortcut to getting a mutable slice of the workable area of the current array.
+/// In other words, the finite element only cells are removed
+///
+/// # Arguments
+///
+/// * `arr` - A mutable reference to the array which requires slicing.
+///
+/// # Returns
+///
+/// A mutable arrav view containing only the workable area of the array.
+pub fn get_mut_work_area(arr: &mut Array3<f64>) -> ArrayViewMut3<f64> {
     // TODO: This is hardcoded to a 7 point stencil
-    let dims = w.dim();
-    w.slice_mut(s![3..(dims.0 as isize) - 3,
-                   3..(dims.1 as isize) - 3,
-                   3..(dims.2 as isize) - 3])
+    let dims = arr.dim();
+    arr.slice_mut(s![3..(dims.0 as isize) - 3,
+                     3..(dims.1 as isize) - 3,
+                     3..(dims.2 as isize) - 3])
 }
 
 /// Evolves the solution a number of `steps`
-fn evolve(wnum: u8, config: &Config, potentials: &Potentials, phi: &mut Array3<f64>, w_store: &Vec<Array3<f64>>) {
+fn evolve(wnum: u8,
+          config: &Config,
+          potentials: &Potentials,
+          phi: &mut Array3<f64>,
+          w_store: &[Array3<f64>]) {
     //without mpi, this is just update interior (which is really updaterule if we dont need W)
 
     let mut work_dims = phi.dim();
@@ -396,31 +365,30 @@ fn evolve(wnum: u8, config: &Config, potentials: &Potentials, phi: &mut Array3<f
         let mut work = Array3::<f64>::zeros(work_dims);
         {
             let w = get_work_area(phi);
-            let a = get_work_area(&potentials.a);
-            let b = get_work_area(&potentials.b);
+            let pa = get_work_area(&potentials.a);
+            let pb = get_work_area(&potentials.b);
 
-            let denominator = 360. * config.grid.dn*config.grid.dn * config.mass;
+            let denominator = 360. * config.grid.dn * config.grid.dn * config.mass;
 
             //NOTE: TODO: We don't have any complex conjugation here.
             // Complete matrix multiplication step using 7 point central difference
             // TODO: Option for 3 or 5 point caclulation
             Zip::indexed(&mut work)
-                .and(a)
-                .and(b)
+                .and(pa)
+                .and(pb)
                 .and(w)
-                .par_apply(|(i, j, k), work, &a, &b, &w| {
+                .par_apply(|(i, j, k), work, &pa, &pb, &w| {
                     // Offset indexes as we are already in a slice
                     let lx = i as isize + 3;
                     let ly = j as isize + 3;
                     let lz = k as isize + 3;
                     let o = 3;
                     // get a slice which gives us our matrix of central difference points
-                    let l = phi
-                        .slice(s![lx - 3..lx + 4, ly - 3..ly + 4, lz - 3..lz + 4]);
+                    let l = phi.slice(s![lx - 3..lx + 4, ly - 3..ly + 4, lz - 3..lz + 4]);
                     // l can now be indexed with local offset `o` and modifiers
                     *work =
-                        w * a +
-                        b * config.grid.dt *
+                        w * pa +
+                        pb * config.grid.dt *
                         (2. * l[[o + 3, o, o]] - 27. * l[[o + 2, o, o]] + 270. * l[[o + 1, o, o]] +
                          270. * l[[o - 1, o, o]] - 27. * l[[o - 2, o, o]] +
                          2. * l[[o - 3, o, o]] + 2. * l[[o, o + 3, o]] -

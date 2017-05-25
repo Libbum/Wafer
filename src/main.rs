@@ -16,6 +16,8 @@
 
 #![cfg_attr(feature="clippy", feature(plugin))]
 #![cfg_attr(feature="clippy", plugin(clippy))]
+#![cfg_attr(feature="clippy", warn(missing_docs_in_private_items))]
+#![cfg_attr(feature="clippy", warn(single_match_else))]
 
 extern crate ansi_term;
 extern crate chrono;
@@ -52,11 +54,18 @@ include!(concat!(env!("OUT_DIR"), "/version.rs"));
 /// and poplulates the `Config` struct with the information required to run the current
 /// instance of the application.
 pub mod config;
+/// The meat of the caclulation is performed on a finite grid. Basically all of the computation
+/// work is done within this module.
 mod grid;
+/// Any required file input (apart from configuration) is handled here. Plain text and binary formats.
 mod input;
+/// All file output is handled in this module. Plain text and binary options are both here.
 mod output;
+/// Handles the potential generation, binding energy offsets, callouts to files or scripts
+/// if needed etc.
 mod potential;
 
+/// System entry point
 fn main() {
 
     let start_time = Instant::now();

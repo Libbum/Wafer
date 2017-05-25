@@ -11,10 +11,10 @@ use ansi_term::Colour::Blue;
 use grid;
 
 lazy_static! {
+    /// Date & time at which the simulation was started. Used as a unique identifier for 
+    /// the output directory of a run.
     static ref PROJDATE: String = Local::now().format("%Y-%m-%d_%H:%M:%S").to_string();
 }
-
-
 
 /// Simply prints the Wafer banner with current commit info and thread count.
 pub fn print_banner(sha: &str) {
@@ -63,7 +63,11 @@ pub fn potential_plain(v: &Array3<f64>, project: &str) -> Result<bool, Error> {
 /// # Returns
 /// * A result type with a `std::io::Error`. The result value is a true bool
 /// as we really only want to error check the result.
-pub fn wavefunction_plain(phi: &Array3<f64>, num: u8, converged: bool, project: &str) -> Result<bool, Error> {
+pub fn wavefunction_plain(phi: &Array3<f64>,
+                          num: u8,
+                          converged: bool,
+                          project: &str)
+                          -> Result<bool, Error> {
     let filename = format!("{}/wavefunction_{}{}.csv",
                            get_project_dir(project),
                            num,
@@ -86,45 +90,42 @@ pub fn print_observable_header(wnum: u8) {
     let spacer = (width - 69) / 2;
     let col2 = 37; //Energy+rrms+1
     println!("");
-    match wnum {
-        0 => {
-            println!("{:═^lspace$}╤{:═^twidth$}╤{:═^w$}╤{:═^width$}╤{:═^rspace$}",
-                     "",
-                     "",
-                     " Ground state caclulation ",
-                     "",
-                     "",
-                     twidth = 12,
-                     width = 16,
-                     w = col2,
-                     lspace = spacer,
-                     rspace = if 2 * spacer + 69 < width {
-                         spacer + 1
-                     } else {
-                         spacer
-                     });
-        }
-        _ => {
-            println!("{:═^lspace$}╤{:═^twidth$}╤{:═^w$}╤{:═^width$}╤{:═^rspace$}",
-                     "",
-                     "",
-                     format!(" {} excited state caclulation ", Ordinal::from(wnum)),
-                     "",
-                     "",
-                     twidth = 12,
-                     width = 16,
-                     w = col2,
-                     lspace = spacer,
-                     rspace = if 2 * spacer + 69 < width {
-                         spacer + 1
-                     } else {
-                         spacer
-                     });
-        }
+    if let 0 = wnum {
+        println!("{:═^lspace$}╤{:═^twidth$}╤{:═^w$}╤{:═^width$}╤{:═^rspace$}",
+                 "",
+                 "",
+                 " Ground state caclulation ",
+                 "",
+                 "",
+                 twidth = 12,
+                 width = 16,
+                 w = col2,
+                 lspace = spacer,
+                 rspace = if 2 * spacer + 69 < width {
+                     spacer + 1
+                 } else {
+                     spacer
+                 });
+    } else {
+        println!("{:═^lspace$}╤{:═^twidth$}╤{:═^w$}╤{:═^width$}╤{:═^rspace$}",
+                 "",
+                 "",
+                 format!(" {} excited state caclulation ", Ordinal::from(wnum)),
+                 "",
+                 "",
+                 twidth = 12,
+                 width = 16,
+                 w = col2,
+                 lspace = spacer,
+                 rspace = if 2 * spacer + 69 < width {
+                     spacer + 1
+                 } else {
+                     spacer
+                 });
     }
     println!("{:^space$}│{:^twidth$}│{:^ewidth$}│{:^width$}│{:^width$}│",
              "",
-             "Time",
+             "Time (τ)",
              "Energy",
              "rᵣₘₛ",
              "Difference",
@@ -157,20 +158,20 @@ pub fn measurements(tau: f64, diff: f64, observables: &grid::Observables) -> Str
     let spacer = (width - 69) / 2;
     if tau > 0.0 {
         format!("{:^space$}│{:>11.3} │{:>19.10e} │{:15.5} │{:15.5e} │",
-                 "",
-                 tau,
-                 observables.energy / observables.norm2,
-                 (observables.r2 / observables.norm2).sqrt(),
-                 diff,
-                 space = spacer)
+                "",
+                tau,
+                observables.energy / observables.norm2,
+                (observables.r2 / observables.norm2).sqrt(),
+                diff,
+                space = spacer)
     } else {
         format!("{:^space$}│{:>11.3} │{:>19.10e} │{:15.5} │{:>15} │",
-                 "",
-                 tau,
-                 observables.energy / observables.norm2,
-                 (observables.r2 / observables.norm2).sqrt(),
-                 "--   ",
-                 space = spacer)
+                "",
+                tau,
+                observables.energy / observables.norm2,
+                (observables.r2 / observables.norm2).sqrt(),
+                "--   ",
+                space = spacer)
 
     }
 }
@@ -198,18 +199,15 @@ pub fn summary(observables: &grid::Observables, wnum: u8, numx: f64) {
              } else {
                  spacer
              });
-    match wnum {
-        0 => {
-            println!("══▶ Ground state energy = {}", energy);
-            println!("══▶ Ground state binding energy = {}", binding);
-        }
-        _ => {
-            let state = Ordinal::from(wnum);
-            println!("══▶ {} excited state energy = {}", state, energy);
-            println!("══▶ {} excited state binding energy = {}",
-                     state,
-                     binding);
-        }
+    if let 0 = wnum {
+        println!("══▶ Ground state energy = {}", energy);
+        println!("══▶ Ground state binding energy = {}", binding);
+    } else {
+        let state = Ordinal::from(wnum);
+        println!("══▶ {} excited state energy = {}", state, energy);
+        println!("══▶ {} excited state binding energy = {}",
+                 state,
+                 binding);
     }
     println!("══▶ rᵣₘₛ = {}", r_norm);
     println!("══▶ L/rᵣₘₛ = {}", numx / r_norm);
@@ -228,8 +226,19 @@ pub fn check_output_dir(project: &str) {
     }
 }
 
+/// Each simulation has a unique folder output so as not to overwrite other instances.
+/// This function gets the name of the current folder.
+///
+/// # Arguments
+///
+/// * `project` - The name of the currently active project as set in the configuration file
+///
+/// # Retuns
+///
+/// A string containting the location of the output folder, comprised of a sanitized
+/// project name, followed by the start date/time of the simulation.
 pub fn get_project_dir(project: &str) -> String {
-     format!("./output/{}_{}", sanitize_string(project), &**PROJDATE)
+    format!("./output/{}_{}", sanitize_string(project), &**PROJDATE)
 }
 
 /// Copies the current configuration file to the project folder
@@ -237,7 +246,10 @@ pub fn copy_config(project: &str) {
     let result = copy("./wafer.cfg", get_project_dir(project) + "/wafer.cfg");
     match result {
         Ok(_) => {}
-        Err(err) => panic!("Error copying configuration file to project directory: {}", err),
+        Err(err) => {
+            panic!("Error copying configuration file to project directory: {}",
+                   err)
+        }
     }
 }
 
@@ -268,16 +280,14 @@ fn sanitize_string(component: &str) -> String {
         let is_hyphen = c == '-';
         let is_underscore = c == '_';
         let is_period = c == '.' && i != 0; // Disallow accidentally hidden folders
-        let is_valid = is_letter || is_number || is_hyphen || is_underscore ||
-                       is_period;
+        let is_valid = is_letter || is_number || is_hyphen || is_underscore || is_period;
         if is_valid {
             buffer.push(c);
+        }
+        if is_space {
+            buffer.push('_'); //Convert spaces to underscores.
         } else {
-            if is_space {
-                buffer.push('_'); //Convert spaces to underscores.
-            } else {
-                buffer.push_str(&format!(",{},", c as u32));
-            }
+            buffer.push_str(&format!(",{},", c as u32));
         }
     }
     buffer

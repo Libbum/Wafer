@@ -45,7 +45,11 @@ pub fn load_wavefunctions(config: &Config, log: &Logger, w_store: &mut Vec<Array
         let wfn = wavefunction_plain(wnum, init_size);
         match wfn {
             Ok(w) => w_store.push(w),
-            Err(err) => panic!("Cannot load any wavefunction_{}* file from input folder: {}", wnum, err),
+            Err(err) => {
+                panic!("Cannot load any wavefunction_{}* file from input folder: {}",
+                       wnum,
+                       err)
+            }
         }
         info!(log, "Loaded (previous) wavefunction {} from disk", wnum);
     }
@@ -67,6 +71,23 @@ pub fn check_input_dir() {
     }
 }
 
+/// Given a filename, this funtion reads in the data of a csv file and parses
+/// the values into a 3D array. There are a few caveats to this as the file
+/// may be of a different shape to the requested size in the configuration file.
+/// The routine therefore attempts to resample/interpolate the data to fit the required
+/// parameters.
+///
+/// # Arguments
+///
+/// * `file` - A filename wrapped in an option. This function is called from filename parsers
+/// which may not be able to obtain a valid location.
+/// * `target_size` - Requsted size of the resultant array. If this size does not match the data
+/// pulled from the file, interpolation or resampling will occur.
+///
+/// # Returns
+///
+/// * A 3D array loaded with data from the file and resampled/interpolated if required.
+/// If something goes wrong in the parsing or file handling, a `csv::Error` is passed.
 fn parse_csv_to_array3(file: Option<String>,
                        target_size: [usize; 3])
                        -> Result<Array3<f64>, csv::Error> {
@@ -128,7 +149,7 @@ fn parse_csv_to_array3(file: Option<String>,
                     }
                     Ok(complete)
                 }
-                Err(err) => panic!("Error parsing file into array: {}", err),
+                Err(err) => panic!("Error parsing file into array: {}", err), //TODO: Pass this up
             }
         }
         None => Err(csv::Error::Io(Error::from(ErrorKind::NotFound))),
