@@ -33,6 +33,7 @@ extern crate num_cpus;
 extern crate ordinal;
 extern crate rand;
 extern crate rayon;
+extern crate rmp_serde as rmps;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;

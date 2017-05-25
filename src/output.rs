@@ -2,6 +2,9 @@ use chrono::Local;
 use ndarray::Array3;
 use ordinal::Ordinal;
 use rayon;
+use serde::Serialize;
+use serde_json;
+use rmps::Serializer;
 use std::fs::{copy, create_dir_all, File};
 use std::io::Error;
 use std::io::prelude::*;
@@ -14,6 +17,21 @@ lazy_static! {
     /// Date & time at which the simulation was started. Used as a unique identifier for
     /// the output directory of a run.
     static ref PROJDATE: String = Local::now().format("%Y-%m-%d_%H:%M:%S").to_string();
+}
+
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
+/// Structured output of observable values
+struct ObservablesOutput {
+    /// Excited state number.
+    state: u8,
+    /// Total energy.
+    energy: f64,
+    /// Binding energy.
+    binding_energy: f64,
+    /// Coefficient of determination
+    r: f64,
+    /// Grid size / Coefficient of determination
+    l_r: f64,
 }
 
 /// Simply prints the Wafer banner with current commit info and thread count.
@@ -177,12 +195,18 @@ pub fn measurements(tau: f64, diff: f64, observables: &grid::Observables) -> Str
 }
 
 /// Pretty print final summary
-pub fn summary(observables: &grid::Observables, wnum: u8, numx: f64) {
+pub fn summary(observables: &grid::Observables, wnum: u8, numx: f64, project: &str) {
     let width = get_term_size();
     let spacer = (width - 69) / 2;
-    let energy = observables.energy / observables.norm2;
-    let binding = observables.energy - observables.v_infinity / observables.norm2;
     let r_norm = (observables.r2 / observables.norm2).sqrt();
+    let output = ObservablesOutput {
+        state: wnum,
+        energy: observables.energy / observables.norm2,
+        binding_energy: observables.energy - observables.v_infinity / observables.norm2,
+        r: r_norm,
+        l_r: numx / r_norm,
+    };
+
     println!("{:═^lspace$}╧{:═^twidth$}╧{:═^ewidth$}╧{:═^width$}╧{:═^width$}╧{:═^rspace$}",
              "",
              "",
@@ -200,18 +224,40 @@ pub fn summary(observables: &grid::Observables, wnum: u8, numx: f64) {
                  spacer
              });
     if let 0 = wnum {
-        println!("══▶ Ground state energy = {}", energy);
-        println!("══▶ Ground state binding energy = {}", binding);
+        println!("══▶ Ground state energy = {}", output.energy);
+        println!("══▶ Ground state binding energy = {}", output.binding_energy);
     } else {
         let state = Ordinal::from(wnum);
-        println!("══▶ {} excited state energy = {}", state, energy);
+        println!("══▶ {} excited state energy = {}", state, output.energy);
         println!("══▶ {} excited state binding energy = {}",
                  state,
-                 binding);
+                 output.binding_energy);
     }
-    println!("══▶ rᵣₘₛ = {}", r_norm);
-    println!("══▶ L/rᵣₘₛ = {}", numx / r_norm);
+    println!("══▶ rᵣₘₛ = {}", output.r);
+    println!("══▶ L/rᵣₘₛ = {}", output.l_r);
     println!("");
+
+    observables_binary(&output, project); //TODO: These are just here for testing, we need to treat this better.
+    observables_plain(&output, project);
+}
+
+/// Saves the observables to a messagepack binary file.
+fn observables_binary(observables: &ObservablesOutput, project: &str) {
+    //TODO: I think this would be nice if it was acutally one file rather than many. So we appended to it somehow.
+    let filename = format!("{}/observables_{}.mpk", get_project_dir(project), observables.state);
+    let mut output = Vec::new();
+    observables.serialize(&mut Serializer::new(&mut output)).unwrap(); //TODO: Actual error handling.
+    let mut buffer = File::create(filename).expect("Cannot create observable output file");
+    buffer.write_all(&output).expect("Unable to write data to observable file");
+}
+
+/// Saves the observables to a plain json file.
+fn observables_plain(observables: &ObservablesOutput, project: &str) {
+    //TODO: I think this would be nice if it was acutally one file rather than many. So we appended to it somehow.
+    let filename = format!("{}/observables_{}.json", get_project_dir(project), observables.state);
+    let buffer = File::create(filename).expect("Cannot create observable output file");
+    serde_json::to_writer_pretty(buffer, observables).expect("Unable to write data to observable file");
+    //buffer.write_all(&output).expect("Unable to write data to observable file");
 }
 
 /// Generates a unique folder inside an `output` directory for the current simulation.

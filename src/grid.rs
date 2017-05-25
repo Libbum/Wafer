@@ -123,7 +123,7 @@ fn solve(config: &Config,
             if diff < config.tolerance {
                 prog_bar.finish_and_clear();
                 println!("{}", output::measurements(tau, diff, &observables));
-                output::summary(&observables, wnum, config.grid.size.x as f64);
+                output::summary(&observables, wnum, config.grid.size.x as f64, &config.project_name);
                 converged = true;
                 break;
             } else {
