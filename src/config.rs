@@ -53,6 +53,10 @@ pub struct Output {
     pub screen_update: u64,
     /// How many steps should the system evolve before saving a partially converged wavefunction.
     pub snap_update: u64,
+    /// Set `true` for files to be saved in a binary format (messagepack). Smaller files, faster save time, but not
+    /// human readable. Set `false` for human readable files (csv and json), which take up more disk space and
+    /// are slower to write.
+    pub binary_files: bool,
     /// Should wavefunctions be saved at all? Not necessary if energy values are the only interest.
     /// Each excited state is saved once it is converged or if `max_steps` is reached.
     pub save_wavefns: bool,

@@ -122,8 +122,8 @@ fn solve(config: &Config,
             let diff = (norm_energy - last_energy).abs();
             if diff < config.tolerance {
                 prog_bar.finish_and_clear();
-                println!("{}", output::measurements(tau, diff, &observables));
-                output::summary(&observables, wnum, config.grid.size.x as f64, &config.project_name);
+                println!("{}", output::print_measurements(tau, diff, &observables));
+                output::finalise_measurment(&observables, wnum, config.grid.size.x as f64, &config.project_name, config.output.binary_files);
                 converged = true;
                 break;
             } else {
@@ -144,7 +144,7 @@ fn solve(config: &Config,
                 prog_bar.set_position(percent as u64);
             }
         }
-        prog_bar.set_message(&output::measurements(tau, diff, &observables));
+        prog_bar.set_message(&output::print_measurements(tau, diff, &observables));
 
         // Evolve solution until next screen update
         if step < config.max_steps {

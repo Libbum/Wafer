@@ -170,7 +170,7 @@ pub fn print_observable_header(wnum: u8) {
 }
 
 /// Pretty prints measurements at current step to screen
-pub fn measurements(tau: f64, diff: f64, observables: &grid::Observables) -> String {
+pub fn print_measurements(tau: f64, diff: f64, observables: &grid::Observables) -> String {
     //TODO: This is going to be called every output. Maybe generate a lazy_static value?
     let width = get_term_size();
     let spacer = (width - 69) / 2;
@@ -194,10 +194,17 @@ pub fn measurements(tau: f64, diff: f64, observables: &grid::Observables) -> Str
     }
 }
 
-/// Pretty print final summary
-pub fn summary(observables: &grid::Observables, wnum: u8, numx: f64, project: &str) {
-    let width = get_term_size();
-    let spacer = (width - 69) / 2;
+/// Sets up the final mesasurements for each wavefunction, printing them to screen and saving
+/// them to disk.
+///
+/// #Arguments
+///
+/// * `observables` - calculated, un-normalised values.
+/// * `wnum` - current wave number.
+/// * `numx` - the width of the calculation box.
+/// * `project` - current project name (for file output).
+/// * `binary` - bool setting binary or plain text output.
+pub fn finalise_measurment(observables: &grid::Observables, wnum: u8, numx: f64, project: &str, binary: bool) {
     let r_norm = (observables.r2 / observables.norm2).sqrt();
     let output = ObservablesOutput {
         state: wnum,
@@ -206,6 +213,20 @@ pub fn summary(observables: &grid::Observables, wnum: u8, numx: f64, project: &s
         r: r_norm,
         l_r: numx / r_norm,
     };
+
+    print_summary(&output);
+
+    if binary {
+        observables_binary(&output, project);
+    } else {
+        observables_plain(&output, project);
+    }
+}
+
+/// Pretty print final summary
+fn print_summary(output: &ObservablesOutput) {
+    let width = get_term_size();
+    let spacer = (width - 69) / 2;
 
     println!("{:═^lspace$}╧{:═^twidth$}╧{:═^ewidth$}╧{:═^width$}╧{:═^width$}╧{:═^rspace$}",
              "",
@@ -223,11 +244,11 @@ pub fn summary(observables: &grid::Observables, wnum: u8, numx: f64, project: &s
              } else {
                  spacer
              });
-    if let 0 = wnum {
+    if let 0 = output.state {
         println!("══▶ Ground state energy = {}", output.energy);
         println!("══▶ Ground state binding energy = {}", output.binding_energy);
     } else {
-        let state = Ordinal::from(wnum);
+        let state = Ordinal::from(output.state);
         println!("══▶ {} excited state energy = {}", state, output.energy);
         println!("══▶ {} excited state binding energy = {}",
                  state,
@@ -237,13 +258,10 @@ pub fn summary(observables: &grid::Observables, wnum: u8, numx: f64, project: &s
     println!("══▶ L/rᵣₘₛ = {}", output.l_r);
     println!("");
 
-    observables_binary(&output, project); //TODO: These are just here for testing, we need to treat this better.
-    observables_plain(&output, project);
 }
 
 /// Saves the observables to a messagepack binary file.
 fn observables_binary(observables: &ObservablesOutput, project: &str) {
-    //TODO: I think this would be nice if it was acutally one file rather than many. So we appended to it somehow.
     let filename = format!("{}/observables_{}.mpk", get_project_dir(project), observables.state);
     let mut output = Vec::new();
     observables.serialize(&mut Serializer::new(&mut output)).unwrap(); //TODO: Actual error handling.
@@ -253,11 +271,9 @@ fn observables_binary(observables: &ObservablesOutput, project: &str) {
 
 /// Saves the observables to a plain json file.
 fn observables_plain(observables: &ObservablesOutput, project: &str) {
-    //TODO: I think this would be nice if it was acutally one file rather than many. So we appended to it somehow.
     let filename = format!("{}/observables_{}.json", get_project_dir(project), observables.state);
     let buffer = File::create(filename).expect("Cannot create observable output file");
     serde_json::to_writer_pretty(buffer, observables).expect("Unable to write data to observable file");
-    //buffer.write_all(&output).expect("Unable to write data to observable file");
 }
 
 /// Generates a unique folder inside an `output` directory for the current simulation.
