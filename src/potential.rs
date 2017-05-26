@@ -113,6 +113,9 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Potentials {
             let init_size: [usize; 3] = [(num.x + 6) as usize,
                                          (num.y + 6) as usize,
                                          (num.z + 6) as usize];
+            // TODO: This is not as straightforawrd. We need to search for both binary and txt
+            // files as input. Throw a warning if both, but chose the one with config.output.binary_files,
+            // then load that. Not just the one.
             match input::potential_plain(init_size) {
                 Ok(pot) => {
                     if pot.shape() == init_size {
@@ -154,7 +157,7 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Potentials {
         //Not sure if we should use someting like messagepack as there are matlab
         //and python bindings, or try for hdf5. The rust bindings there are pretty
         //shonky. So not sure. We'll need a text only option anyhow, so build that fist.
-        match output::potential_plain(&v, &config.project_name) {
+        match output::potential(&v, &config.project_name, config.output.binary_files) {
             Ok(_) => {}
             Err(err) => warn!(log, "Could not write potential to disk: {}", err),
         }

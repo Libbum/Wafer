@@ -133,22 +133,51 @@ pub fn print_banner(sha: &str) {
     println!("");
 }
 
+/// Handles the saving of potential data to disk.
+///
+/// # Arguments
+/// *`v` - The potential to output.
+/// * `project` - The project name (for directory to save to).
+/// * `binary` - Bool to identify what type of file to be output (plain text or messagepack).
+pub fn potential(v: &Array3<f64>, project: &str, binary: bool) -> Result<(), OutputError> {
+    let filename = format!("{}/potential.{}", get_project_dir(project), if binary { "mpk" } else { "csv"});
+
+    if binary {
+        potential_binary(v, &filename)
+    } else {
+        potential_plain(v, &filename)
+    }
+}
+
 /// Outputs the current potential to disk in a plain, csv format
 ///
 /// # Arguments
 /// *`v` - The potential to output
-///
-/// # Returns
-/// * A result type with a `std::io::Error`. The result value is a true bool
-/// as we really only want to error check the result.
-pub fn potential_plain(v: &Array3<f64>, project: &str) -> Result<(), OutputError> {
-    let mut buffer = File::create(get_project_dir(project) + "/potential.csv")?;
+/// * `filename` - file / directory to save to.
+fn potential_plain(v: &Array3<f64>, filename: &str) -> Result<(), OutputError> {
+    let mut buffer = File::create(filename)?;
     let work = grid::get_work_area(v);
     for ((i, j, k), el) in work.indexed_iter() {
         let output = format!("{}, {}, {}, {:e}\n", i, j, k, el);
         buffer.write_all(output.as_bytes())?;
     }
     Ok(())
+}
+
+/// Outputs the current potential to disk in the messagepack binary format
+///
+/// # Arguments
+/// *`v` - The potential to output
+/// * `filename` - file / directory to save to.
+fn potential_binary(v: &Array3<f64>, filename: &str) -> Result<(), OutputError> {
+    //NOTE: The code below should work, but we must wait for ndarray to have serde 1.0 compatability.
+    //For now, we just output to plain instead.
+    potential_plain(v, filename)
+    //let mut output = Vec::new();
+    //v.serialize(&mut rmps::Serializer::new(&mut output))?;
+    //let mut buffer = File::create(filename)?;
+    //buffer.write_all(&output)?;
+    //Ok(())
 }
 
 /// Saves a wavefunction to disk, and controlls what format (plain text or binary)
@@ -161,10 +190,6 @@ pub fn potential_plain(v: &Array3<f64>, project: &str) -> Result<(), OutputError
 /// will have `_partial` appended to it to indicate a restart is required.
 /// * `project` - The project name (for directory to save to).
 /// * `binary` - A bool to ascertain if output should be in binary or plain text format.
-///
-/// # Returns
-/// * A result type with a `std::io::Error`. The result value is a true bool
-/// as we really only want to error check the result.
 pub fn wavefunction(phi: &ArrayView3<f64>,
                     num: u8,
                     converged: bool,
@@ -188,10 +213,6 @@ pub fn wavefunction(phi: &ArrayView3<f64>,
 /// # Arguments
 /// * `phi` - The wavefunction to output. This should be a view called from `grid::get_work_area()`.
 /// * `filename` - A string indiciting the location of the output.
-///
-/// # Returns
-/// * A result type with a `std::io::Error`. The result value is a true bool
-/// as we really only want to error check the result.
 fn wavefunction_binary(phi: &ArrayView3<f64>, filename: &str) -> Result<(), OutputError> {
     //NOTE: The code below should work, but we must wait for ndarray to have serde 1.0 compatability.
     //For now, we just output to plain instead.
@@ -208,12 +229,8 @@ fn wavefunction_binary(phi: &ArrayView3<f64>, filename: &str) -> Result<(), Outp
 /// # Arguments
 /// * `phi` - The wavefunction to output. This should be a view called from `grid::get_work_area()`.
 /// * `filename` - A string indiciting the location of the output.
-///
-/// # Returns
-/// * A result type with a `std::io::Error`. The result value is a true bool
-/// as we really only want to error check the result.
 fn wavefunction_plain(phi: &ArrayView3<f64>, filename: &str) -> Result<(), OutputError> {
-    let mut buffer = csv::Writer::from_path(filename)?;
+    let mut buffer = csv::WriterBuilder::new().has_headers(false).from_path(filename)?;
     for ((i, j, k), data) in phi.indexed_iter() {
         buffer
             .serialize(PlainRecord {
