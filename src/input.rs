@@ -8,6 +8,19 @@ use ndarray_parallel::prelude::*;
 use grid;
 use config::Config;
 
+#[derive(Debug,Deserialize)]
+/// A simple struct to parse data from a plain csv file
+struct PlainRecord {
+    /// Index in *x*
+    i: usize,
+    /// Index in *y*
+    j: usize,
+    /// Index in *z*
+    k: usize,
+    /// Data at this position
+    data: f64,
+}
+
 /// Loads a wafefunction from a csv file on disk.
 pub fn wavefunction_plain(wnum: u8, target_size: [usize; 3]) -> Result<Array3<f64>, csv::Error> {
     let filename = format!("./input/wavefunction_{}.csv", wnum);
@@ -93,23 +106,23 @@ fn parse_csv_to_array3(file: Option<String>,
                        -> Result<Array3<f64>, csv::Error> {
     match file {
         Some(f) => {
-            let mut rdr = csv::Reader::from_file(f)?.has_headers(false);
+            let mut rdr = csv::ReaderBuilder::new().has_headers(false).from_path(f)?;
             let mut max_i = 0;
             let mut max_j = 0;
             let mut max_k = 0;
             let mut data: Vec<f64> = Vec::new();
-            for record in rdr.decode() {
-                let (i, j, k, value): (usize, usize, usize, f64) = record?;
-                if i > max_i {
-                    max_i = i
+            for result in rdr.deserialize() {
+                let record: PlainRecord = result?;
+                if record.i > max_i {
+                    max_i = record.i
                 };
-                if j > max_j {
-                    max_j = j
+                if record.j > max_j {
+                    max_j = record.j
                 };
-                if k > max_k {
-                    max_k = k
+                if record.k > max_k {
+                    max_k = record.k
                 };
-                data.push(value);
+                data.push(record.data);
             }
             let numx = max_i + 1;
             let numy = max_j + 1;
@@ -152,6 +165,6 @@ fn parse_csv_to_array3(file: Option<String>,
                 Err(err) => panic!("Error parsing file into array: {}", err), //TODO: Pass this up
             }
         }
-        None => Err(csv::Error::Io(Error::from(ErrorKind::NotFound))),
+        None => Err(csv::Error::from(Error::from(ErrorKind::NotFound))),
     }
 }

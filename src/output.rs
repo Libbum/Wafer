@@ -1,12 +1,15 @@
 use chrono::Local;
-use ndarray::Array3;
+use csv;
+use ndarray::{Array3, ArrayView3};
 use ordinal::Ordinal;
 use rayon;
 use serde::Serialize;
 use serde_json;
-use rmps::Serializer;
+use rmps;
+use std::error::Error;
+use std::fmt;
 use std::fs::{copy, create_dir_all, File};
-use std::io::Error;
+use std::io;
 use std::io::prelude::*;
 use term_size;
 use ansi_term::Colour::Blue;
@@ -34,6 +37,87 @@ struct ObservablesOutput {
     l_r: f64,
 }
 
+#[derive(Debug,Serialize)]
+/// A simple struct to parse data to a plain csv file
+struct PlainRecord {
+    /// Index in *x*
+    i: usize,
+    /// Index in *y*
+    j: usize,
+    /// Index in *z*
+    k: usize,
+    /// Data at this position
+    data: f64,
+}
+
+/// Error type for handling file output. Effectively a wapper around multiple error types we encounter.
+#[derive(Debug)]
+pub enum OutputError {
+    /// From disk issues.
+    Io(io::Error),
+    /// From `serde_json`.
+    EncodePlain(serde_json::Error),
+    /// From `rmp_serde`.
+    EncodeBinary(rmps::encode::Error),
+    /// From `csv`.
+    Csv(csv::Error),
+}
+
+impl fmt::Display for OutputError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            OutputError::Io(ref err) => err.fmt(f),
+            OutputError::EncodePlain(ref err) => err.fmt(f),
+            OutputError::EncodeBinary(ref err) => err.fmt(f),
+            OutputError::Csv(ref err) => err.fmt(f),
+        }
+    }
+}
+
+impl Error for OutputError {
+    fn description(&self) -> &str {
+        match *self {
+            OutputError::Io(ref err) => err.description(),
+            OutputError::EncodePlain(ref err) => err.description(),
+            OutputError::EncodeBinary(ref err) => err.description(),
+            OutputError::Csv(ref err) => err.description(),
+        }
+    }
+
+    fn cause(&self) -> Option<&Error> {
+        match *self {
+            OutputError::Io(ref err) => Some(err),
+            OutputError::EncodePlain(ref err) => Some(err),
+            OutputError::EncodeBinary(ref err) => Some(err),
+            OutputError::Csv(ref err) => Some(err),
+        }
+    }
+}
+
+impl From<io::Error> for OutputError {
+    fn from(err: io::Error) -> OutputError {
+        OutputError::Io(err)
+    }
+}
+
+impl From<serde_json::Error> for OutputError {
+    fn from(err: serde_json::Error) -> OutputError {
+        OutputError::EncodePlain(err)
+    }
+}
+
+impl From<rmps::encode::Error> for OutputError {
+    fn from(err: rmps::encode::Error) -> OutputError {
+        OutputError::EncodeBinary(err)
+    }
+}
+
+impl From<csv::Error> for OutputError {
+    fn from(err: csv::Error) -> OutputError {
+        OutputError::Csv(err)
+    }
+}
+
 /// Simply prints the Wafer banner with current commit info and thread count.
 pub fn print_banner(sha: &str) {
     println!("                    {}", Blue.paint("___"));
@@ -57,49 +141,90 @@ pub fn print_banner(sha: &str) {
 /// # Returns
 /// * A result type with a `std::io::Error`. The result value is a true bool
 /// as we really only want to error check the result.
-pub fn potential_plain(v: &Array3<f64>, project: &str) -> Result<bool, Error> {
+pub fn potential_plain(v: &Array3<f64>, project: &str) -> Result<(), OutputError> {
     let mut buffer = File::create(get_project_dir(project) + "/potential.csv")?;
-    let dims = v.dim();
-    let work = v.slice(s![3..(dims.0 as isize) - 3,
-                          3..(dims.1 as isize) - 3,
-                          3..(dims.2 as isize) - 3]);
+    let work = grid::get_work_area(v);
     for ((i, j, k), el) in work.indexed_iter() {
         let output = format!("{}, {}, {}, {:e}\n", i, j, k, el);
         buffer.write_all(output.as_bytes())?;
     }
-    Ok(true)
+    Ok(())
 }
 
-/// Outputs a wavefunction to disk in a plain, csv format
+/// Saves a wavefunction to disk, and controlls what format (plain text or binary)
+/// the data should be handled as.
 ///
 /// # Arguments
-/// * `phi` - The wavefunction to output
+/// * `phi` - The wavefunction to output. This should be a view called from `grid::get_work_area()`.
 /// * `num` - The wavefunction's excited state value for file naming.
-/// * `converged` - a bool advising the state of the wavefunction. If false, the filename
+/// * `converged` - A bool advising the state of the wavefunction. If false, the filename
 /// will have `_partial` appended to it to indicate a restart is required.
+/// * `project` - The project name (for directory to save to).
+/// * `binary` - A bool to ascertain if output should be in binary or plain text format.
 ///
 /// # Returns
 /// * A result type with a `std::io::Error`. The result value is a true bool
 /// as we really only want to error check the result.
-pub fn wavefunction_plain(phi: &Array3<f64>,
-                          num: u8,
-                          converged: bool,
-                          project: &str)
-                          -> Result<bool, Error> {
-    let filename = format!("{}/wavefunction_{}{}.csv",
+pub fn wavefunction(phi: &ArrayView3<f64>,
+                    num: u8,
+                    converged: bool,
+                    project: &str,
+                    binary: bool)
+                    -> Result<(), OutputError> {
+    let filename = format!("{}/wavefunction_{}{}.{}",
                            get_project_dir(project),
                            num,
-                           if converged { "" } else { "_partial" });
-    let mut buffer = File::create(filename)?;
-    let dims = phi.dim();
-    let work = phi.slice(s![3..(dims.0 as isize) - 3,
-                            3..(dims.1 as isize) - 3,
-                            3..(dims.2 as isize) - 3]);
-    for ((i, j, k), el) in work.indexed_iter() {
-        let output = format!("{}, {}, {}, {:e}\n", i, j, k, el);
-        buffer.write_all(output.as_bytes())?;
+                           if converged { "" } else { "_partial" },
+                           if binary { "mpk" } else { "csv" });
+    if binary {
+        wavefunction_binary(phi, &filename)
+    } else {
+        wavefunction_plain(phi, &filename)
     }
-    Ok(true)
+}
+
+/// Outputs a wavefunction to disk in the messagepack binary format.
+///
+/// # Arguments
+/// * `phi` - The wavefunction to output. This should be a view called from `grid::get_work_area()`.
+/// * `filename` - A string indiciting the location of the output.
+///
+/// # Returns
+/// * A result type with a `std::io::Error`. The result value is a true bool
+/// as we really only want to error check the result.
+fn wavefunction_binary(phi: &ArrayView3<f64>, filename: &str) -> Result<(), OutputError> {
+    //NOTE: The code below should work, but we must wait for ndarray to have serde 1.0 compatability.
+    //For now, we just output to plain instead.
+    wavefunction_plain(phi, filename)
+    //let mut output = Vec::new();
+    //phi.serialize(&mut rmps::Serializer::new(&mut output))?;
+    //let mut buffer = File::create(filename)?;
+    //buffer.write_all(&output)?;
+    //Ok(())
+}
+
+/// Outputs a wavefunction to disk in a plain, csv format.
+///
+/// # Arguments
+/// * `phi` - The wavefunction to output. This should be a view called from `grid::get_work_area()`.
+/// * `filename` - A string indiciting the location of the output.
+///
+/// # Returns
+/// * A result type with a `std::io::Error`. The result value is a true bool
+/// as we really only want to error check the result.
+fn wavefunction_plain(phi: &ArrayView3<f64>, filename: &str) -> Result<(), OutputError> {
+    let mut buffer = csv::Writer::from_path(filename)?;
+    for ((i, j, k), data) in phi.indexed_iter() {
+        buffer
+            .serialize(PlainRecord {
+                           i: i,
+                           j: j,
+                           k: k,
+                           data: *data,
+                       })?;
+    }
+    buffer.flush()?;
+    Ok(())
 }
 
 /// Pretty prints a header for the subsequent observable data
@@ -204,7 +329,12 @@ pub fn print_measurements(tau: f64, diff: f64, observables: &grid::Observables) 
 /// * `numx` - the width of the calculation box.
 /// * `project` - current project name (for file output).
 /// * `binary` - bool setting binary or plain text output.
-pub fn finalise_measurment(observables: &grid::Observables, wnum: u8, numx: f64, project: &str, binary: bool) {
+pub fn finalise_measurement(observables: &grid::Observables,
+                            wnum: u8,
+                            numx: f64,
+                            project: &str,
+                            binary: bool)
+                            -> Result<(), OutputError> {
     let r_norm = (observables.r2 / observables.norm2).sqrt();
     let output = ObservablesOutput {
         state: wnum,
@@ -217,9 +347,9 @@ pub fn finalise_measurment(observables: &grid::Observables, wnum: u8, numx: f64,
     print_summary(&output);
 
     if binary {
-        observables_binary(&output, project);
+        observables_binary(&output, project)
     } else {
-        observables_plain(&output, project);
+        observables_plain(&output, project)
     }
 }
 
@@ -246,10 +376,13 @@ fn print_summary(output: &ObservablesOutput) {
              });
     if let 0 = output.state {
         println!("══▶ Ground state energy = {}", output.energy);
-        println!("══▶ Ground state binding energy = {}", output.binding_energy);
+        println!("══▶ Ground state binding energy = {}",
+                 output.binding_energy);
     } else {
         let state = Ordinal::from(output.state);
-        println!("══▶ {} excited state energy = {}", state, output.energy);
+        println!("══▶ {} excited state energy = {}",
+                 state,
+                 output.energy);
         println!("══▶ {} excited state binding energy = {}",
                  state,
                  output.binding_energy);
@@ -261,19 +394,26 @@ fn print_summary(output: &ObservablesOutput) {
 }
 
 /// Saves the observables to a messagepack binary file.
-fn observables_binary(observables: &ObservablesOutput, project: &str) {
-    let filename = format!("{}/observables_{}.mpk", get_project_dir(project), observables.state);
+fn observables_binary(observables: &ObservablesOutput, project: &str) -> Result<(), OutputError> {
+    let filename = format!("{}/observables_{}.mpk",
+                           get_project_dir(project),
+                           observables.state);
     let mut output = Vec::new();
-    observables.serialize(&mut Serializer::new(&mut output)).unwrap(); //TODO: Actual error handling.
-    let mut buffer = File::create(filename).expect("Cannot create observable output file");
-    buffer.write_all(&output).expect("Unable to write data to observable file");
+    observables
+        .serialize(&mut rmps::Serializer::new(&mut output))?;
+    let mut buffer = File::create(filename)?;
+    buffer.write_all(&output)?;
+    Ok(())
 }
 
 /// Saves the observables to a plain json file.
-fn observables_plain(observables: &ObservablesOutput, project: &str) {
-    let filename = format!("{}/observables_{}.json", get_project_dir(project), observables.state);
-    let buffer = File::create(filename).expect("Cannot create observable output file");
-    serde_json::to_writer_pretty(buffer, observables).expect("Unable to write data to observable file");
+fn observables_plain(observables: &ObservablesOutput, project: &str) -> Result<(), OutputError> {
+    let filename = format!("{}/observables_{}.json",
+                           get_project_dir(project),
+                           observables.state);
+    let buffer = File::create(filename)?;
+    serde_json::to_writer_pretty(buffer, observables)?;
+    Ok(())
 }
 
 /// Generates a unique folder inside an `output` directory for the current simulation.

@@ -72,7 +72,9 @@ fn solve(config: &Config,
             // then try to load the old excited state 1 from disk, which is most likely
             // something completely irrelevant. Throw a warning for this scenario.
             if config.init_condition != InitialCondition::FromFile && wnum > config.wavenum {
-                warn!(log, "Loaded a higher order wavefunction from disk although Initial conditions are set to '{}'.", config.init_condition);
+                warn!(log,
+                      "Loaded a higher order wavefunction from disk although Initial conditions are set to '{}'.",
+                      config.init_condition);
             }
             wfn
         } else {
@@ -123,7 +125,13 @@ fn solve(config: &Config,
             if diff < config.tolerance {
                 prog_bar.finish_and_clear();
                 println!("{}", output::print_measurements(tau, diff, &observables));
-                output::finalise_measurment(&observables, wnum, config.grid.size.x as f64, &config.project_name, config.output.binary_files);
+                if let Err(err) = output::finalise_measurement(&observables,
+                                                               wnum,
+                                                               config.grid.size.x as f64,
+                                                               &config.project_name,
+                                                               config.output.binary_files) {
+                    panic!("Error with ouput: {}", err);
+                }
                 converged = true;
                 break;
             } else {
@@ -158,7 +166,12 @@ fn solve(config: &Config,
     if config.output.save_wavefns {
         //NOTE: This wil save regardless of whether it is converged or not, so we flag it if that's the case.
         info!(log, "Saving wavefunction {} to disk", wnum);
-        match output::wavefunction_plain(&phi, wnum, converged, &config.project_name) {
+        let work = get_work_area(&phi);
+        match output::wavefunction(&work,
+                                   wnum,
+                                   converged,
+                                   &config.project_name,
+                                   config.output.binary_files) {
             Ok(_) => {}
             Err(err) => crit!(log, "Could not write wavefunction to disk: {}", err),
         }
@@ -331,7 +344,7 @@ fn orthogonalise_wavefunction(wnum: u8, w: &mut Array3<f64>, w_store: &[Array3<f
 /// # Returns
 ///
 /// An arrav view containing only the workable area of the array.
-fn get_work_area(arr: &Array3<f64>) -> ArrayView3<f64> {
+pub fn get_work_area(arr: &Array3<f64>) -> ArrayView3<f64> {
     // TODO: This is hardcoded to a 7 point stencil
     let dims = arr.dim();
     arr.slice(s![3..(dims.0 as isize) - 3,
