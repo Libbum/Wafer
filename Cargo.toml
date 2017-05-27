@@ -19,6 +19,7 @@ name = "wafer"
 ansi_term = "0.9"
 blas-sys = { version = "0.6", default-features = false, features = ["openblas"] }
 chrono = "0.3"
+clap = "~2.24.2"
 clippy = {git = "https://github.com/Manishearth/rust-clippy", optional = true}
 csv = "1.0.0-beta.3"
 indicatif = "0.5"

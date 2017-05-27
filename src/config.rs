@@ -331,9 +331,9 @@ impl Config {
     /// contents of this file are not valid *json* (soon to be *hjson*
     /// to minimise this possibility); and finally there are a number of checks
     /// on bounds of the user input. For example; grid.dt ≤ grid.dn²/3.
-    pub fn load() -> Result<Config, Error> {
+    pub fn load(file: &str) -> Result<Config, Error> {
         //Read in configuration file (hjson format)
-        let raw_config = read_file("wafer.cfg")?;
+        let raw_config = read_file(file)?;
         // Decode configuration file.
         let decoded_config: Config = serde_json::from_str(&raw_config)?;
         Config::parse(&decoded_config)?;

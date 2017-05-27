@@ -21,6 +21,8 @@
 
 extern crate ansi_term;
 extern crate chrono;
+#[macro_use]
+extern crate clap;
 extern crate csv;
 extern crate indicatif;
 #[macro_use]
@@ -44,6 +46,7 @@ extern crate slog_async;
 extern crate slog_term;
 extern crate term_size;
 
+use clap::{App, Arg};
 use slog::{Drain, Duplicate, Logger, Fuse, LevelFilter, Level};
 use std::fs::OpenOptions;
 use std::process;
@@ -69,10 +72,29 @@ mod potential;
 
 /// System entry point
 fn main() {
-
+    //Simulation timer.
     let start_time = Instant::now();
 
-    let config = match Config::load() {
+    //CLI options. For the moment, a custom configuration file and custom debug levels.
+    let matches = App::new("Wafer")
+                        .version(crate_version!())
+                        .author(crate_authors!())
+                        .about("Exploits a Wick-rotated time-dependent Schrödinger equation to solve for time-independent solutions in three dimensions.")
+                        .arg(Arg::with_name("config")
+                                    .short("c")
+                                    .long("config")
+                                    .value_name("FILE")
+                                    .help("The configuration file to use (default is \"wafer.cfg\")")
+                                    .takes_value(true))
+                        .arg(Arg::with_name("debug")
+                                    .short("d")
+                                    .multiple(true)
+                                    .help("Raises screen debug level"))
+                        .get_matches();
+
+    //Load configuation parameters.
+    let config_file = matches.value_of("config").unwrap_or("wafer.cfg");
+    let config = match Config::load(config_file) {
         Ok(c) => c,
         Err(err) => {
             println!("Error processing configuration: {}", err);
@@ -84,6 +106,7 @@ fn main() {
         process::exit(1);
     };
 
+    //Setup logging.
     let log_file = OpenOptions::new()
         .create(true)
         .write(true)
@@ -97,12 +120,15 @@ fn main() {
     let screen_drain = slog_term::FullFormat::new(screen).build().fuse();
     let screen_drain = slog_async::Async::new(screen_drain).build().fuse();
 
-    let log = Logger::root(Fuse::new(Duplicate::new(LevelFilter::new(screen_drain,
-                                                                     Level::Warning),
-                                                    sys_drain)),
+    let screen_level = match matches.occurrences_of("debug") {
+        0 => Level::Warning,
+        1 => Level::Info,
+        2 | _ => Level::Debug,
+    };
+    let log = Logger::root(Fuse::new(Duplicate::new(LevelFilter::new(screen_drain, screen_level), sys_drain)),
                            o!());
 
-    info!(log, "Starting Wafer solver"; "version" => env!("CARGO_PKG_VERSION"), "build-id" => short_sha());
+    info!(log, "Starting Wafer solver"; "version" => crate_version!(), "build-id" => short_sha());
 
     info!(log, "Checking/creating directories");
     if let Err(err) = input::check_input_dir() {
