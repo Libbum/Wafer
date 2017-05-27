@@ -107,23 +107,26 @@ fn main() {
         Ok(c) => c,
         Err(err) => {
             println!("Error processing configuration: {}", err);
-            //This match isn't happy using the `exit_with_pause` function, but fine with it explicit like this...
-            thread::sleep(Duration::from_millis(10));
             process::exit(1);
         }
     };
     if let Err(err) = output::check_output_dir(&config.project_name) {
         println!("Could not communicate with output directory: {}", err);
-        exit_with_pause();
+        process::exit(1);
     };
 
     //Setup logging.
-    let log_file = OpenOptions::new()
+    let log_file = match OpenOptions::new()
         .create(true)
         .write(true)
         .truncate(true)
-        .open(output::get_project_dir(&config.project_name) + "/simulation.log")
-        .expect("Cannot connect to log file");
+        .open(output::get_project_dir(&config.project_name) + "/simulation.log") {
+        Ok(f) => f,
+        Err(err) => {
+            println!("Could not connect to log file: {}", err);
+            process::exit(1);
+        }
+    };
     let syslog = slog_term::PlainDecorator::new(log_file);
     let sys_drain = slog_term::FullFormat::new(syslog).build().fuse();
     let sys_drain = slog_async::Async::new(sys_drain).build().fuse();
