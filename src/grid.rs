@@ -27,7 +27,7 @@ pub struct Observables {
 }
 
 /// Runs the calculation and holds long term (system time) wavefunction storage
-pub fn run(config: &Config, log: &Logger) {
+pub fn run(config: &Config, log: &Logger) -> Result<(), input::Error> { //TODO: Generalise error here.
 
     let potentials = potential::load_arrays(config, log);
 
@@ -35,7 +35,7 @@ pub fn run(config: &Config, log: &Logger) {
     if config.wavenum > 0 {
         //We require wavefunctions from disk, even if initial condition is not `FromFile`
         //The wavenum = 0 case is handled later
-        input::load_wavefunctions(config, log, config.output.binary_files, &mut w_store);
+        input::load_wavefunctions(config, log, config.output.binary_files, &mut w_store)?;
     }
 
     info!(log, "Starting calculation");
@@ -43,6 +43,7 @@ pub fn run(config: &Config, log: &Logger) {
     for wnum in config.wavenum..config.wavemax + 1 {
         solve(config, log, &potentials, wnum, &mut w_store);
     }
+    Ok(())
 }
 
 

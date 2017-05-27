@@ -1,8 +1,11 @@
 use csv;
 use slog::Logger;
 use std::fs::create_dir;
-use std::io::{Error, ErrorKind};
+use std::io;
+use std::error;
+use std::fmt;
 use std::path::Path;
+use ndarray;
 use ndarray::{Array3, Zip};
 use ndarray_parallel::prelude::*;
 use grid;
@@ -21,6 +24,63 @@ struct PlainRecord {
     data: f64,
 }
 
+/// Error type for handling file output. Effectively a wapper around multiple error types we encounter.
+#[derive(Debug)]
+pub enum Error {
+    /// From disk issues.
+    Io(io::Error),
+    /// From `csv`.
+    Csv(csv::Error),
+    /// From `ndarray`.
+    Shape(ndarray::ShapeError),
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Error::Io(ref err) => err.fmt(f),
+            Error::Csv(ref err) => err.fmt(f),
+            Error::Shape(ref err) => err.fmt(f),
+        }
+    }
+}
+
+impl error::Error for Error {
+    fn description(&self) -> &str {
+        match *self {
+            Error::Io(ref err) => err.description(),
+            Error::Csv(ref err) => err.description(),
+            Error::Shape(ref err) => err.description(),
+        }
+    }
+
+    fn cause(&self) -> Option<&error::Error> {
+        match *self {
+            Error::Io(ref err) => Some(err),
+            Error::Csv(ref err) => Some(err),
+            Error::Shape(ref err) => Some(err),
+        }
+    }
+}
+
+impl From<io::Error> for Error {
+    fn from(err: io::Error) -> Error {
+        Error::Io(err)
+    }
+}
+
+impl From<csv::Error> for Error {
+    fn from(err: csv::Error) -> Error {
+        Error::Csv(err)
+    }
+}
+
+impl From<ndarray::ShapeError> for Error {
+    fn from(err: ndarray::ShapeError) -> Error {
+        Error::Shape(err)
+    }
+}
+
 
 /// Loads potential file from disk. Handles cases where multiple files exist.
 ///
@@ -31,7 +91,7 @@ struct PlainRecord {
 /// * `binary` - Configuation flag concerning binary /  plain file output. Will be used as an arbitrator
 /// when multiple files are detected.
 /// * `log` - Reference to the system logger.
-pub fn potential(target_size: [usize; 3], binary: bool, log: &Logger) -> Result<Array3<f64>, csv::Error> {
+pub fn potential(target_size: [usize; 3], binary: bool, log: &Logger) -> Result<Array3<f64>, Error> {
     let plain_path = "./input/potential.csv";
     let binary_path = "./input/potential.mpk";
     let plain_file = if Path::new(&plain_path).exists() {
@@ -60,20 +120,21 @@ pub fn potential(target_size: [usize; 3], binary: bool, log: &Logger) -> Result<
 }
 
 /// Loads a potential from a csv file on disk.
-fn potential_plain(file: Option<String>, target_size: [usize; 3]) -> Result<Array3<f64>, csv::Error> {
+fn potential_plain(file: Option<String>, target_size: [usize; 3]) -> Result<Array3<f64>, Error> {
     //No need for anything more here, just call the general parser.
     parse_csv_to_array3(file, target_size)
 }
 
 /// Loads a potential from a mpk file on disk.
-fn potential_binary(file: Option<String>, target_size: [usize; 3]) -> Result<Array3<f64>, csv::Error> {
+fn potential_binary(file: Option<String>, target_size: [usize; 3]) -> Result<Array3<f64>, Error> {
     //TODO: Not implemented yet, for now call plain
+    let _none = file;
     potential_plain(Some("./input/potential.csv".to_string()), target_size)
 }
 
 
 /// Loads previously computed wavefunctions from disk.
-pub fn load_wavefunctions(config: &Config, log: &Logger, binary: bool, w_store: &mut Vec<Array3<f64>>) {
+pub fn load_wavefunctions(config: &Config, log: &Logger, binary: bool, w_store: &mut Vec<Array3<f64>>) -> Result<(), Error> {
     let num = &config.grid.size;
     let init_size: [usize; 3] = [(num.x + 6) as usize,
                                  (num.y + 6) as usize,
@@ -83,14 +144,13 @@ pub fn load_wavefunctions(config: &Config, log: &Logger, binary: bool, w_store: 
         let wfn = wavefunction(wnum, init_size, binary, log);
         match wfn {
             Ok(w) => w_store.push(w),
-            Err(err) => {
-                panic!("Cannot load any wavefunction_{}* file from input folder: {}",
-                       wnum,
-                       err)
-            }
+            Err(err) => return Err(err),
+            //TODO: Probably need to make these errors a litte more expressive in thier format sections. For example:
+            //    panic!("Cannot load any wavefunction_{}* file from input folder: {}", wnum, err)
         }
         info!(log, "Loaded (previous) wavefunction {} from disk", wnum);
     }
+    Ok(())
 }
 
 /// Loads wavefunction file from disk. Handles cases where multiple files exist.
@@ -103,7 +163,7 @@ pub fn load_wavefunctions(config: &Config, log: &Logger, binary: bool, w_store: 
 /// * `binary` - Configuation flag concerning binary /  plain file output. Will be used as an arbitrator
 /// when multiple files are detected.
 /// * `log` - Reference to the system logger.
-pub fn wavefunction(wnum: u8, target_size: [usize; 3], binary: bool, log: &Logger) -> Result<Array3<f64>, csv::Error> {
+pub fn wavefunction(wnum: u8, target_size: [usize; 3], binary: bool, log: &Logger) -> Result<Array3<f64>, Error> {
     let plain_path = format!("./input/wavefunction_{}.csv", wnum);
     let plain_path_partial = format!("./input/wavefunction_{}_partial.csv", wnum);
     let plain_file = if Path::new(&plain_path).exists() {
@@ -139,13 +199,14 @@ pub fn wavefunction(wnum: u8, target_size: [usize; 3], binary: bool, log: &Logge
 }
 
 /// Loads a wafefunction from a csv file on disk.
-fn wavefunction_plain(file: Option<String>, wnum: u8, target_size: [usize; 3]) -> Result<Array3<f64>, csv::Error> {
+fn wavefunction_plain(file: Option<String>, wnum: u8, target_size: [usize; 3]) -> Result<Array3<f64>, Error> {
     //No more to add here, just parse the file in the generic parser.
+    let _none = wnum;
     parse_csv_to_array3(file, target_size)
 }
 
 /// Loads a wafefunction from a mpk file on disk.
-fn wavefunction_binary(file: Option<String>, wnum: u8, target_size: [usize; 3]) -> Result<Array3<f64>, csv::Error> {
+fn wavefunction_binary(file: Option<String>, wnum: u8, target_size: [usize; 3]) -> Result<Array3<f64>, Error> {
     //TODO: Not implemented yet, call plain
     //NOTE: This will guarentee a failure from the file name.
     wavefunction_plain(file, wnum, target_size)
@@ -154,17 +215,11 @@ fn wavefunction_binary(file: Option<String>, wnum: u8, target_size: [usize; 3]) 
 /// Checks that the folder `input` exists. If not, creates it.
 /// This doesn't specifically need to happen for all instances,
 /// but we may want to put restart values in there later on.
-///
-/// # Panics
-/// * If directory can not be created. Gives `std::io::Error`.
-pub fn check_input_dir() {
+pub fn check_input_dir() -> Result<(), Error> { //std::io::Error
     if !Path::new("./input").exists() {
-        let result = create_dir("./input");
-        match result {
-            Ok(_) => {}
-            Err(err) => panic!("Cannot create input directory: {}", err),
-        }
+        create_dir("./input")?;
     }
+    Ok(())
 }
 
 /// Given a filename, this funtion reads in the data of a csv file and parses
@@ -186,7 +241,7 @@ pub fn check_input_dir() {
 /// If something goes wrong in the parsing or file handling, a `csv::Error` is passed.
 fn parse_csv_to_array3(file: Option<String>,
                        target_size: [usize; 3])
-                       -> Result<Array3<f64>, csv::Error> {
+                       -> Result<Array3<f64>, Error> {
     match file {
         Some(f) => {
             let mut rdr = csv::ReaderBuilder::new().has_headers(false).from_path(f)?;
@@ -245,9 +300,9 @@ fn parse_csv_to_array3(file: Option<String>,
                     }
                     Ok(complete)
                 }
-                Err(err) => panic!("Error parsing file into array: {}", err), //TODO: Pass this up
+                Err(err) => Err(Error::Shape(err)),
             }
         }
-        None => Err(csv::Error::from(Error::from(ErrorKind::NotFound))),
+        None => Err(Error::Io(io::Error::from(io::ErrorKind::NotFound))),
     }
 }

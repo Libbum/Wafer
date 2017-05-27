@@ -46,6 +46,7 @@ extern crate term_size;
 
 use slog::{Drain, Duplicate, Logger, Fuse, LevelFilter, Level};
 use std::fs::OpenOptions;
+use std::process;
 use std::time::Instant;
 use config::Config;
 
@@ -72,7 +73,10 @@ fn main() {
     let start_time = Instant::now();
 
     let config = Config::load();
-    output::check_output_dir(&config.project_name);
+    if let Err(err) = output::check_output_dir(&config.project_name) {
+        println!("Could not communicate with output directory: {}", err);
+        process::exit(1);
+    };
 
     let log_file = OpenOptions::new()
         .create(true)
@@ -95,12 +99,15 @@ fn main() {
     info!(log, "Starting Wafer solver"; "version" => env!("CARGO_PKG_VERSION"), "build-id" => short_sha());
 
     info!(log, "Checking/creating directories");
-    input::check_input_dir();
+    if let Err(err) = input::check_input_dir() {
+        crit!(log, "Could not communicate with input directory: {}", err);
+        process::exit(1);
+    };
 
     //Override rayon's defaults of threads (including HT cores) to physical cores
-    match rayon::initialize(rayon::Configuration::new().num_threads(num_cpus::get_physical())) {
-        Ok(_) => {}
-        Err(err) => panic!("Failed to initialise thread pool: {}", err),
+    if let Err(err) = rayon::initialize(rayon::Configuration::new().num_threads(num_cpus::get_physical())) {
+        crit!(log, "Failed to initialise thread pool: {}", err);
+        process::exit(1);
     };
 
     let term_width = output::get_term_size();
@@ -111,9 +118,15 @@ fn main() {
 
     info!(log, "Loading Configuation from disk");
     config.print(term_width);
-    output::copy_config(&config.project_name); //TODO: Input from CLI if non-default config file
+    if let Err(err) = output::copy_config(&config.project_name) {
+       //TODO: Input from CLI if non-default config file
+       warn!(log, "Configuration file not copied to output directory: {}", err);
+    };
 
-    grid::run(&config, &log);
+    if let Err(err) = grid::run(&config, &log) {
+        crit!(log, "{}", err);
+        process::exit(1);
+    };
 
     let elapsed = start_time.elapsed();
     let time_taken = (elapsed.as_secs() as f64) + (elapsed.subsec_nanos() as f64 / 1000_000_000.0);

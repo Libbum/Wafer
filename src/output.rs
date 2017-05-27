@@ -6,7 +6,7 @@ use rayon;
 use serde::Serialize;
 use serde_json;
 use rmps;
-use std::error::Error;
+use std::error;
 use std::fmt;
 use std::fs::{copy, create_dir_all, File};
 use std::io;
@@ -52,7 +52,7 @@ struct PlainRecord {
 
 /// Error type for handling file output. Effectively a wapper around multiple error types we encounter.
 #[derive(Debug)]
-pub enum OutputError {
+pub enum Error {
     /// From disk issues.
     Io(io::Error),
     /// From `serde_json`.
@@ -63,58 +63,58 @@ pub enum OutputError {
     Csv(csv::Error),
 }
 
-impl fmt::Display for OutputError {
+impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            OutputError::Io(ref err) => err.fmt(f),
-            OutputError::EncodePlain(ref err) => err.fmt(f),
-            OutputError::EncodeBinary(ref err) => err.fmt(f),
-            OutputError::Csv(ref err) => err.fmt(f),
+            Error::Io(ref err) => err.fmt(f),
+            Error::EncodePlain(ref err) => err.fmt(f),
+            Error::EncodeBinary(ref err) => err.fmt(f),
+            Error::Csv(ref err) => err.fmt(f),
         }
     }
 }
 
-impl Error for OutputError {
+impl error::Error for Error {
     fn description(&self) -> &str {
         match *self {
-            OutputError::Io(ref err) => err.description(),
-            OutputError::EncodePlain(ref err) => err.description(),
-            OutputError::EncodeBinary(ref err) => err.description(),
-            OutputError::Csv(ref err) => err.description(),
+            Error::Io(ref err) => err.description(),
+            Error::EncodePlain(ref err) => err.description(),
+            Error::EncodeBinary(ref err) => err.description(),
+            Error::Csv(ref err) => err.description(),
         }
     }
 
-    fn cause(&self) -> Option<&Error> {
+    fn cause(&self) -> Option<&error::Error> {
         match *self {
-            OutputError::Io(ref err) => Some(err),
-            OutputError::EncodePlain(ref err) => Some(err),
-            OutputError::EncodeBinary(ref err) => Some(err),
-            OutputError::Csv(ref err) => Some(err),
+            Error::Io(ref err) => Some(err),
+            Error::EncodePlain(ref err) => Some(err),
+            Error::EncodeBinary(ref err) => Some(err),
+            Error::Csv(ref err) => Some(err),
         }
     }
 }
 
-impl From<io::Error> for OutputError {
-    fn from(err: io::Error) -> OutputError {
-        OutputError::Io(err)
+impl From<io::Error> for Error {
+    fn from(err: io::Error) -> Error {
+        Error::Io(err)
     }
 }
 
-impl From<serde_json::Error> for OutputError {
-    fn from(err: serde_json::Error) -> OutputError {
-        OutputError::EncodePlain(err)
+impl From<serde_json::Error> for Error {
+    fn from(err: serde_json::Error) -> Error {
+        Error::EncodePlain(err)
     }
 }
 
-impl From<rmps::encode::Error> for OutputError {
-    fn from(err: rmps::encode::Error) -> OutputError {
-        OutputError::EncodeBinary(err)
+impl From<rmps::encode::Error> for Error {
+    fn from(err: rmps::encode::Error) -> Error {
+        Error::EncodeBinary(err)
     }
 }
 
-impl From<csv::Error> for OutputError {
-    fn from(err: csv::Error) -> OutputError {
-        OutputError::Csv(err)
+impl From<csv::Error> for Error {
+    fn from(err: csv::Error) -> Error {
+        Error::Csv(err)
     }
 }
 
@@ -139,7 +139,7 @@ pub fn print_banner(sha: &str) {
 /// *`v` - The potential to output.
 /// * `project` - The project name (for directory to save to).
 /// * `binary` - Bool to identify what type of file to be output (plain text or messagepack).
-pub fn potential(v: &Array3<f64>, project: &str, binary: bool) -> Result<(), OutputError> {
+pub fn potential(v: &Array3<f64>, project: &str, binary: bool) -> Result<(), Error> {
     let filename = format!("{}/potential.{}", get_project_dir(project), if binary { "mpk" } else { "csv"});
 
     if binary {
@@ -154,7 +154,7 @@ pub fn potential(v: &Array3<f64>, project: &str, binary: bool) -> Result<(), Out
 /// # Arguments
 /// *`v` - The potential to output
 /// * `filename` - file / directory to save to.
-fn potential_plain(v: &Array3<f64>, filename: &str) -> Result<(), OutputError> {
+fn potential_plain(v: &Array3<f64>, filename: &str) -> Result<(), Error> {
     let mut buffer = File::create(filename)?;
     let work = grid::get_work_area(v);
     for ((i, j, k), el) in work.indexed_iter() {
@@ -169,7 +169,7 @@ fn potential_plain(v: &Array3<f64>, filename: &str) -> Result<(), OutputError> {
 /// # Arguments
 /// *`v` - The potential to output
 /// * `filename` - file / directory to save to.
-fn potential_binary(v: &Array3<f64>, filename: &str) -> Result<(), OutputError> {
+fn potential_binary(v: &Array3<f64>, filename: &str) -> Result<(), Error> {
     //NOTE: The code below should work, but we must wait for ndarray to have serde 1.0 compatability.
     //For now, we just output to plain instead.
     potential_plain(v, filename)
@@ -195,7 +195,7 @@ pub fn wavefunction(phi: &ArrayView3<f64>,
                     converged: bool,
                     project: &str,
                     binary: bool)
-                    -> Result<(), OutputError> {
+                    -> Result<(), Error> {
     let filename = format!("{}/wavefunction_{}{}.{}",
                            get_project_dir(project),
                            num,
@@ -213,7 +213,7 @@ pub fn wavefunction(phi: &ArrayView3<f64>,
 /// # Arguments
 /// * `phi` - The wavefunction to output. This should be a view called from `grid::get_work_area()`.
 /// * `filename` - A string indiciting the location of the output.
-fn wavefunction_binary(phi: &ArrayView3<f64>, filename: &str) -> Result<(), OutputError> {
+fn wavefunction_binary(phi: &ArrayView3<f64>, filename: &str) -> Result<(), Error> {
     //NOTE: The code below should work, but we must wait for ndarray to have serde 1.0 compatability.
     //For now, we just output to plain instead.
     wavefunction_plain(phi, filename)
@@ -229,7 +229,7 @@ fn wavefunction_binary(phi: &ArrayView3<f64>, filename: &str) -> Result<(), Outp
 /// # Arguments
 /// * `phi` - The wavefunction to output. This should be a view called from `grid::get_work_area()`.
 /// * `filename` - A string indiciting the location of the output.
-fn wavefunction_plain(phi: &ArrayView3<f64>, filename: &str) -> Result<(), OutputError> {
+fn wavefunction_plain(phi: &ArrayView3<f64>, filename: &str) -> Result<(), Error> {
     let mut buffer = csv::WriterBuilder::new().has_headers(false).from_path(filename)?;
     for ((i, j, k), data) in phi.indexed_iter() {
         buffer
@@ -351,7 +351,7 @@ pub fn finalise_measurement(observables: &grid::Observables,
                             numx: f64,
                             project: &str,
                             binary: bool)
-                            -> Result<(), OutputError> {
+                            -> Result<(), Error> {
     let r_norm = (observables.r2 / observables.norm2).sqrt();
     let output = ObservablesOutput {
         state: wnum,
@@ -411,7 +411,7 @@ fn print_summary(output: &ObservablesOutput) {
 }
 
 /// Saves the observables to a messagepack binary file.
-fn observables_binary(observables: &ObservablesOutput, project: &str) -> Result<(), OutputError> {
+fn observables_binary(observables: &ObservablesOutput, project: &str) -> Result<(), Error> {
     let filename = format!("{}/observables_{}.mpk",
                            get_project_dir(project),
                            observables.state);
@@ -424,7 +424,7 @@ fn observables_binary(observables: &ObservablesOutput, project: &str) -> Result<
 }
 
 /// Saves the observables to a plain json file.
-fn observables_plain(observables: &ObservablesOutput, project: &str) -> Result<(), OutputError> {
+fn observables_plain(observables: &ObservablesOutput, project: &str) -> Result<(), Error> {
     let filename = format!("{}/observables_{}.json",
                            get_project_dir(project),
                            observables.state);
@@ -434,15 +434,9 @@ fn observables_plain(observables: &ObservablesOutput, project: &str) -> Result<(
 }
 
 /// Generates a unique folder inside an `output` directory for the current simulation.
-///
-/// # Panics
-/// * If directory can not be created. Gives `std::io::Error`.
-pub fn check_output_dir(project: &str) {
-    let proj_dir = create_dir_all(get_project_dir(project));
-    match proj_dir {
-        Ok(_) => {}
-        Err(err) => panic!("Cannot create project directory: {}", err),
-    }
+pub fn check_output_dir(project: &str) -> Result<(), Error> {
+    create_dir_all(get_project_dir(project))?;
+    Ok(())
 }
 
 /// Each simulation has a unique folder output so as not to overwrite other instances.
@@ -461,15 +455,9 @@ pub fn get_project_dir(project: &str) -> String {
 }
 
 /// Copies the current configuration file to the project folder
-pub fn copy_config(project: &str) {
-    let result = copy("./wafer.cfg", get_project_dir(project) + "/wafer.cfg");
-    match result {
-        Ok(_) => {}
-        Err(err) => {
-            panic!("Error copying configuration file to project directory: {}",
-                   err)
-        }
-    }
+pub fn copy_config(project: &str) -> Result<(), Error> {
+    copy("./wafer.cfg", get_project_dir(project) + "/wafer.cfg")?;
+    Ok(())
 }
 
 /// Uses `term_size` to pull in the terminal width and from there sets the output
