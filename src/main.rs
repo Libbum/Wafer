@@ -117,7 +117,7 @@ fn main() {
         process::exit(1);
     };
 
-    let term_width = output::get_term_size();
+    let term_width = *output::TERMWIDTH;
 
     let sha = if term_width <= 97 { short_sha() } else { sha() };
 

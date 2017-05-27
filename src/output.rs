@@ -20,6 +20,8 @@ lazy_static! {
     /// Date & time at which the simulation was started. Used as a unique identifier for
     /// the output directory of a run.
     static ref PROJDATE: String = Local::now().format("%Y-%m-%d_%H:%M:%S").to_string();
+    /// Width of program output to screen.
+    pub static ref TERMWIDTH: usize = get_term_size();
 }
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
@@ -250,7 +252,7 @@ fn wavefunction_plain(phi: &ArrayView3<f64>, filename: &str) -> Result<(), Error
 
 /// Pretty prints a header for the subsequent observable data
 pub fn print_observable_header(wnum: u8) {
-    let width = get_term_size();
+    let width = *TERMWIDTH;
     let spacer = (width - 69) / 2;
     let col2 = 37; //Energy+rrms+1
     println!("");
@@ -317,8 +319,7 @@ pub fn print_observable_header(wnum: u8) {
 
 /// Pretty prints measurements at current step to screen
 pub fn print_measurements(tau: f64, diff: f64, observables: &grid::Observables) -> String {
-    //TODO: This is going to be called every output. Maybe generate a lazy_static value?
-    let width = get_term_size();
+    let width = *TERMWIDTH;
     let spacer = (width - 69) / 2;
     if tau > 0.0 {
         format!("{:^space$}│{:>11.3} │{:>19.10e} │{:15.5} │{:15.5e} │",
@@ -376,7 +377,7 @@ pub fn finalise_measurement(observables: &grid::Observables,
 
 /// Pretty print final summary
 fn print_summary(output: &ObservablesOutput) {
-    let width = get_term_size();
+    let width = *TERMWIDTH;
     let spacer = (width - 69) / 2;
 
     println!("{:═^lspace$}╧{:═^twidth$}╧{:═^ewidth$}╧{:═^width$}╧{:═^width$}╧{:═^rspace$}",
@@ -466,7 +467,7 @@ pub fn copy_config(project: &str) -> Result<(), Error> {
 
 /// Uses `term_size` to pull in the terminal width and from there sets the output
 /// pretty printing value to an appropriate value (between 70-100).
-pub fn get_term_size() -> usize {
+fn get_term_size() -> usize {
     let mut term_width = 100;
     if let Some((width, _)) = term_size::dimensions() {
         if width <= 70 {

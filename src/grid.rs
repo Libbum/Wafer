@@ -350,7 +350,6 @@ fn get_r_squared_expectation_value(w: &ArrayView3<f64>, grid: &Grid) -> f64 {
 }
 
 /// Gets energy of the corresponding wavefunction
-//TODO: We can probably drop the config requirement and replace it with a grid modifier of dn*mass
 fn wfnc_energy(config: &Config, potentials: &Potentials, phi: &Array3<f64>) -> f64 {
 
     let w = get_work_area(phi);
@@ -396,7 +395,6 @@ fn wfnc_energy(config: &Config, potentials: &Potentials, phi: &Array3<f64>) -> f
 
 /// Normalisation of the wavefunction
 fn normalise_wavefunction(w: &mut Array3<f64>, norm2: f64) {
-    //TODO: This can be moved directly into the calculation for now. It's only here due to normalisationCollect
     let norm = norm2.sqrt();
     w.par_map_inplace(|el| *el /= norm);
 }

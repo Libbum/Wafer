@@ -348,7 +348,7 @@ pub fn potential_sub(config: &Config, idx: &Index3) -> Result<f64, Error> {
 pub fn calculate_r2(idx: &Index3, grid: &Grid) -> f64 {
     let dx = (idx.x as f64) - ((grid.size.x as f64) + 1.) / 2.;
     let dy = (idx.y as f64) - ((grid.size.y as f64) + 1.) / 2.;
-    let dz = (idx.z as f64) - ((grid.size.z as f64) + 1.) / 2.; //TODO: DISTNUMZ (if needed)
+    let dz = (idx.z as f64) - ((grid.size.z as f64) + 1.) / 2.;
     (dx * dx + dy * dy + dz * dz)
 }
 

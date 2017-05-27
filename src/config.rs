@@ -624,8 +624,6 @@ fn generate_boolean(init_size: [usize; 3]) -> Array3<f64> {
 /// * `config` - a reference to the confguration struct
 /// * `w` - Reference to a wavefunction to impose symmetry conditions on.
 pub fn symmetrise_wavefunction(config: &Config, w: &mut Array3<f64>) {
-    //TODO: Need to learn how to properly slice an ndarray for this.
-
     let num = &config.grid.size;
     let sign = match config.init_symmetry {
         SymmetryConstraint::NotConstrained => 0.,
@@ -646,7 +644,7 @@ pub fn symmetrise_wavefunction(config: &Config, w: &mut Array3<f64>) {
                         if z > (3 + num.z) / 2 {
                             z = (3 + num.z) + 1 - z;
                         }
-                        w[[sx, sy, sz]] = sign * w[[sx, sy, z]];
+                        w[[sx, sy, sz]] = sign * w[[sx, sy, z]]; //We have to resort to the loops because of this indexing.
                     }
                 }
             }
@@ -664,13 +662,6 @@ pub fn symmetrise_wavefunction(config: &Config, w: &mut Array3<f64>) {
                     }
                 }
             }
-            //Think we have to do this the hard way...
-            //let mirror = w.view();
-            //let runner = w.view_mut();
-            //Zip::indexed(runner).par_apply(|(i, j, k), el| {
-            //    let jj = if j < num.y / 2 { num.y + 1 - j } else { j };
-            //    *el = sign * mirror[[i, jj, k]];
-            //});
         }
     };
 }
