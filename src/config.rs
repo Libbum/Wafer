@@ -230,8 +230,13 @@ impl fmt::Display for Error {
         match *self {
             Error::Io(ref err) => err.fmt(f),
             Error::DecodeJson(ref err) => err.fmt(f),
-            Error::LargeDt => write!(f, "Config Error: Temporal step (grid.dt) must be less than or equal to grid.dn²/3"),
-            Error::LargeWavenum => write!(f, "Config Error: wavenum can not be larger than wavemax"),
+            Error::LargeDt => {
+                write!(f,
+                       "Config Error: Temporal step (grid.dt) must be less than or equal to grid.dn²/3")
+            }
+            Error::LargeWavenum => {
+                write!(f, "Config Error: wavenum can not be larger than wavemax")
+            }
             Error::Input(ref err) => err.fmt(f),
         }
     }
@@ -252,8 +257,7 @@ impl error::Error for Error {
         match *self {
             Error::Io(ref err) => Some(err),
             Error::DecodeJson(ref err) => Some(err),
-            Error::LargeDt |
-            Error::LargeWavenum => None,
+            Error::LargeDt | Error::LargeWavenum => None,
             Error::Input(ref err) => Some(err),
         }
     }

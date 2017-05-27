@@ -35,7 +35,10 @@ impl fmt::Display for Error {
             Error::Input(ref err) => err.fmt(f),
             Error::Output(ref err) => err.fmt(f),
             Error::Potential(ref err) => err.fmt(f),
-            Error::MaxStep => write!(f, "Maximum step limit reached. Cannot continue, but restart files have been output."),
+            Error::MaxStep => {
+                write!(f,
+                       "Maximum step limit reached. Cannot continue, but restart files have been output.")
+            }
         }
     }
 }
@@ -127,7 +130,8 @@ fn solve(config: &Config,
          log: &Logger,
          potentials: &Potentials,
          wnum: u8,
-         w_store: &mut Vec<Array3<f64>>) -> Result<(), Error> {
+         w_store: &mut Vec<Array3<f64>>)
+         -> Result<(), Error> {
 
     // Initial conditions from config file if ground state,
     // but start from previously converged wfn if we're an excited state.
@@ -202,10 +206,10 @@ fn solve(config: &Config,
                 prog_bar.finish_and_clear();
                 println!("{}", output::print_measurements(tau, diff, &observables));
                 output::finalise_measurement(&observables,
-                                                               wnum,
-                                                               config.grid.size.x as f64,
-                                                               &config.project_name,
-                                                               config.output.binary_files)?;
+                                             wnum,
+                                             config.grid.size.x as f64,
+                                             &config.project_name,
+                                             config.output.binary_files)?;
                 converged = true;
                 break;
             } else {
@@ -242,10 +246,10 @@ fn solve(config: &Config,
         info!(log, "Saving wavefunction {} to disk", wnum);
         let work = get_work_area(&phi);
         if let Err(err) = output::wavefunction(&work,
-                                   wnum,
-                                   converged,
-                                   &config.project_name,
-                                   config.output.binary_files) {
+                                               wnum,
+                                               converged,
+                                               &config.project_name,
+                                               config.output.binary_files) {
             warn!(log, "Could not write wavefunction to disk: {}", err);
         }
     }
@@ -324,7 +328,7 @@ fn get_v_infinity_expectation_value(w: &ArrayView3<f64>, config: &Config) -> f64
                        let idx = Index3 { x: i, y: j, z: k };
                        let potsub = match potential::potential_sub(config, &idx) {
                            Ok(p) => p,
-                           Err(err) => panic!("Error: {}", err),
+                           Err(err) => panic!("{}", err), //NOTE: We panic here as well, see the discusion in potential.rs where the panic resides there.
                        };
                        *work = w * w * potsub;
                    });

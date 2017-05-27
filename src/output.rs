@@ -140,7 +140,9 @@ pub fn print_banner(sha: &str) {
 /// * `project` - The project name (for directory to save to).
 /// * `binary` - Bool to identify what type of file to be output (plain text or messagepack).
 pub fn potential(v: &Array3<f64>, project: &str, binary: bool) -> Result<(), Error> {
-    let filename = format!("{}/potential.{}", get_project_dir(project), if binary { "mpk" } else { "csv"});
+    let filename = format!("{}/potential.{}",
+                           get_project_dir(project),
+                           if binary { "mpk" } else { "csv" });
 
     if binary {
         potential_binary(v, &filename)
@@ -230,7 +232,9 @@ fn wavefunction_binary(phi: &ArrayView3<f64>, filename: &str) -> Result<(), Erro
 /// * `phi` - The wavefunction to output. This should be a view called from `grid::get_work_area()`.
 /// * `filename` - A string indiciting the location of the output.
 fn wavefunction_plain(phi: &ArrayView3<f64>, filename: &str) -> Result<(), Error> {
-    let mut buffer = csv::WriterBuilder::new().has_headers(false).from_path(filename)?;
+    let mut buffer = csv::WriterBuilder::new()
+        .has_headers(false)
+        .from_path(filename)?;
     for ((i, j, k), data) in phi.indexed_iter() {
         buffer
             .serialize(PlainRecord {

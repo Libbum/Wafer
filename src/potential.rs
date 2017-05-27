@@ -37,7 +37,10 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Error::NotAvailable => write!(f, "Not able to calculate potential value at an index for this potential type."),
+            Error::NotAvailable => {
+                write!(f,
+                       "Not able to calculate potential value at an index for this potential type.")
+            }
             Error::Input(ref err) => err.fmt(f),
             Error::Output(ref err) => err.fmt(f),
         }

@@ -111,7 +111,8 @@ fn main() {
     };
 
     //Override rayon's defaults of threads (including HT cores) to physical cores
-    if let Err(err) = rayon::initialize(rayon::Configuration::new().num_threads(num_cpus::get_physical())) {
+    if let Err(err) = rayon::initialize(rayon::Configuration::new()
+                                            .num_threads(num_cpus::get_physical())) {
         crit!(log, "Failed to initialise thread pool: {}", err);
         process::exit(1);
     };
@@ -125,8 +126,10 @@ fn main() {
     info!(log, "Loading Configuation from disk");
     config.print(term_width);
     if let Err(err) = output::copy_config(&config.project_name) {
-       //TODO: Input from CLI if non-default config file
-       warn!(log, "Configuration file not copied to output directory: {}", err);
+        //TODO: Input from CLI if non-default config file
+        warn!(log,
+              "Configuration file not copied to output directory: {}",
+              err);
     };
 
     if let Err(err) = grid::run(&config, &log) {

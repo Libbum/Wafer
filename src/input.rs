@@ -91,7 +91,10 @@ impl From<ndarray::ShapeError> for Error {
 /// * `binary` - Configuation flag concerning binary /  plain file output. Will be used as an arbitrator
 /// when multiple files are detected.
 /// * `log` - Reference to the system logger.
-pub fn potential(target_size: [usize; 3], binary: bool, log: &Logger) -> Result<Array3<f64>, Error> {
+pub fn potential(target_size: [usize; 3],
+                 binary: bool,
+                 log: &Logger)
+                 -> Result<Array3<f64>, Error> {
     let plain_path = "./input/potential.csv";
     let binary_path = "./input/potential.mpk";
     let plain_file = if Path::new(&plain_path).exists() {
@@ -106,7 +109,9 @@ pub fn potential(target_size: [usize; 3], binary: bool, log: &Logger) -> Result<
     };
 
     if plain_file.is_some() && binary_file.is_some() {
-        warn!(log, "Multiple potential files found in input directory. Chosing 'potential.{}' based on configuration settings.", if binary { "mpk" } else { "csv" });
+        warn!(log,
+              "Multiple potential files found in input directory. Chosing 'potential.{}' based on configuration settings.",
+              if binary { "mpk" } else { "csv" });
         if binary {
             potential_plain(plain_file, target_size)
         } else {
@@ -134,7 +139,11 @@ fn potential_binary(file: Option<String>, target_size: [usize; 3]) -> Result<Arr
 
 
 /// Loads previously computed wavefunctions from disk.
-pub fn load_wavefunctions(config: &Config, log: &Logger, binary: bool, w_store: &mut Vec<Array3<f64>>) -> Result<(), Error> {
+pub fn load_wavefunctions(config: &Config,
+                          log: &Logger,
+                          binary: bool,
+                          w_store: &mut Vec<Array3<f64>>)
+                          -> Result<(), Error> {
     let num = &config.grid.size;
     let init_size: [usize; 3] = [(num.x + 6) as usize,
                                  (num.y + 6) as usize,
@@ -163,7 +172,11 @@ pub fn load_wavefunctions(config: &Config, log: &Logger, binary: bool, w_store: 
 /// * `binary` - Configuation flag concerning binary /  plain file output. Will be used as an arbitrator
 /// when multiple files are detected.
 /// * `log` - Reference to the system logger.
-pub fn wavefunction(wnum: u8, target_size: [usize; 3], binary: bool, log: &Logger) -> Result<Array3<f64>, Error> {
+pub fn wavefunction(wnum: u8,
+                    target_size: [usize; 3],
+                    binary: bool,
+                    log: &Logger)
+                    -> Result<Array3<f64>, Error> {
     let plain_path = format!("./input/wavefunction_{}.csv", wnum);
     let plain_path_partial = format!("./input/wavefunction_{}_partial.csv", wnum);
     let plain_file = if Path::new(&plain_path).exists() {
@@ -185,7 +198,10 @@ pub fn wavefunction(wnum: u8, target_size: [usize; 3], binary: bool, log: &Logge
     };
 
     if plain_file.is_some() && binary_file.is_some() {
-        warn!(log, "Multiple wavefunction_{} files found in input directory. Chosing '{}' version based on configuration settings.", wnum, if binary { "mpk" } else { "csv" });
+        warn!(log,
+              "Multiple wavefunction_{} files found in input directory. Chosing '{}' version based on configuration settings.",
+              wnum,
+              if binary { "mpk" } else { "csv" });
         if binary {
             wavefunction_plain(plain_file, wnum, target_size)
         } else {
@@ -199,14 +215,20 @@ pub fn wavefunction(wnum: u8, target_size: [usize; 3], binary: bool, log: &Logge
 }
 
 /// Loads a wafefunction from a csv file on disk.
-fn wavefunction_plain(file: Option<String>, wnum: u8, target_size: [usize; 3]) -> Result<Array3<f64>, Error> {
+fn wavefunction_plain(file: Option<String>,
+                      wnum: u8,
+                      target_size: [usize; 3])
+                      -> Result<Array3<f64>, Error> {
     //No more to add here, just parse the file in the generic parser.
     let _none = wnum;
     parse_csv_to_array3(file, target_size)
 }
 
 /// Loads a wafefunction from a mpk file on disk.
-fn wavefunction_binary(file: Option<String>, wnum: u8, target_size: [usize; 3]) -> Result<Array3<f64>, Error> {
+fn wavefunction_binary(file: Option<String>,
+                       wnum: u8,
+                       target_size: [usize; 3])
+                       -> Result<Array3<f64>, Error> {
     //TODO: Not implemented yet, call plain
     //NOTE: This will guarentee a failure from the file name.
     wavefunction_plain(file, wnum, target_size)
@@ -215,7 +237,8 @@ fn wavefunction_binary(file: Option<String>, wnum: u8, target_size: [usize; 3]) 
 /// Checks that the folder `input` exists. If not, creates it.
 /// This doesn't specifically need to happen for all instances,
 /// but we may want to put restart values in there later on.
-pub fn check_input_dir() -> Result<(), Error> { //std::io::Error
+pub fn check_input_dir() -> Result<(), Error> {
+    //std::io::Error
     if !Path::new("./input").exists() {
         create_dir("./input")?;
     }
