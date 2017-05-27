@@ -3,8 +3,9 @@ use ndarray_parallel::prelude::*;
 use rand::distributions::{Normal, IndependentSample};
 use rand;
 use slog::Logger;
+use std::error;
 use std::fmt;
-use std::io::Error;
+use std::io;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
 use std::path::Path;
@@ -209,6 +210,73 @@ impl fmt::Display for RunType {
     }
 }
 
+/// Error type for handling the configuration stucts.
+#[derive(Debug)]
+pub enum Error {
+    /// From disk issues.
+    Io(io::Error),
+    /// From `serde_json`.
+    DecodeJson(serde_json::Error),
+    /// If temporal step `dt` is larger than `dn`^2/3.
+    LargeDt,
+    /// If `wavenum` is larger than `wavemax`.
+    LargeWavenum,
+    /// From `input`.
+    Input(input::Error),
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Error::Io(ref err) => err.fmt(f),
+            Error::DecodeJson(ref err) => err.fmt(f),
+            Error::LargeDt => write!(f, "Config Error: Temporal step (grid.dt) must be less than or equal to grid.dn²/3"),
+            Error::LargeWavenum => write!(f, "Config Error: wavenum can not be larger than wavemax"),
+            Error::Input(ref err) => err.fmt(f),
+        }
+    }
+}
+
+impl error::Error for Error {
+    fn description(&self) -> &str {
+        match *self {
+            Error::Io(ref err) => err.description(),
+            Error::DecodeJson(ref err) => err.description(),
+            Error::LargeDt => "grid.dt >= grid.dn²/3",
+            Error::LargeWavenum => "wavenum > wavemax",
+            Error::Input(ref err) => err.description(),
+        }
+    }
+
+    fn cause(&self) -> Option<&error::Error> {
+        match *self {
+            Error::Io(ref err) => Some(err),
+            Error::DecodeJson(ref err) => Some(err),
+            Error::LargeDt |
+            Error::LargeWavenum => None,
+            Error::Input(ref err) => Some(err),
+        }
+    }
+}
+
+impl From<io::Error> for Error {
+    fn from(err: io::Error) -> Error {
+        Error::Io(err)
+    }
+}
+
+impl From<serde_json::Error> for Error {
+    fn from(err: serde_json::Error) -> Error {
+        Error::DecodeJson(err)
+    }
+}
+
+impl From<input::Error> for Error {
+    fn from(err: input::Error) -> Error {
+        Error::Input(err)
+    }
+}
+
 /// The main struct which all input data from `wafer.cfg` is pushed into.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Config {
@@ -259,31 +327,25 @@ impl Config {
     /// contents of this file are not valid *json* (soon to be *hjson*
     /// to minimise this possibility); and finally there are a number of checks
     /// on bounds of the user input. For example; grid.dt ≤ grid.dn²/3.
-    pub fn load() -> Config {
+    pub fn load() -> Result<Config, Error> {
         //Read in configuration file (hjson format)
-        let raw_config = match read_file("wafer.cfg") {
-            Ok(s) => s,
-            Err(err) => panic!("Cannot read configuration file: {}.", err),
-        };
+        let raw_config = read_file("wafer.cfg")?;
         // Decode configuration file.
-        let decoded_config: Config = match serde_json::from_str(&raw_config) {
-            Ok(c) => c,
-            Err(err) => panic!("Error parsing configuration file: {}.", err),
-        };
-        Config::parse(&decoded_config);
-        decoded_config
+        let decoded_config: Config = serde_json::from_str(&raw_config)?;
+        Config::parse(&decoded_config)?;
+        Ok(decoded_config)
     }
 
     /// Additional checks to the configuration file that cannot be done implicily
     /// by the type checker.
-    fn parse(&self) {
+    fn parse(&self) -> Result<(), Error> {
         if self.grid.dt > self.grid.dn.powi(2) / 3. {
-            panic!("Config Error: Temporal step (grid.dt) must be less than or equal to \
-                    grid.dn²/3");
+            return Err(Error::LargeDt);
         }
         if self.wavenum > self.wavemax {
-            panic!("Config Error: wavenum can not be larger than wavemax");
+            return Err(Error::LargeWavenum);
         }
+        Ok(())
     }
 
     /// Pretty prints the **Config** contents to stdout.
@@ -443,7 +505,7 @@ impl Config {
 ///
 /// # Errors
 ///
-/// Returns `std::io::Error` if unsuccesful
+/// `std::io::Error` are the only types returned here, although they are wrapped into the config::Error::Io type.
 ///
 /// # Remarks
 ///
@@ -463,7 +525,7 @@ fn read_file<P: AsRef<Path>>(file_path: P) -> Result<String, Error> {
 /// # Arguments
 ///
 /// * `config` - a reference to the confguration struct
-pub fn set_initial_conditions(config: &Config, log: &Logger) -> Array3<f64> {
+pub fn set_initial_conditions(config: &Config, log: &Logger) -> Result<Array3<f64>, Error> {
     info!(log, "Setting initial conditions for wavefunction");
     let num = &config.grid.size;
     //NOTE: Don't forget that sizes are non inclusive. We want num.n + 5 to be our last value, so we need num.n + 6 here.
@@ -472,11 +534,7 @@ pub fn set_initial_conditions(config: &Config, log: &Logger) -> Array3<f64> {
                                  (num.z + 6) as usize];
     let mut w: Array3<f64> = match config.init_condition {
         InitialCondition::FromFile => {
-            //TODO: Selection of csv or messagepack
-            match input::wavefunction(config.wavenum, init_size, config.output.binary_files, log) {
-                Ok(wfn) => wfn,
-                Err(err) => panic!("Cannot load wavefunction file: {}", err),
-            }
+            input::wavefunction(config.wavenum, init_size, config.output.binary_files, log)?
         }
         InitialCondition::Gaussian => generate_gaussian(config, init_size),
         InitialCondition::Coulomb => generate_coulomb(config, init_size),
@@ -503,7 +561,7 @@ pub fn set_initial_conditions(config: &Config, log: &Logger) -> Array3<f64> {
 
     // Symmetrise the IC.
     symmetrise_wavefunction(config, &mut w);
-    w
+    Ok(w)
 }
 
 /// Builds a gaussian distribution of values with a mean of 0 and standard

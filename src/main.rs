@@ -72,7 +72,13 @@ fn main() {
 
     let start_time = Instant::now();
 
-    let config = Config::load();
+    let config = match Config::load() {
+        Ok(c) => c,
+        Err(err) => {
+            println!("Error processing configuration: {}", err);
+            process::exit(1);
+        }
+    };
     if let Err(err) = output::check_output_dir(&config.project_name) {
         println!("Could not communicate with output directory: {}", err);
         process::exit(1);
