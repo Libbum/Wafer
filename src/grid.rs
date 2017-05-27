@@ -3,6 +3,8 @@ use ndarray::{Array3, ArrayView3, ArrayViewMut3, Zip};
 use ndarray_parallel::prelude::*;
 use slog::Logger;
 use std::f64::MAX;
+use std::error;
+use std::fmt;
 use config;
 use config::{Config, Grid, Index3, InitialCondition};
 use potential;
@@ -10,6 +12,79 @@ use potential::Potentials;
 use input;
 use output;
 
+
+/// Error type for handling data on the grid. Mostly wrappers around the other modules.
+#[derive(Debug)]
+pub enum Error {
+    /// From `config`.
+    Config(config::Error),
+    /// From `input`.
+    Input(input::Error),
+    /// From `output`.
+    Output(output::Error),
+    /// From `potential`.
+    Potential(potential::Error),
+    /// Maximum step reached.
+    MaxStep,
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Error::Config(ref err) => err.fmt(f),
+            Error::Input(ref err) => err.fmt(f),
+            Error::Output(ref err) => err.fmt(f),
+            Error::Potential(ref err) => err.fmt(f),
+            Error::MaxStep => write!(f, "Maximum step limit reached. Cannot continue, but restart files have been output."),
+        }
+    }
+}
+
+impl error::Error for Error {
+    fn description(&self) -> &str {
+        match *self {
+            Error::Config(ref err) => err.description(),
+            Error::Input(ref err) => err.description(),
+            Error::Output(ref err) => err.description(),
+            Error::Potential(ref err) => err.description(),
+            Error::MaxStep => "Maximum step limit reached",
+        }
+    }
+
+    fn cause(&self) -> Option<&error::Error> {
+        match *self {
+            Error::Config(ref err) => Some(err),
+            Error::Input(ref err) => Some(err),
+            Error::Output(ref err) => Some(err),
+            Error::Potential(ref err) => Some(err),
+            Error::MaxStep => None,
+        }
+    }
+}
+
+impl From<config::Error> for Error {
+    fn from(err: config::Error) -> Error {
+        Error::Config(err)
+    }
+}
+
+impl From<input::Error> for Error {
+    fn from(err: input::Error) -> Error {
+        Error::Input(err)
+    }
+}
+
+impl From<output::Error> for Error {
+    fn from(err: output::Error) -> Error {
+        Error::Output(err)
+    }
+}
+
+impl From<potential::Error> for Error {
+    fn from(err: potential::Error) -> Error {
+        Error::Potential(err)
+    }
+}
 
 #[derive(Debug)]
 /// Holds all computed observables for the current wavefunction.
@@ -27,9 +102,9 @@ pub struct Observables {
 }
 
 /// Runs the calculation and holds long term (system time) wavefunction storage
-pub fn run(config: &Config, log: &Logger) -> Result<(), input::Error> { //TODO: Generalise error here.
+pub fn run(config: &Config, log: &Logger) -> Result<(), Error> {
 
-    let potentials = potential::load_arrays(config, log);
+    let potentials = potential::load_arrays(config, log)?;
 
     let mut w_store: Vec<Array3<f64>> = Vec::new();
     if config.wavenum > 0 {
@@ -41,7 +116,7 @@ pub fn run(config: &Config, log: &Logger) -> Result<(), input::Error> { //TODO: 
     info!(log, "Starting calculation");
 
     for wnum in config.wavenum..config.wavemax + 1 {
-        solve(config, log, &potentials, wnum, &mut w_store);
+        solve(config, log, &potentials, wnum, &mut w_store)?;
     }
     Ok(())
 }
@@ -52,7 +127,7 @@ fn solve(config: &Config,
          log: &Logger,
          potentials: &Potentials,
          wnum: u8,
-         w_store: &mut Vec<Array3<f64>>) {
+         w_store: &mut Vec<Array3<f64>>) -> Result<(), Error> {
 
     // Initial conditions from config file if ground state,
     // but start from previously converged wfn if we're an excited state.
@@ -89,10 +164,7 @@ fn solve(config: &Config,
         }
     } else {
         //This sorts out loading from disk if we are on wavefunction 0.
-        match config::set_initial_conditions(config, log) {
-            Ok(wfn) => wfn,
-            Err(err) => panic!("{}", err),
-        }
+        config::set_initial_conditions(config, log)?
     };
 
     output::print_observable_header(wnum);
@@ -129,13 +201,11 @@ fn solve(config: &Config,
             if diff < config.tolerance {
                 prog_bar.finish_and_clear();
                 println!("{}", output::print_measurements(tau, diff, &observables));
-                if let Err(err) = output::finalise_measurement(&observables,
+                output::finalise_measurement(&observables,
                                                                wnum,
                                                                config.grid.size.x as f64,
                                                                &config.project_name,
-                                                               config.output.binary_files) {
-                    panic!("Error with ouput: {}", err);
-                }
+                                                               config.output.binary_files)?;
                 converged = true;
                 break;
             } else {
@@ -171,22 +241,21 @@ fn solve(config: &Config,
         //NOTE: This wil save regardless of whether it is converged or not, so we flag it if that's the case.
         info!(log, "Saving wavefunction {} to disk", wnum);
         let work = get_work_area(&phi);
-        match output::wavefunction(&work,
+        if let Err(err) = output::wavefunction(&work,
                                    wnum,
                                    converged,
                                    &config.project_name,
                                    config.output.binary_files) {
-            Ok(_) => {}
-            Err(err) => crit!(log, "Could not write wavefunction to disk: {}", err),
+            warn!(log, "Could not write wavefunction to disk: {}", err);
         }
     }
 
     if converged {
         info!(log, "Caluculation Converged");
         w_store.push(phi); //Save state
+        Ok(())
     } else {
-        crit!(log, "Caluculation stopped due to maximum step limit.");
-        panic!("Maximum step limit reached. Cannot continue, but restart files have been output.");
+        Err(Error::MaxStep)
     }
 }
 

@@ -505,12 +505,7 @@ impl Config {
 ///
 /// # Errors
 ///
-/// `std::io::Error` are the only types returned here, although they are wrapped into the config::Error::Io type.
-///
-/// # Remarks
-///
-/// This reader probably doesn't need to be so generic.
-/// For now it is only called for `wafer.cfg`.
+/// `std::io::Error` are the only types returned here, although they are wrapped into the `config::Error::Io` type.
 fn read_file<P: AsRef<Path>>(file_path: P) -> Result<String, Error> {
     let mut contents = String::new();
     OpenOptions::new()

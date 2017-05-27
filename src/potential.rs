@@ -1,7 +1,7 @@
 use ndarray::{Array3, Zip};
 use ndarray_parallel::prelude::*;
 use slog::Logger;
-use std::error::Error;
+use std::error;
 use std::f64::MAX;
 use std::f64::consts::PI;
 use std::fmt;
@@ -21,38 +21,56 @@ pub struct Potentials {
     pub b: Array3<f64>,
 }
 
-//TODO: Add failure modes for file read and scripting.
 /// Error type for handling potentials.
 #[derive(Debug)]
-pub enum PotentialError {
+pub enum Error {
     /// Some potential types cannot be called by many functions.
     /// In particlular the `from_script` and `from_file` types have limited
     /// functionality here and must be handled separately.
     NotAvailable,
+    /// From `input`.
+    Input(input::Error),
+    /// From `output`.
+    Output(output::Error),
 }
 
-impl fmt::Display for PotentialError {
+impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            PotentialError::NotAvailable => {
-                write!(f,
-                       "Not able to calculate potential value at an index for this potential type.")
-            }
+            Error::NotAvailable => write!(f, "Not able to calculate potential value at an index for this potential type."),
+            Error::Input(ref err) => err.fmt(f),
+            Error::Output(ref err) => err.fmt(f),
         }
     }
 }
 
-impl Error for PotentialError {
+impl error::Error for Error {
     fn description(&self) -> &str {
         match *self {
-            PotentialError::NotAvailable => "not available",
+            Error::NotAvailable => "not available",
+            Error::Input(ref err) => err.description(),
+            Error::Output(ref err) => err.description(),
         }
     }
 
-    fn cause(&self) -> Option<&Error> {
+    fn cause(&self) -> Option<&error::Error> {
         match *self {
-            PotentialError::NotAvailable => None,
+            Error::NotAvailable => None,
+            Error::Input(ref err) => Some(err),
+            Error::Output(ref err) => Some(err),
         }
+    }
+}
+
+impl From<input::Error> for Error {
+    fn from(err: input::Error) -> Error {
+        Error::Input(err)
+    }
+}
+
+impl From<output::Error> for Error {
+    fn from(err: output::Error) -> Error {
+        Error::Output(err)
     }
 }
 
@@ -67,7 +85,7 @@ impl Error for PotentialError {
 ///
 /// A 3D array of potential values of the requsted size.
 /// Or an error if called on the wrong potential type.
-pub fn generate(config: &Config) -> Result<Array3<f64>, PotentialError> {
+pub fn generate(config: &Config) -> Result<Array3<f64>, Error> {
     let num = &config.grid.size;
     //NOTE: Don't forget that sizes are non inclusive. We want num.n + 5 to be our last value, so we need num.n + 6 here.
     let init_size: [usize; 3] = [(num.x + 6) as usize,
@@ -78,13 +96,16 @@ pub fn generate(config: &Config) -> Result<Array3<f64>, PotentialError> {
     Zip::indexed(&mut v)
         .par_apply(|(i, j, k), x| match potential(config, &Index3 { x: i, y: j, z: k }) {
                        Ok(result) => *x = result,
-                       Err(err) => panic!("Error: {}", err), //TODO: We can send this up higher I think.
+                       Err(err) => panic!("{}", err), //NOTE: We panic here rather than generating an error.
+                                                      // First: I'm not sure how to return the error out of the closure,
+                                                      // and second: This error can only be `NotAvailable`, so this should
+                                                      // never run here. If it does, a panic is probably a better halter.
                    });
     Ok(v)
 }
 
 /// Loads a pre-calculated potential from a user defined script.
-pub fn from_script() -> Result<Array3<f64>, PotentialError> {
+pub fn from_script() -> Result<Array3<f64>, Error> {
     //TODO: This is currently just a placeholder.
     let ret = 2.3;
     let mut v = Array3::<f64>::zeros((2, 2, 2));
@@ -104,26 +125,19 @@ pub fn from_script() -> Result<Array3<f64>, PotentialError> {
 /// # Returns
 ///
 /// A `Potentials` struct with the potential `v` and ancillary arrays `a` and `b`.
-pub fn load_arrays(config: &Config, log: &Logger) -> Potentials {
+pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials, Error> {
     let mut minima: f64 = MAX;
 
-    let result = match config.potential {
+    let v: Array3<f64> = match config.potential {
         PotentialType::FromFile => {
             let num = &config.grid.size;
             let init_size: [usize; 3] = [(num.x + 6) as usize,
                                          (num.y + 6) as usize,
                                          (num.z + 6) as usize];
             match input::potential(init_size, config.output.binary_files, log) {
-                Ok(pot) => {
-                    if pot.shape() == init_size {
-                        info!(log, "Loaded potential array from disk");
-                        Ok(pot)
-                    } else {
-                        panic!("Potential on disk has different dimensionality to the \
-                                requested dimensions in the configuration file.");
-                    }
-                }
-                Err(err) => panic!("Cannot load potential file: {}", err), //TODO: These panics require better treatment
+                Ok(pot) => Ok(pot),
+                // Have to explicity cast this result.
+                Err(err) => Err(Error::Input(err)),
             }
         }
         PotentialType::FromScript => from_script(),
@@ -131,12 +145,7 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Potentials {
             info!(log, "Calculating potential array");
             generate(config)
         }
-    };
-    let v: Array3<f64> = match result {
-        Ok(r) => r,
-        Err(err) => panic!("Error: {}", err),
-    };
-
+    }?; //Note the try here.
 
     let b = 1. / (1. + config.grid.dt * &v / 2.);
     let a = (1. - config.grid.dt * &v / 2.) * &b;
@@ -151,16 +160,10 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Potentials {
 
     if config.output.save_potential {
         info!(log, "Saving potential to disk");
-        //Not sure if we should use someting like messagepack as there are matlab
-        //and python bindings, or try for hdf5. The rust bindings there are pretty
-        //shonky. So not sure. We'll need a text only option anyhow, so build that fist.
-        match output::potential(&v, &config.project_name, config.output.binary_files) {
-            Ok(_) => {}
-            Err(err) => warn!(log, "Could not write potential to disk: {}", err),
-        }
+        output::potential(&v, &config.project_name, config.output.binary_files)?;
     }
 
-    Potentials { v: v, a: a, b: b }
+    Ok(Potentials { v: v, a: a, b: b })
 }
 
 //TODO: For now we're dropping complex all together, but this is needed.
@@ -175,7 +178,7 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Potentials {
 ///
 /// A double with the potential value at the requsted index, or an error if the function
 /// is called for an invalid potential type.
-fn potential(config: &Config, idx: &Index3) -> Result<f64, PotentialError> {
+fn potential(config: &Config, idx: &Index3) -> Result<f64, Error> {
     let num = &config.grid.size;
     match config.potential {
         PotentialType::NoPotential => Ok(0.0),
@@ -297,7 +300,7 @@ fn potential(config: &Config, idx: &Index3) -> Result<f64, PotentialError> {
             }
         }
         PotentialType::FromFile |
-        PotentialType::FromScript => Err(PotentialError::NotAvailable), //TODO: Script may not need to error.
+        PotentialType::FromScript => Err(Error::NotAvailable), //TODO: Script may not need to error.
     }
 }
 
@@ -306,7 +309,7 @@ fn potential(config: &Config, idx: &Index3) -> Result<f64, PotentialError> {
 //TODO: We need potential_sub file outputs for those which require it.
 // Then here from_file can be treated differently.
 /// Calculate binding energy offset (if any). Follows the `potential` input/output arguments.
-pub fn potential_sub(config: &Config, idx: &Index3) -> Result<f64, PotentialError> {
+pub fn potential_sub(config: &Config, idx: &Index3) -> Result<f64, Error> {
     //TODO: idx is only called for FullCornell, so we may want to match it outside of this call and
     //use a special case. Then we can drop the index requirement completely here.
     match config.potential {
@@ -334,7 +337,7 @@ pub fn potential_sub(config: &Config, idx: &Index3) -> Result<f64, PotentialErro
                      (1. + xi).powf(-0.29);
             Ok(config.sig / md + 4. * config.mass)
         }
-        PotentialType::FromScript => Err(PotentialError::NotAvailable), //TODO: Script may not need to error.
+        PotentialType::FromScript => Err(Error::NotAvailable), //TODO: Script may not need to error.
     }
 }
 
@@ -346,7 +349,7 @@ pub fn calculate_r2(idx: &Index3, grid: &Grid) -> f64 {
     (dx * dx + dy * dy + dz * dz)
 }
 
-/// Running coupling
+/// Running coupling. Used for Cornell potentials.
 fn alphas(mu: f64) -> f64 {
     let nf = 2.0; //TODO: This should be an optional parameter for FullCornell only
     let b0 = 11. - 2. * nf / 3.;
@@ -363,7 +366,7 @@ fn alphas(mu: f64) -> f64 {
      (b0 * b0 * b0 * b0 * l * l)) / (b0 * l)
 }
 
-/// Debye screening mass
+/// Debye screening mass. Useed for Cornell potentials.
 fn mu(t: f64) -> f64 {
     let nf = 2.0; //TODO: This should be an optional parameter for FullCornell only
     let tc = 0.2; //TODO: This should be an optional parameter for FullCornell only
