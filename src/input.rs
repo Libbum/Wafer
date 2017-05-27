@@ -203,35 +203,32 @@ pub fn wavefunction(wnum: u8,
               wnum,
               if binary { "mpk" } else { "csv" });
         if binary {
-            wavefunction_plain(plain_file, wnum, target_size)
+            wavefunction_plain(plain_file, target_size)
         } else {
-            wavefunction_binary(binary_file, wnum, target_size)
+            wavefunction_binary(binary_file, target_size)
         }
     } else if plain_file.is_some() {
-        wavefunction_plain(plain_file, wnum, target_size)
+        wavefunction_plain(plain_file, target_size)
     } else {
-        wavefunction_binary(binary_file, wnum, target_size)
+        wavefunction_binary(binary_file, target_size)
     }
 }
 
 /// Loads a wafefunction from a csv file on disk.
 fn wavefunction_plain(file: Option<String>,
-                      wnum: u8,
                       target_size: [usize; 3])
                       -> Result<Array3<f64>, Error> {
     //No more to add here, just parse the file in the generic parser.
-    let _none = wnum;
     parse_csv_to_array3(file, target_size)
 }
 
 /// Loads a wafefunction from a mpk file on disk.
 fn wavefunction_binary(file: Option<String>,
-                       wnum: u8,
                        target_size: [usize; 3])
                        -> Result<Array3<f64>, Error> {
     //TODO: Not implemented yet, call plain
     //NOTE: This will guarentee a failure from the file name.
-    wavefunction_plain(file, wnum, target_size)
+    wavefunction_plain(file, target_size)
 }
 
 /// Checks that the folder `input` exists. If not, creates it.
