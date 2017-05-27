@@ -21,41 +21,66 @@ struct PlainRecord {
     data: f64,
 }
 
-/// Loads a wafefunction from a csv file on disk.
-pub fn wavefunction_plain(wnum: u8, target_size: [usize; 3]) -> Result<Array3<f64>, csv::Error> {
-    let filename = format!("./input/wavefunction_{}.csv", wnum);
-    let filename_parital = format!("./input/wavefunction_{}_partial.csv", wnum);
-    let file = if Path::new(&filename).exists() {
-        Some(filename)
-    } else if Path::new(&filename_parital).exists() {
-        Some(filename_parital)
+
+/// Loads potential file from disk. Handles cases where multiple files exist.
+///
+/// # Arguments
+///
+/// * `target_size` - Size of the requested work area for this simulation. If the file on disk does
+/// not meet these dimensions, it will be scaled.
+/// * `binary` - Configuation flag concerning binary /  plain file output. Will be used as an arbitrator
+/// when multiple files are detected.
+/// * `log` - Reference to the system logger.
+pub fn potential(target_size: [usize; 3], binary: bool, log: &Logger) -> Result<Array3<f64>, csv::Error> {
+    let plain_path = "./input/potential.csv";
+    let binary_path = "./input/potential.mpk";
+    let plain_file = if Path::new(&plain_path).exists() {
+        Some(plain_path.to_string())
     } else {
         None
     };
-    parse_csv_to_array3(file, target_size)
+    let binary_file = if Path::new(&binary_path).exists() {
+        Some(binary_path.to_string())
+    } else {
+        None
+    };
+
+    if plain_file.is_some() && binary_file.is_some() {
+        warn!(log, "Multiple potential files found in input directory. Chosing 'potential.{}' based on configuration settings.", if binary { "mpk" } else { "csv" });
+        if binary {
+            potential_plain(plain_file, target_size)
+        } else {
+            potential_binary(binary_file, target_size)
+        }
+    } else if plain_file.is_some() {
+        potential_plain(plain_file, target_size)
+    } else {
+        potential_binary(binary_file, target_size)
+    }
 }
 
 /// Loads a potential from a csv file on disk.
-pub fn potential_plain(target_size: [usize; 3]) -> Result<Array3<f64>, csv::Error> {
-    let filename = "./input/potential.csv";
-    let file = if Path::new(&filename).exists() {
-        Some(filename.to_string())
-    } else {
-        None
-    };
+fn potential_plain(file: Option<String>, target_size: [usize; 3]) -> Result<Array3<f64>, csv::Error> {
+    //No need for anything more here, just call the general parser.
     parse_csv_to_array3(file, target_size)
+}
+
+/// Loads a potential from a mpk file on disk.
+fn potential_binary(file: Option<String>, target_size: [usize; 3]) -> Result<Array3<f64>, csv::Error> {
+    //TODO: Not implemented yet, for now call plain
+    potential_plain(Some("./input/potential.csv".to_string()), target_size)
 }
 
 
 /// Loads previously computed wavefunctions from disk.
-pub fn load_wavefunctions(config: &Config, log: &Logger, w_store: &mut Vec<Array3<f64>>) {
+pub fn load_wavefunctions(config: &Config, log: &Logger, binary: bool, w_store: &mut Vec<Array3<f64>>) {
     let num = &config.grid.size;
     let init_size: [usize; 3] = [(num.x + 6) as usize,
                                  (num.y + 6) as usize,
                                  (num.z + 6) as usize];
     // Load required wavefunctions. If the current state resides on disk as well, we load that later.
     for wnum in 0..config.wavenum {
-        let wfn = wavefunction_plain(wnum, init_size);
+        let wfn = wavefunction(wnum, init_size, binary, log);
         match wfn {
             Ok(w) => w_store.push(w),
             Err(err) => {
@@ -66,6 +91,64 @@ pub fn load_wavefunctions(config: &Config, log: &Logger, w_store: &mut Vec<Array
         }
         info!(log, "Loaded (previous) wavefunction {} from disk", wnum);
     }
+}
+
+/// Loads wavefunction file from disk. Handles cases where multiple files exist.
+///
+/// # Arguments
+///
+/// * `wnum` - Excited state level of the wavefunction to load.
+/// * `target_size` - Size of the requested work area for this simulation. If the file on disk does
+/// not meet these dimensions, it will be scaled.
+/// * `binary` - Configuation flag concerning binary /  plain file output. Will be used as an arbitrator
+/// when multiple files are detected.
+/// * `log` - Reference to the system logger.
+pub fn wavefunction(wnum: u8, target_size: [usize; 3], binary: bool, log: &Logger) -> Result<Array3<f64>, csv::Error> {
+    let plain_path = format!("./input/wavefunction_{}.csv", wnum);
+    let plain_path_partial = format!("./input/wavefunction_{}_partial.csv", wnum);
+    let plain_file = if Path::new(&plain_path).exists() {
+        Some(plain_path)
+    } else if Path::new(&plain_path_partial).exists() {
+        Some(plain_path_partial)
+    } else {
+        None
+    };
+
+    let binary_path = format!("./input/wavefunction_{}.mpk", wnum);
+    let binary_path_partial = format!("./input/wavefunction_{}_partial.mpk", wnum);
+    let binary_file = if Path::new(&binary_path).exists() {
+        Some(binary_path)
+    } else if Path::new(&binary_path_partial).exists() {
+        Some(binary_path_partial)
+    } else {
+        None
+    };
+
+    if plain_file.is_some() && binary_file.is_some() {
+        warn!(log, "Multiple wavefunction_{} files found in input directory. Chosing '{}' version based on configuration settings.", wnum, if binary { "mpk" } else { "csv" });
+        if binary {
+            wavefunction_plain(plain_file, wnum, target_size)
+        } else {
+            wavefunction_binary(binary_file, wnum, target_size)
+        }
+    } else if plain_file.is_some() {
+        wavefunction_plain(plain_file, wnum, target_size)
+    } else {
+        wavefunction_binary(binary_file, wnum, target_size)
+    }
+}
+
+/// Loads a wafefunction from a csv file on disk.
+fn wavefunction_plain(file: Option<String>, wnum: u8, target_size: [usize; 3]) -> Result<Array3<f64>, csv::Error> {
+    //No more to add here, just parse the file in the generic parser.
+    parse_csv_to_array3(file, target_size)
+}
+
+/// Loads a wafefunction from a mpk file on disk.
+fn wavefunction_binary(file: Option<String>, wnum: u8, target_size: [usize; 3]) -> Result<Array3<f64>, csv::Error> {
+    //TODO: Not implemented yet, call plain
+    //NOTE: This will guarentee a failure from the file name.
+    wavefunction_plain(file, wnum, target_size)
 }
 
 /// Checks that the folder `input` exists. If not, creates it.

@@ -113,10 +113,7 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Potentials {
             let init_size: [usize; 3] = [(num.x + 6) as usize,
                                          (num.y + 6) as usize,
                                          (num.z + 6) as usize];
-            // TODO: This is not as straightforawrd. We need to search for both binary and txt
-            // files as input. Throw a warning if both, but chose the one with config.output.binary_files,
-            // then load that. Not just the one.
-            match input::potential_plain(init_size) {
+            match input::potential(init_size, config.output.binary_files, log) {
                 Ok(pot) => {
                     if pot.shape() == init_size {
                         info!(log, "Loaded potential array from disk");

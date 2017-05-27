@@ -473,7 +473,7 @@ pub fn set_initial_conditions(config: &Config, log: &Logger) -> Array3<f64> {
     let mut w: Array3<f64> = match config.init_condition {
         InitialCondition::FromFile => {
             //TODO: Selection of csv or messagepack
-            match input::wavefunction_plain(config.wavenum, init_size) {
+            match input::wavefunction(config.wavenum, init_size, config.output.binary_files, log) {
                 Ok(wfn) => wfn,
                 Err(err) => panic!("Cannot load wavefunction file: {}", err),
             }

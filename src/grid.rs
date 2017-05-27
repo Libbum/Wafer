@@ -35,7 +35,7 @@ pub fn run(config: &Config, log: &Logger) {
     if config.wavenum > 0 {
         //We require wavefunctions from disk, even if initial condition is not `FromFile`
         //The wavenum = 0 case is handled later
-        input::load_wavefunctions(config, log, &mut w_store);
+        input::load_wavefunctions(config, log, config.output.binary_files, &mut w_store);
     }
 
     info!(log, "Starting calculation");
@@ -62,7 +62,7 @@ fn solve(config: &Config,
                                      (num.z + 6) as usize];
         // Try to load current wavefunction from disk.
         // If not, we start with the previously converged function
-        if let Ok(wfn) = input::wavefunction_plain(wnum, init_size) {
+        if let Ok(wfn) = input::wavefunction(wnum, init_size, config.output.binary_files, log) {
             info!(log, "Loaded (current) wavefunction {} from disk", wnum);
             // If people are lazy or forget, their input files may contaminate
             // the run here.
