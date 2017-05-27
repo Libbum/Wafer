@@ -3,8 +3,7 @@ use ndarray::{Array3, ArrayView3, ArrayViewMut3, Zip};
 use ndarray_parallel::prelude::*;
 use slog::Logger;
 use std::f64::MAX;
-use std::error;
-use std::fmt;
+use std::{error, fmt, thread};
 use config;
 use config::{Config, Grid, Index3, InitialCondition};
 use potential;
@@ -109,6 +108,15 @@ pub fn run(config: &Config, log: &Logger) -> Result<(), Error> {
 
     let potentials = potential::load_arrays(config, log)?;
 
+    let io = thread::spawn(move || {
+        if config.output.save_potential {
+            info!(log, "Saving potential to disk");
+            if let Err(err) = output::potential(&potentials.v, &config.project_name, config.output.binary_files) {
+                warn!(log, "Error saving potential to disk: {}", err);
+            }
+        }
+    });
+
     let mut w_store: Vec<Array3<f64>> = Vec::new();
     if config.wavenum > 0 {
         //We require wavefunctions from disk, even if initial condition is not `FromFile`
@@ -121,6 +129,11 @@ pub fn run(config: &Config, log: &Logger) -> Result<(), Error> {
     for wnum in config.wavenum..config.wavemax + 1 {
         solve(config, log, &potentials, wnum, &mut w_store)?;
     }
+
+    if let Err(err) = io.join() {
+        panic!("Thread panic when joining from potential save: {:?}", err);
+    }
+
     Ok(())
 }
 

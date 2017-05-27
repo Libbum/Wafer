@@ -1,10 +1,9 @@
 use ndarray::{Array3, Zip};
 use ndarray_parallel::prelude::*;
 use slog::Logger;
-use std::error;
+use std::{error, fmt};
 use std::f64::MAX;
 use std::f64::consts::PI;
-use std::fmt;
 
 use config::{Config, Index3, Grid, PotentialType};
 use input;
@@ -159,11 +158,6 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials, Error> {
         if el.is_finite() {
             minima = minima.min(*el);
         }
-    }
-
-    if config.output.save_potential {
-        info!(log, "Saving potential to disk");
-        output::potential(&v, &config.project_name, config.output.binary_files)?;
     }
 
     Ok(Potentials { v: v, a: a, b: b })
