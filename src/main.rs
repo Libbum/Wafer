@@ -50,7 +50,8 @@ use clap::{App, Arg};
 use slog::{Drain, Duplicate, Logger, Fuse, LevelFilter, Level};
 use std::fs::OpenOptions;
 use std::process;
-use std::time::Instant;
+use std::thread;
+use std::time::{Duration, Instant};
 use config::Config;
 
 include!(concat!(env!("OUT_DIR"), "/version.rs"));
@@ -69,6 +70,14 @@ mod output;
 /// Handles the potential generation, binding energy offsets, callouts to files or scripts
 /// if needed etc.
 mod potential;
+
+/// Exits (no error) after a short pause. Because we're using async logs, sometimes we dump before
+/// the log system outputs information. We spool for a little first in these instances so we get the
+/// logging info.
+fn exit_with_pause() {
+    thread::sleep(Duration::from_millis(10));
+    process::exit(1);
+}
 
 /// System entry point
 fn main() {
@@ -98,12 +107,14 @@ fn main() {
         Ok(c) => c,
         Err(err) => {
             println!("Error processing configuration: {}", err);
+            //This match isn't happy using the `exit_with_pause` function, but fine with it explicit like this...
+            thread::sleep(Duration::from_millis(10));
             process::exit(1);
         }
     };
     if let Err(err) = output::check_output_dir(&config.project_name) {
         println!("Could not communicate with output directory: {}", err);
-        process::exit(1);
+        exit_with_pause();
     };
 
     //Setup logging.
@@ -133,14 +144,14 @@ fn main() {
     info!(log, "Checking/creating directories");
     if let Err(err) = input::check_input_dir() {
         crit!(log, "Could not communicate with input directory: {}", err);
-        process::exit(1);
+        exit_with_pause();
     };
 
     //Override rayon's defaults of threads (including HT cores) to physical cores
     if let Err(err) = rayon::initialize(rayon::Configuration::new()
                                             .num_threads(num_cpus::get_physical())) {
         crit!(log, "Failed to initialise thread pool: {}", err);
-        process::exit(1);
+        exit_with_pause();
     };
 
     let term_width = *output::TERMWIDTH;
@@ -160,7 +171,7 @@ fn main() {
 
     if let Err(err) = grid::run(&config, &log) {
         crit!(log, "{}", err);
-        process::exit(1);
+        exit_with_pause();
     };
 
     let elapsed = start_time.elapsed();
