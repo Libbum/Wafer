@@ -188,6 +188,27 @@ impl fmt::Display for SymmetryConstraint {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+/// Sets the precision of the central difference formalism.
+pub enum CentralDifference {
+    /// 3 point, good to 𝓞(`grid.dn`²).
+    ThreePoint,
+    /// 5 point, good to 𝓞(`grid.dn`⁴).
+    FivePoint,
+    /// 7 point, good to 𝓞(`grid.dn`⁶).
+    SevenPoint,
+}
+
+impl fmt::Display for CentralDifference {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            CentralDifference::ThreePoint => write!(f, "Three point: O(Δ{{x,y,z}}²)"),
+            CentralDifference::FivePoint => write!(f, "Three point: O(Δ{{x,y,z}}⁴)"),
+            CentralDifference::SevenPoint => write!(f, "Three point: O(Δ{{x,y,z}}⁶)"),
+        }
+    }
+}
+
 //TODO: This isn't implimented at all yet. May not be needed.
 #[derive(Serialize, Deserialize, Debug)]
 /// Sets the type of run Wafer will execute.
@@ -290,6 +311,9 @@ pub struct Config {
     pub grid: Grid,
     /// A convergence value, how accurate the total energy needs to be.
     pub tolerance: f64,
+    /// Precision of the central difference formalism. The higher the value here the
+    /// lower the resultant error will be, provided the step size has been optimally chosen.
+    pub central_difference: CentralDifference,
     /// The maximum amount of steps the solver should attempt before giving up.
     pub max_steps: u64,
     /// A starting number pertaining to an excited state energy level. To start
@@ -383,6 +407,11 @@ impl Config {
                      format!("Save wavefns: {}", self.output.save_wavefns),
                      format!("Save potential: {}", self.output.save_potential),
                      width = colwidth);
+            println!("{:5}{:<width$}{:<width$}",
+                     "",
+                     format!("CD precision: {}", self.central_difference),
+                     format!("Output file format: {}", if self.output.binary_files { "Binary"} else { "Plaintext" }),
+                     width = dcolwidth);
             println!("{:5}{:<twidth$}{:<width$}",
                      "",
                      format!("Potential: {}", self.potential),
@@ -446,6 +475,11 @@ impl Config {
                      "",
                      format!("Save wavefns: {}", self.output.save_wavefns),
                      format!("Save potential: {}", self.output.save_potential),
+                     width = colwidth);
+            println!("{:5}{:<width$}{:<width$}",
+                     "",
+                     format!("CD precision: {}", self.central_difference),
+                     format!("Output file format: {}", if self.output.binary_files { "Binary"} else { "Plaintext" }),
                      width = colwidth);
             println!("{:5}{:<twidth$}{:<width$}",
                      "",
