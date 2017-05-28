@@ -199,6 +199,25 @@ pub enum CentralDifference {
     SevenPoint,
 }
 
+impl CentralDifference {
+    /// Grabs the **B** ounding **B** ox size for the current precision.
+    pub fn bb(&self) -> usize {
+        match *self {
+            CentralDifference::ThreePoint => 2,
+            CentralDifference::FivePoint => 4,
+            CentralDifference::SevenPoint => 6,
+        }
+    }
+    /// Grabs how much the work area is extended in one direction for the current precision.
+    pub fn ext(&self) -> usize {
+        match *self {
+            CentralDifference::ThreePoint => 1,
+            CentralDifference::FivePoint => 2,
+            CentralDifference::SevenPoint => 3,
+        }
+    }
+}
+
 impl fmt::Display for CentralDifference {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
@@ -561,10 +580,10 @@ fn read_file<P: AsRef<Path>>(file_path: P) -> Result<String, Error> {
 pub fn set_initial_conditions(config: &Config, log: &Logger) -> Result<Array3<f64>, Error> {
     info!(log, "Setting initial conditions for wavefunction");
     let num = &config.grid.size;
-    //NOTE: Don't forget that sizes are non inclusive. We want num.n + 5 to be our last value, so we need num.n + 6 here.
-    let init_size: [usize; 3] = [(num.x + 6) as usize,
-                                 (num.y + 6) as usize,
-                                 (num.z + 6) as usize];
+    let bb = config.central_difference.bb();
+    let init_size: [usize; 3] = [num.x as usize + bb,
+                                 num.y as usize + bb,
+                                 num.z as usize + bb];
     let mut w: Array3<f64> = match config.init_condition {
         InitialCondition::FromFile => {
             input::wavefunction(config.wavenum, init_size, config.output.binary_files, log)?
@@ -576,18 +595,18 @@ pub fn set_initial_conditions(config: &Config, log: &Logger) -> Result<Array3<f6
     };
 
     //Enforce Boundary Conditions
-    // NOTE: Don't forget that ranges are non-inclusive. So 0..3 means 'select 0,1,2'.
+    let ext = config.central_difference.ext();
     // In Z
-    w.slice_mut(s![.., .., 0..3]).par_map_inplace(|el| *el = 0.);
-    w.slice_mut(s![.., .., (init_size[2] - 3) as isize..init_size[2] as isize])
+    w.slice_mut(s![.., .., 0..ext]).par_map_inplace(|el| *el = 0.);
+    w.slice_mut(s![.., .., (init_size[2] - ext) as isize..init_size[2] as isize])
         .par_map_inplace(|el| *el = 0.);
     // In X
-    w.slice_mut(s![0..3, .., ..]).par_map_inplace(|el| *el = 0.);
-    w.slice_mut(s![(init_size[0] - 3) as isize..init_size[0] as isize, .., ..])
+    w.slice_mut(s![0..ext, .., ..]).par_map_inplace(|el| *el = 0.);
+    w.slice_mut(s![(init_size[0] - ext) as isize..init_size[0] as isize, .., ..])
         .par_map_inplace(|el| *el = 0.);
     // In Y
-    w.slice_mut(s![.., 0..3, ..]).par_map_inplace(|el| *el = 0.);
-    w.slice_mut(s![.., (init_size[1] - 3) as isize..init_size[1] as isize, ..])
+    w.slice_mut(s![.., 0..ext, ..]).par_map_inplace(|el| *el = 0.);
+    w.slice_mut(s![.., (init_size[1] - ext) as isize..init_size[1] as isize, ..])
         .par_map_inplace(|el| *el = 0.);
 
     //NOTE: qfdtd has a zeroing out of W here. We are yet to impliment (may not need W).
