@@ -312,9 +312,29 @@ fn potential(config: &Config, idx: &Index3) -> Result<f64, Error> {
 //TODO: We need potential_sub file outputs for those which require it.
 // Then here from_file can be treated differently.
 /// Calculate binding energy offset (if any). Follows the `potential` input/output arguments.
-pub fn potential_sub(config: &Config, idx: &Index3) -> Result<f64, Error> {
-    //TODO: idx is only called for FullCornell, so we may want to match it outside of this call and
-    //use a special case. Then we can drop the index requirement completely here.
+/// Used if calculation requires indexing. If not, call `potential_sub` instead. Currenly only
+/// `FullCornell` requires this routine.
+pub fn potential_sub_idx(config: &Config, idx: &Index3) -> Result<f64, Error> {
+    match config.potential {
+        PotentialType::FullCornell => {
+            let dz = idx.z as f64 - (config.grid.size.z as f64 + 1.) / 2.;
+            let r = config.grid.dn * (calculate_r2(idx, &config.grid)).sqrt();
+            let t = 1.0; //TODO: This should be an optional parameter for FullCornell only
+            let xi: f64 = 0.0; //TODO: This should be an optional parameter for FullCornell only
+            let md = mu(t) *
+                     (1. +
+                      0.07 * xi.powf(0.2) *
+                      (1. - config.grid.dn * config.grid.dn * dz * dz / (r * r))) *
+                     (1. + xi).powf(-0.29);
+            Ok(config.sig / md + 4. * config.mass)
+        }
+        _ => Err(Error::NotAvailable),
+    }
+}
+
+/// Calculate binding energy offset (if any). Follows the `potential` input/output arguments.
+/// `FullCornell`, and subsequnt potentials that require indexed values must call `potential_sub_idx`.
+pub fn potential_sub(config: &Config) -> Result<f64, Error> {
     match config.potential {
         PotentialType::NoPotential |
         PotentialType::Cube |
@@ -328,21 +348,11 @@ pub fn potential_sub(config: &Config, idx: &Index3) -> Result<f64, Error> {
         PotentialType::FromFile => Ok(0.0),
         PotentialType::ElipticalCoulomb => Ok(1. / config.grid.dn),
         PotentialType::SimpleCornell => Ok(4.0 * config.mass),
-        PotentialType::FullCornell => {
-            let dz = idx.z as f64 - (config.grid.size.z as f64 + 1.) / 2.;
-            let r = config.grid.dn * (calculate_r2(idx, &config.grid)).sqrt();
-            let t = 1.0; //TODO: This should be an optional parameter for FullCornell only
-            let xi: f64 = 0.0; //TODO: This should be an optional parameter for FullCornell only
-            let md = mu(t) *
-                     (1. +
-                      0.07 * xi.powf(0.2) *
-                      (1. - config.grid.dn * config.grid.dn * dz * dz / (r * r))) *
-                     (1. + xi).powf(-0.29);
-            Ok(config.sig / md + 4. * config.mass)
-        }
+        PotentialType::FullCornell |
         PotentialType::FromScript => Err(Error::NotAvailable), //TODO: Script may not need to error.
     }
 }
+
 
 /// Calculates squared distance
 pub fn calculate_r2(idx: &Index3, grid: &Grid) -> f64 {

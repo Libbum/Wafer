@@ -6,7 +6,7 @@ use std::f64::MAX;
 use std::error;
 use std::fmt;
 use config;
-use config::{Config, Grid, Index3, InitialCondition};
+use config::{Config, Grid, Index3, InitialCondition, PotentialType};
 use potential;
 use potential::Potentials;
 use input;
@@ -322,16 +322,27 @@ fn get_norm_squared(w: &ArrayView3<f64>) -> f64 {
 fn get_v_infinity_expectation_value(w: &ArrayView3<f64>, config: &Config) -> f64 {
     //NOTE: No complex conjugation due to all real input for now
     let mut work = Array3::<f64>::zeros(w.dim());
-    Zip::indexed(&mut work)
-        .and(w)
-        .par_apply(|(i, j, k), work, &w| {
+    //NOTE: I'm unsure if we really need the errors here. We already match types.
+    //It may be overkill. If so, then this is just added complexity. Consider removing them.
+    //The non indexed version could be sent up the chain too.
+    if let PotentialType::FullCornell = config.potential {
+            Zip::indexed(&mut work)
+                .and(w)
+                .par_apply(|(i, j, k), work, &w| {
                        let idx = Index3 { x: i, y: j, z: k };
-                       let potsub = match potential::potential_sub(config, &idx) {
+                       let potsub = match potential::potential_sub_idx(config, &idx) {
                            Ok(p) => p,
-                           Err(err) => panic!("{}", err), //NOTE: We panic here as well, see the discusion in potential.rs where the panic resides there.
+                           Err(err) => panic!("Calling invalid potential_sub routine: {}", err),
                        };
                        *work = w * w * potsub;
-                   });
+                });
+    } else {
+        let potsub = match potential::potential_sub(config) {
+            Ok(p) => p,
+            Err(err) => panic!("Calling invalid potential_sub routine: {}", err),
+        };
+        Zip::from(&mut work).and(w).par_apply(|work, &w| { *work = w * w * potsub; });
+    }
     work.scalar_sum()
 }
 
