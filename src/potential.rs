@@ -90,10 +90,8 @@ impl From<output::Error> for Error {
 /// Or an error if called on the wrong potential type.
 pub fn generate(config: &Config) -> Result<Array3<f64>, Error> {
     let num = &config.grid.size;
-    //NOTE: Don't forget that sizes are non inclusive. We want num.n + 5 to be our last value, so we need num.n + 6 here.
-    let init_size: [usize; 3] = [(num.x + 6) as usize,
-                                 (num.y + 6) as usize,
-                                 (num.z + 6) as usize];
+    let bb = config.central_difference.bb();
+    let init_size: [usize; 3] = [num.x + bb, num.y + bb, num.z + bb];
     let mut v = Array3::<f64>::zeros(init_size);
 
     Zip::indexed(&mut v)
@@ -130,14 +128,12 @@ pub fn from_script() -> Result<Array3<f64>, Error> {
 /// A `Potentials` struct with the potential `v` and ancillary arrays `a` and `b`.
 pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials, Error> {
     let mut minima: f64 = MAX;
-
+    let bb = config.central_difference.bb();
     let v: Array3<f64> = match config.potential {
         PotentialType::FromFile => {
             let num = &config.grid.size;
-            let init_size: [usize; 3] = [(num.x + 6) as usize,
-                                         (num.y + 6) as usize,
-                                         (num.z + 6) as usize];
-            match input::potential(init_size, config.output.binary_files, log) {
+            let init_size: [usize; 3] = [num.x + bb, num.y + bb, num.z + bb];
+            match input::potential(init_size, bb, config.output.binary_files, log) {
                 Ok(pot) => Ok(pot),
                 // Have to explicity cast this result.
                 Err(err) => Err(Error::Input(err)),
@@ -163,7 +159,7 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials, Error> {
 
     if config.output.save_potential {
         info!(log, "Saving potential to disk");
-        output::potential(&v, &config.project_name, config.output.binary_files)?;
+        output::potential(&v, bb, &config.project_name, config.output.binary_files)?;
     }
 
     Ok(Potentials { v: v, a: a, b: b })

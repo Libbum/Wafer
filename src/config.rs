@@ -222,8 +222,8 @@ impl fmt::Display for CentralDifference {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             CentralDifference::ThreePoint => write!(f, "Three point: O(Δ{{x,y,z}}²)"),
-            CentralDifference::FivePoint => write!(f, "Three point: O(Δ{{x,y,z}}⁴)"),
-            CentralDifference::SevenPoint => write!(f, "Three point: O(Δ{{x,y,z}}⁶)"),
+            CentralDifference::FivePoint => write!(f, "Five point: O(Δ{{x,y,z}}⁴)"),
+            CentralDifference::SevenPoint => write!(f, "Seven point: O(Δ{{x,y,z}}⁶)"),
         }
     }
 }
@@ -429,7 +429,12 @@ impl Config {
             println!("{:5}{:<width$}{:<width$}",
                      "",
                      format!("CD precision: {}", self.central_difference),
-                     format!("Output file format: {}", if self.output.binary_files { "Binary"} else { "Plaintext" }),
+                     format!("Output file format: {}",
+                             if self.output.binary_files {
+                                 "Binary"
+                             } else {
+                                 "Plaintext"
+                             }),
                      width = dcolwidth);
             println!("{:5}{:<twidth$}{:<width$}",
                      "",
@@ -498,7 +503,12 @@ impl Config {
             println!("{:5}{:<width$}{:<width$}",
                      "",
                      format!("CD precision: {}", self.central_difference),
-                     format!("Output file format: {}", if self.output.binary_files { "Binary"} else { "Plaintext" }),
+                     format!("Output file format: {}",
+                             if self.output.binary_files {
+                                 "Binary"
+                             } else {
+                                 "Plaintext"
+                             }),
                      width = colwidth);
             println!("{:5}{:<twidth$}{:<width$}",
                      "",
@@ -576,7 +586,8 @@ fn read_file<P: AsRef<Path>>(file_path: P) -> Result<String, Error> {
 ///
 /// # Arguments
 ///
-/// * `config` - a reference to the confguration struct
+/// * `config` - a reference to the confguration struct.
+/// * `log` - a reference to the logger.
 pub fn set_initial_conditions(config: &Config, log: &Logger) -> Result<Array3<f64>, Error> {
     info!(log, "Setting initial conditions for wavefunction");
     let num = &config.grid.size;
@@ -586,7 +597,11 @@ pub fn set_initial_conditions(config: &Config, log: &Logger) -> Result<Array3<f6
                                  num.z as usize + bb];
     let mut w: Array3<f64> = match config.init_condition {
         InitialCondition::FromFile => {
-            input::wavefunction(config.wavenum, init_size, config.output.binary_files, log)?
+            input::wavefunction(config.wavenum,
+                                init_size,
+                                bb,
+                                config.output.binary_files,
+                                log)?
         }
         InitialCondition::Gaussian => generate_gaussian(config, init_size),
         InitialCondition::Coulomb => generate_coulomb(config, init_size),
@@ -595,21 +610,22 @@ pub fn set_initial_conditions(config: &Config, log: &Logger) -> Result<Array3<f6
     };
 
     //Enforce Boundary Conditions
-    let ext = config.central_difference.ext();
+    let ext = config.central_difference.ext() as isize;
     // In Z
-    w.slice_mut(s![.., .., 0..ext]).par_map_inplace(|el| *el = 0.);
-    w.slice_mut(s![.., .., (init_size[2] - ext) as isize..init_size[2] as isize])
+    w.slice_mut(s![.., .., 0..ext])
+        .par_map_inplace(|el| *el = 0.);
+    w.slice_mut(s![.., .., init_size[2] as isize - ext..init_size[2] as isize])
         .par_map_inplace(|el| *el = 0.);
     // In X
-    w.slice_mut(s![0..ext, .., ..]).par_map_inplace(|el| *el = 0.);
-    w.slice_mut(s![(init_size[0] - ext) as isize..init_size[0] as isize, .., ..])
+    w.slice_mut(s![0..ext, .., ..])
+        .par_map_inplace(|el| *el = 0.);
+    w.slice_mut(s![init_size[0] as isize - ext..init_size[0] as isize, .., ..])
         .par_map_inplace(|el| *el = 0.);
     // In Y
-    w.slice_mut(s![.., 0..ext, ..]).par_map_inplace(|el| *el = 0.);
-    w.slice_mut(s![.., (init_size[1] - ext) as isize..init_size[1] as isize, ..])
+    w.slice_mut(s![.., 0..ext, ..])
         .par_map_inplace(|el| *el = 0.);
-
-    //NOTE: qfdtd has a zeroing out of W here. We are yet to impliment (may not need W).
+    w.slice_mut(s![.., init_size[1] as isize - ext..init_size[1] as isize, ..])
+        .par_map_inplace(|el| *el = 0.);
 
     // Symmetrise the IC.
     symmetrise_wavefunction(config, &mut w);
