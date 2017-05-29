@@ -303,7 +303,7 @@ fn parse_csv_to_array3(file: Option<String>,
                     let init_size: [usize; 3] = [numx + bb, numy + bb, numz + bb];
                     let mut complete = Array3::<f64>::zeros(target_size);
                     {
-                        let mut work = grid::get_mut_work_area(&mut complete, bb);
+                        let mut work = grid::get_mut_work_area(&mut complete, bb/2); //NOTE: This is a bit of a hack. But it works.
                         let same: bool = init_size
                             .iter()
                             .zip(target_size.iter())
