@@ -29,6 +29,8 @@ struct PlainRecord {
 pub enum Error {
     /// From disk issues.
     Io(io::Error),
+    // If files are not found on disk
+    NotFound { value: String },
     /// From `csv`.
     Csv(csv::Error),
     /// From `ndarray`.
@@ -39,8 +41,15 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Error::Io(ref err) => err.fmt(f),
+            Error::NotFound { value: ref file } => {
+                write!(f, "Cannot find {} in input directory.", file)
+            }
             Error::Csv(ref err) => err.fmt(f),
-            Error::Shape(ref err) => err.fmt(f),
+            Error::Shape(ref err) => {
+                write!(f,
+                       "Calculated and actual size of input data is not aligned ══▶ {}",
+                       err)
+            }
         }
     }
 }
@@ -49,6 +58,7 @@ impl error::Error for Error {
     fn description(&self) -> &str {
         match *self {
             Error::Io(ref err) => err.description(),
+            Error::NotFound { .. } => "File not found",
             Error::Csv(ref err) => err.description(),
             Error::Shape(ref err) => err.description(),
         }
@@ -57,6 +67,7 @@ impl error::Error for Error {
     fn cause(&self) -> Option<&error::Error> {
         match *self {
             Error::Io(ref err) => Some(err),
+            Error::NotFound { .. } => None,
             Error::Csv(ref err) => Some(err),
             Error::Shape(ref err) => Some(err),
         }
@@ -108,40 +119,39 @@ pub fn potential(target_size: [usize; 3],
     } else {
         None
     };
-
+    println!("{:?}, {:?}", plain_file, binary_file);
     if plain_file.is_some() && binary_file.is_some() {
         warn!(log,
               "Multiple potential files found in input directory. Chosing 'potential.{}' based on configuration settings.",
               if binary { "mpk" } else { "csv" });
         if binary {
-            potential_plain(plain_file, target_size, bb)
+            potential_plain(plain_file.unwrap(), target_size, bb)
         } else {
-            potential_binary(binary_file, target_size, bb)
+            potential_binary(binary_file.unwrap(), target_size, bb)
         }
     } else if plain_file.is_some() {
-        potential_plain(plain_file, target_size, bb)
+        potential_plain(plain_file.unwrap(), target_size, bb)
+    } else if binary_file.is_some() {
+        potential_binary(binary_file.unwrap(), target_size, bb)
     } else {
-        potential_binary(binary_file, target_size, bb)
+        Err(Error::NotFound { value: "potential.*".to_string() })
     }
 }
 
 /// Loads a potential from a csv file on disk.
-fn potential_plain(file: Option<String>,
-                   target_size: [usize; 3],
-                   bb: usize)
-                   -> Result<Array3<f64>, Error> {
+fn potential_plain(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<f64>, Error> {
     //No need for anything more here, just call the general parser.
     parse_csv_to_array3(file, target_size, bb)
 }
 
 /// Loads a potential from a mpk file on disk.
-fn potential_binary(file: Option<String>,
+fn potential_binary(file: String,
                     target_size: [usize; 3],
                     bb: usize)
                     -> Result<Array3<f64>, Error> {
     //TODO: Not implemented yet, for now call plain
     let _none = file;
-    potential_plain(Some("./input/potential.csv".to_string()), target_size, bb)
+    potential_plain("./input/potential.csv".to_string(), target_size, bb)
 }
 
 
@@ -210,19 +220,22 @@ pub fn wavefunction(wnum: u8,
               wnum,
               if binary { "mpk" } else { "csv" });
         if binary {
-            wavefunction_plain(plain_file, target_size, bb)
+            wavefunction_plain(plain_file.unwrap(), target_size, bb)
         } else {
-            wavefunction_binary(binary_file, target_size, bb)
+            wavefunction_binary(binary_file.unwrap(), target_size, bb)
         }
     } else if plain_file.is_some() {
-        wavefunction_plain(plain_file, target_size, bb)
+        wavefunction_plain(plain_file.unwrap(), target_size, bb)
+    } else if binary_file.is_some() {
+        wavefunction_binary(binary_file.unwrap(), target_size, bb)
     } else {
-        wavefunction_binary(binary_file, target_size, bb)
+        let missing = format!("wavefunction_{}*.*", wnum);
+        Err(Error::NotFound { value: missing })
     }
 }
 
 /// Loads a wafefunction from a csv file on disk.
-fn wavefunction_plain(file: Option<String>,
+fn wavefunction_plain(file: String,
                       target_size: [usize; 3],
                       bb: usize)
                       -> Result<Array3<f64>, Error> {
@@ -231,7 +244,7 @@ fn wavefunction_plain(file: Option<String>,
 }
 
 /// Loads a wafefunction from a mpk file on disk.
-fn wavefunction_binary(file: Option<String>,
+fn wavefunction_binary(file: String,
                        target_size: [usize; 3],
                        bb: usize)
                        -> Result<Array3<f64>, Error> {
@@ -268,71 +281,66 @@ pub fn check_input_dir() -> Result<(), Error> {
 ///
 /// * A 3D array loaded with data from the file and resampled/interpolated if required.
 /// If something goes wrong in the parsing or file handling, a `csv::Error` is passed.
-fn parse_csv_to_array3(file: Option<String>,
+fn parse_csv_to_array3(file: String,
                        target_size: [usize; 3],
                        bb: usize)
                        -> Result<Array3<f64>, Error> {
-    match file {
-        Some(f) => {
-            let mut rdr = csv::ReaderBuilder::new().has_headers(false).from_path(f)?;
-            let mut max_i = 0;
-            let mut max_j = 0;
-            let mut max_k = 0;
-            let mut data: Vec<f64> = Vec::new();
-            for result in rdr.deserialize() {
-                let record: PlainRecord = result?;
-                if record.i > max_i {
-                    max_i = record.i
-                };
-                if record.j > max_j {
-                    max_j = record.j
-                };
-                if record.k > max_k {
-                    max_k = record.k
-                };
-                data.push(record.data);
-            }
-            let numx = max_i + 1;
-            let numy = max_j + 1;
-            let numz = max_k + 1;
-            match Array3::<f64>::from_shape_vec((numx, numy, numz), data) {
-                Ok(result) => {
-                    //result is now a parsed Array3 with the work area inside.
-                    //We must fill this into an array with CD boundaries, provided
-                    //it is the correct size. If not, we must scale it.
-                    let init_size: [usize; 3] = [numx + bb, numy + bb, numz + bb];
-                    let mut complete = Array3::<f64>::zeros(target_size);
-                    {
-                        let mut work = grid::get_mut_work_area(&mut complete, bb/2); //NOTE: This is a bit of a hack. But it works.
-                        let same: bool = init_size
-                            .iter()
-                            .zip(target_size.iter())
-                            .all(|(a, b)| a == b);
-                        let smaller: bool =
-                            init_size.iter().zip(target_size.iter()).all(|(a, b)| a < b);
-                        let larger: bool =
-                            init_size.iter().zip(target_size.iter()).all(|(a, b)| a > b);
-                        if same {
-                            // Input is the same size, copy down.
-                            Zip::from(&mut work)
-                                .and(result.view())
-                                .par_apply(|work, &result| *work = result);
-                        } else if smaller {
-                            //TODO: Input has lower resolution. Spread it out.
-                            panic!("Wavefunction is lower in resolution than requested");
-                        } else if larger {
-                            //TODO: Input has higer resolution. Sample it.
-                            panic!("Wavefunction is higher in resolution than requested");
-                        } else {
-                            //TODO: Dimensons are all over the shop. Sample and interp
-                            panic!("Wavefunction differs in resolution from requested");
-                        }
-                    }
-                    Ok(complete)
+    let mut rdr = csv::ReaderBuilder::new()
+        .has_headers(false)
+        .from_path(file)?;
+    let mut max_i = 0;
+    let mut max_j = 0;
+    let mut max_k = 0;
+    let mut data: Vec<f64> = Vec::new();
+    for result in rdr.deserialize() {
+        let record: PlainRecord = result?;
+        if record.i > max_i {
+            max_i = record.i
+        };
+        if record.j > max_j {
+            max_j = record.j
+        };
+        if record.k > max_k {
+            max_k = record.k
+        };
+        data.push(record.data);
+    }
+    let numx = max_i + 1;
+    let numy = max_j + 1;
+    let numz = max_k + 1;
+    match Array3::<f64>::from_shape_vec((numx, numy, numz), data) {
+        Ok(result) => {
+            //result is now a parsed Array3 with the work area inside.
+            //We must fill this into an array with CD boundaries, provided
+            //it is the correct size. If not, we must scale it.
+            let init_size: [usize; 3] = [numx + bb, numy + bb, numz + bb];
+            let mut complete = Array3::<f64>::zeros(target_size);
+            {
+                let mut work = grid::get_mut_work_area(&mut complete, bb / 2); //NOTE: This is a bit of a hack. But it works.
+                let same: bool = init_size
+                    .iter()
+                    .zip(target_size.iter())
+                    .all(|(a, b)| a == b);
+                let smaller: bool = init_size.iter().zip(target_size.iter()).all(|(a, b)| a < b);
+                let larger: bool = init_size.iter().zip(target_size.iter()).all(|(a, b)| a > b);
+                if same {
+                    // Input is the same size, copy down.
+                    Zip::from(&mut work)
+                        .and(result.view())
+                        .par_apply(|work, &result| *work = result);
+                } else if smaller {
+                    //TODO: Input has lower resolution. Spread it out.
+                    panic!("Wavefunction is lower in resolution than requested");
+                } else if larger {
+                    //TODO: Input has higer resolution. Sample it.
+                    panic!("Wavefunction is higher in resolution than requested");
+                } else {
+                    //TODO: Dimensons are all over the shop. Sample and interp
+                    panic!("Wavefunction differs in resolution from requested");
                 }
-                Err(err) => Err(Error::Shape(err)),
             }
+            Ok(complete)
         }
-        None => Err(Error::Io(io::Error::from(io::ErrorKind::NotFound))),
+        Err(err) => Err(Error::Shape(err)),
     }
 }
