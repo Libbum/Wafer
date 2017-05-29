@@ -645,3 +645,36 @@ fn evolve(wnum: u8,
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    macro_rules! assert_approx_eq {
+    ($a:expr, $b:expr) => ({
+        let eps = 1.0e-6;
+        let (a, b) = (&$a, &$b);
+        assert!((*a - *b).abs() < eps,
+                "assertion failed: `(left !== right)` \
+                           (left: `{:?}`, right: `{:?}`, expect diff: `{:?}`, real diff: `{:?}`)",
+                 *a, *b, eps, (*a - *b).abs());
+    });
+    ($a:expr, $b:expr, $eps:expr) => ({
+        let (a, b) = (&$a, &$b);
+        assert!((*a - *b).abs() < $eps,
+                "assertion failed: `(left !== right)` \
+                           (left: `{:?}`, right: `{:?}`, expect diff: `{:?}`, real diff: `{:?}`)",
+                 *a, *b, $eps, (*a - *b).abs());
+    })
+    }
+
+    #[test]
+    fn work_area() {
+        let test = Array3::<f64>::zeros((5,8,7));
+        let work = get_work_area(&test, 1);
+        let dims = work.dim();
+        assert_eq!(dims.0, 3);
+        assert_eq!(dims.1, 6);
+        assert_eq!(dims.2, 5);
+    }
+}
