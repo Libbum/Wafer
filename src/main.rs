@@ -116,17 +116,18 @@ fn main() {
     };
 
     //Setup logging.
-    let log_file = match OpenOptions::new()
-        .create(true)
-        .write(true)
-        .truncate(true)
-        .open(output::get_project_dir(&config.project_name) + "/simulation.log") {
-        Ok(f) => f,
-        Err(err) => {
-            println!("Could not connect to log file: {}", err);
-            process::exit(1);
-        }
-    };
+    let log_file =
+        match OpenOptions::new()
+                  .create(true)
+                  .write(true)
+                  .truncate(true)
+                  .open(output::get_project_dir(&config.project_name) + "/simulation.log") {
+            Ok(f) => f,
+            Err(err) => {
+                println!("Could not connect to log file: {}", err);
+                process::exit(1);
+            }
+        };
     let syslog = slog_term::PlainDecorator::new(log_file);
     let sys_drain = slog_term::FullFormat::new(syslog).build().fuse();
     let sys_drain = slog_async::Async::new(sys_drain).build().fuse();
@@ -139,7 +140,8 @@ fn main() {
         1 => Level::Info,
         2 | _ => Level::Debug,
     };
-    let log = Logger::root(Fuse::new(Duplicate::new(LevelFilter::new(screen_drain, screen_level), sys_drain)),
+    let log = Logger::root(Fuse::new(Duplicate::new(LevelFilter::new(screen_drain, screen_level),
+                                                    sys_drain)),
                            o!());
 
     info!(log, "Starting Wafer solver"; "version" => crate_version!(), "build-id" => short_sha());

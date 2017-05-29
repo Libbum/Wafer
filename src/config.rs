@@ -188,6 +188,46 @@ impl fmt::Display for SymmetryConstraint {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+/// Sets the precision of the central difference formalism.
+pub enum CentralDifference {
+    /// 3 point, good to 𝓞(`grid.dn`²).
+    ThreePoint,
+    /// 5 point, good to 𝓞(`grid.dn`⁴).
+    FivePoint,
+    /// 7 point, good to 𝓞(`grid.dn`⁶).
+    SevenPoint,
+}
+
+impl CentralDifference {
+    /// Grabs the **B** ounding **B** ox size for the current precision.
+    pub fn bb(&self) -> usize {
+        match *self {
+            CentralDifference::ThreePoint => 2,
+            CentralDifference::FivePoint => 4,
+            CentralDifference::SevenPoint => 6,
+        }
+    }
+    /// Grabs how much the work area is extended in one direction for the current precision.
+    pub fn ext(&self) -> usize {
+        match *self {
+            CentralDifference::ThreePoint => 1,
+            CentralDifference::FivePoint => 2,
+            CentralDifference::SevenPoint => 3,
+        }
+    }
+}
+
+impl fmt::Display for CentralDifference {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            CentralDifference::ThreePoint => write!(f, "Three point: O(Δ{{x,y,z}}²)"),
+            CentralDifference::FivePoint => write!(f, "Five point: O(Δ{{x,y,z}}⁴)"),
+            CentralDifference::SevenPoint => write!(f, "Seven point: O(Δ{{x,y,z}}⁶)"),
+        }
+    }
+}
+
 //TODO: This isn't implimented at all yet. May not be needed.
 #[derive(Serialize, Deserialize, Debug)]
 /// Sets the type of run Wafer will execute.
@@ -290,6 +330,9 @@ pub struct Config {
     pub grid: Grid,
     /// A convergence value, how accurate the total energy needs to be.
     pub tolerance: f64,
+    /// Precision of the central difference formalism. The higher the value here the
+    /// lower the resultant error will be, provided the step size has been optimally chosen.
+    pub central_difference: CentralDifference,
     /// The maximum amount of steps the solver should attempt before giving up.
     pub max_steps: u64,
     /// A starting number pertaining to an excited state energy level. To start
@@ -383,6 +426,16 @@ impl Config {
                      format!("Save wavefns: {}", self.output.save_wavefns),
                      format!("Save potential: {}", self.output.save_potential),
                      width = colwidth);
+            println!("{:5}{:<width$}{:<width$}",
+                     "",
+                     format!("CD precision: {}", self.central_difference),
+                     format!("Output file format: {}",
+                             if self.output.binary_files {
+                                 "Binary"
+                             } else {
+                                 "Plaintext"
+                             }),
+                     width = dcolwidth);
             println!("{:5}{:<twidth$}{:<width$}",
                      "",
                      format!("Potential: {}", self.potential),
@@ -446,6 +499,16 @@ impl Config {
                      "",
                      format!("Save wavefns: {}", self.output.save_wavefns),
                      format!("Save potential: {}", self.output.save_potential),
+                     width = colwidth);
+            println!("{:5}{:<width$}{:<width$}",
+                     "",
+                     format!("CD precision: {}", self.central_difference),
+                     format!("Output file format: {}",
+                             if self.output.binary_files {
+                                 "Binary"
+                             } else {
+                                 "Plaintext"
+                             }),
                      width = colwidth);
             println!("{:5}{:<twidth$}{:<width$}",
                      "",
@@ -523,17 +586,22 @@ fn read_file<P: AsRef<Path>>(file_path: P) -> Result<String, Error> {
 ///
 /// # Arguments
 ///
-/// * `config` - a reference to the confguration struct
+/// * `config` - a reference to the confguration struct.
+/// * `log` - a reference to the logger.
 pub fn set_initial_conditions(config: &Config, log: &Logger) -> Result<Array3<f64>, Error> {
     info!(log, "Setting initial conditions for wavefunction");
     let num = &config.grid.size;
-    //NOTE: Don't forget that sizes are non inclusive. We want num.n + 5 to be our last value, so we need num.n + 6 here.
-    let init_size: [usize; 3] = [(num.x + 6) as usize,
-                                 (num.y + 6) as usize,
-                                 (num.z + 6) as usize];
+    let bb = config.central_difference.bb();
+    let init_size: [usize; 3] = [num.x as usize + bb,
+                                 num.y as usize + bb,
+                                 num.z as usize + bb];
     let mut w: Array3<f64> = match config.init_condition {
         InitialCondition::FromFile => {
-            input::wavefunction(config.wavenum, init_size, config.output.binary_files, log)?
+            input::wavefunction(config.wavenum,
+                                init_size,
+                                bb,
+                                config.output.binary_files,
+                                log)?
         }
         InitialCondition::Gaussian => generate_gaussian(config, init_size),
         InitialCondition::Coulomb => generate_coulomb(config, init_size),
@@ -542,21 +610,22 @@ pub fn set_initial_conditions(config: &Config, log: &Logger) -> Result<Array3<f6
     };
 
     //Enforce Boundary Conditions
-    // NOTE: Don't forget that ranges are non-inclusive. So 0..3 means 'select 0,1,2'.
+    let ext = config.central_difference.ext() as isize;
     // In Z
-    w.slice_mut(s![.., .., 0..3]).par_map_inplace(|el| *el = 0.);
-    w.slice_mut(s![.., .., (init_size[2] - 3) as isize..init_size[2] as isize])
+    w.slice_mut(s![.., .., 0..ext])
+        .par_map_inplace(|el| *el = 0.);
+    w.slice_mut(s![.., .., init_size[2] as isize - ext..init_size[2] as isize])
         .par_map_inplace(|el| *el = 0.);
     // In X
-    w.slice_mut(s![0..3, .., ..]).par_map_inplace(|el| *el = 0.);
-    w.slice_mut(s![(init_size[0] - 3) as isize..init_size[0] as isize, .., ..])
+    w.slice_mut(s![0..ext, .., ..])
+        .par_map_inplace(|el| *el = 0.);
+    w.slice_mut(s![init_size[0] as isize - ext..init_size[0] as isize, .., ..])
         .par_map_inplace(|el| *el = 0.);
     // In Y
-    w.slice_mut(s![.., 0..3, ..]).par_map_inplace(|el| *el = 0.);
-    w.slice_mut(s![.., (init_size[1] - 3) as isize..init_size[1] as isize, ..])
+    w.slice_mut(s![.., 0..ext, ..])
         .par_map_inplace(|el| *el = 0.);
-
-    //NOTE: qfdtd has a zeroing out of W here. We are yet to impliment (may not need W).
+    w.slice_mut(s![.., init_size[1] as isize - ext..init_size[1] as isize, ..])
+        .par_map_inplace(|el| *el = 0.);
 
     // Symmetrise the IC.
     symmetrise_wavefunction(config, &mut w);

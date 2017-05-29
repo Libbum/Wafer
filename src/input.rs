@@ -92,6 +92,7 @@ impl From<ndarray::ShapeError> for Error {
 /// when multiple files are detected.
 /// * `log` - Reference to the system logger.
 pub fn potential(target_size: [usize; 3],
+                 bb: usize,
                  binary: bool,
                  log: &Logger)
                  -> Result<Array3<f64>, Error> {
@@ -113,28 +114,34 @@ pub fn potential(target_size: [usize; 3],
               "Multiple potential files found in input directory. Chosing 'potential.{}' based on configuration settings.",
               if binary { "mpk" } else { "csv" });
         if binary {
-            potential_plain(plain_file, target_size)
+            potential_plain(plain_file, target_size, bb)
         } else {
-            potential_binary(binary_file, target_size)
+            potential_binary(binary_file, target_size, bb)
         }
     } else if plain_file.is_some() {
-        potential_plain(plain_file, target_size)
+        potential_plain(plain_file, target_size, bb)
     } else {
-        potential_binary(binary_file, target_size)
+        potential_binary(binary_file, target_size, bb)
     }
 }
 
 /// Loads a potential from a csv file on disk.
-fn potential_plain(file: Option<String>, target_size: [usize; 3]) -> Result<Array3<f64>, Error> {
+fn potential_plain(file: Option<String>,
+                   target_size: [usize; 3],
+                   bb: usize)
+                   -> Result<Array3<f64>, Error> {
     //No need for anything more here, just call the general parser.
-    parse_csv_to_array3(file, target_size)
+    parse_csv_to_array3(file, target_size, bb)
 }
 
 /// Loads a potential from a mpk file on disk.
-fn potential_binary(file: Option<String>, target_size: [usize; 3]) -> Result<Array3<f64>, Error> {
+fn potential_binary(file: Option<String>,
+                    target_size: [usize; 3],
+                    bb: usize)
+                    -> Result<Array3<f64>, Error> {
     //TODO: Not implemented yet, for now call plain
     let _none = file;
-    potential_plain(Some("./input/potential.csv".to_string()), target_size)
+    potential_plain(Some("./input/potential.csv".to_string()), target_size, bb)
 }
 
 
@@ -145,12 +152,11 @@ pub fn load_wavefunctions(config: &Config,
                           w_store: &mut Vec<Array3<f64>>)
                           -> Result<(), Error> {
     let num = &config.grid.size;
-    let init_size: [usize; 3] = [(num.x + 6) as usize,
-                                 (num.y + 6) as usize,
-                                 (num.z + 6) as usize];
+    let bb = config.central_difference.bb();
+    let init_size: [usize; 3] = [num.x + bb, num.y + bb, num.z + bb];
     // Load required wavefunctions. If the current state resides on disk as well, we load that later.
     for wnum in 0..config.wavenum {
-        let wfn = wavefunction(wnum, init_size, binary, log);
+        let wfn = wavefunction(wnum, init_size, bb, binary, log);
         match wfn {
             Ok(w) => w_store.push(w),
             Err(err) => return Err(err),
@@ -174,6 +180,7 @@ pub fn load_wavefunctions(config: &Config,
 /// * `log` - Reference to the system logger.
 pub fn wavefunction(wnum: u8,
                     target_size: [usize; 3],
+                    bb: usize,
                     binary: bool,
                     log: &Logger)
                     -> Result<Array3<f64>, Error> {
@@ -203,32 +210,34 @@ pub fn wavefunction(wnum: u8,
               wnum,
               if binary { "mpk" } else { "csv" });
         if binary {
-            wavefunction_plain(plain_file, target_size)
+            wavefunction_plain(plain_file, target_size, bb)
         } else {
-            wavefunction_binary(binary_file, target_size)
+            wavefunction_binary(binary_file, target_size, bb)
         }
     } else if plain_file.is_some() {
-        wavefunction_plain(plain_file, target_size)
+        wavefunction_plain(plain_file, target_size, bb)
     } else {
-        wavefunction_binary(binary_file, target_size)
+        wavefunction_binary(binary_file, target_size, bb)
     }
 }
 
 /// Loads a wafefunction from a csv file on disk.
 fn wavefunction_plain(file: Option<String>,
-                      target_size: [usize; 3])
+                      target_size: [usize; 3],
+                      bb: usize)
                       -> Result<Array3<f64>, Error> {
     //No more to add here, just parse the file in the generic parser.
-    parse_csv_to_array3(file, target_size)
+    parse_csv_to_array3(file, target_size, bb)
 }
 
 /// Loads a wafefunction from a mpk file on disk.
 fn wavefunction_binary(file: Option<String>,
-                       target_size: [usize; 3])
+                       target_size: [usize; 3],
+                       bb: usize)
                        -> Result<Array3<f64>, Error> {
     //TODO: Not implemented yet, call plain
     //NOTE: This will guarentee a failure from the file name.
-    wavefunction_plain(file, target_size)
+    wavefunction_plain(file, target_size, bb)
 }
 
 /// Checks that the folder `input` exists. If not, creates it.
@@ -260,7 +269,8 @@ pub fn check_input_dir() -> Result<(), Error> {
 /// * A 3D array loaded with data from the file and resampled/interpolated if required.
 /// If something goes wrong in the parsing or file handling, a `csv::Error` is passed.
 fn parse_csv_to_array3(file: Option<String>,
-                       target_size: [usize; 3])
+                       target_size: [usize; 3],
+                       bb: usize)
                        -> Result<Array3<f64>, Error> {
     match file {
         Some(f) => {
@@ -290,10 +300,10 @@ fn parse_csv_to_array3(file: Option<String>,
                     //result is now a parsed Array3 with the work area inside.
                     //We must fill this into an array with CD boundaries, provided
                     //it is the correct size. If not, we must scale it.
-                    let init_size: [usize; 3] = [numx + 6, numy + 6, numz + 6];
+                    let init_size: [usize; 3] = [numx + bb, numy + bb, numz + bb];
                     let mut complete = Array3::<f64>::zeros(target_size);
                     {
-                        let mut work = grid::get_mut_work_area(&mut complete);
+                        let mut work = grid::get_mut_work_area(&mut complete, bb);
                         let same: bool = init_size
                             .iter()
                             .zip(target_size.iter())
