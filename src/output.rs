@@ -510,3 +510,19 @@ fn sanitize_string(component: &str) -> String {
     }
     buffer
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn term_bounds() {
+        let term_size = get_term_size();
+        assert!(term_size >= 70 && term_size <= 100);
+    }
+
+    #[test]
+    fn directory_string() {
+        let bad_string = " $//Project*\\";
+        assert_eq!(sanitize_string(&bad_string), "_,36,,47,,47,Project,42,,92,");
+    }
+}

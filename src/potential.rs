@@ -384,3 +384,46 @@ fn mu(t: f64) -> f64 {
     let tc = 0.2; //TODO: This should be an optional parameter for FullCornell only
     1.4 * ((1. + nf / 6.) * 4. * PI * alphas(2. * PI * t)).sqrt() * t * tc
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use config::{Grid, Index3};
+    //TODO: Build a test Config to throw in to functions.
+
+    macro_rules! assert_approx_eq {
+    ($a:expr, $b:expr) => ({
+        let eps = 1.0e-6;
+        let (a, b) = (&$a, &$b);
+        assert!((*a - *b).abs() < eps,
+                "assertion failed: `(left !== right)` \
+                           (left: `{:?}`, right: `{:?}`, expect diff: `{:?}`, real diff: `{:?}`)",
+                 *a, *b, eps, (*a - *b).abs());
+    });
+    ($a:expr, $b:expr, $eps:expr) => ({
+        let (a, b) = (&$a, &$b);
+        assert!((*a - *b).abs() < $eps,
+                "assertion failed: `(left !== right)` \
+                           (left: `{:?}`, right: `{:?}`, expect diff: `{:?}`, real diff: `{:?}`)",
+                 *a, *b, $eps, (*a - *b).abs());
+    })
+    }
+
+    #[test]
+    fn distance_squared() {
+        let grid = Grid { size: Index3 { x: 5, y: 6, z: 3 }, dn: 0.1, dt: 3e-5 };
+        let idx = Index3 { x: 3, y: 3, z: 3 };
+        assert_approx_eq!(calculate_r2(&idx, &grid), 1.25);
+    }
+
+    #[test]
+    fn running_coupling() {
+        let md = 3.2;
+        assert_approx_eq!(alphas(md), 6.189593433886306, 1e-14);
+    }
+    #[test]
+    fn debye_screening_mass() {
+        let t = 5.2;
+        assert_approx_eq!(mu(t), 2.604838027702063, 1e-14);
+    }
+}

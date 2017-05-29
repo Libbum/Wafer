@@ -206,11 +206,3 @@ fn main() {
     info!(log, "Simulation completed");
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn placeholder() {
-        let num = 5;
-        assert_eq!(num, 5);
-    }
-}
