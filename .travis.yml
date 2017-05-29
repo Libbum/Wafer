@@ -1,4 +1,5 @@
 language: rust
+sudo: required
 # use trusty for newer openblas
 dist: trusty
 rust:
@@ -15,3 +16,4 @@ addons:
   apt:
     packages:
       - libopenblas-dev
+      - gfortran
