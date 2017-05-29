@@ -1,6 +1,6 @@
 use chrono::Local;
 use csv;
-use ndarray::{Array3, ArrayView3};
+use ndarray::ArrayView3;
 use ordinal::Ordinal;
 use rayon;
 use serde::Serialize;
@@ -141,15 +141,15 @@ pub fn print_banner(sha: &str) {
 /// *`v` - The potential to output.
 /// * `project` - The project name (for directory to save to).
 /// * `binary` - Bool to identify what type of file to be output (plain text or messagepack).
-pub fn potential(v: &Array3<f64>, bb: usize, project: &str, binary: bool) -> Result<(), Error> {
+pub fn potential(v: &ArrayView3<f64>, project: &str, binary: bool) -> Result<(), Error> {
     let filename = format!("{}/potential.{}",
                            get_project_dir(project),
                            if binary { "mpk" } else { "csv" });
 
     if binary {
-        potential_binary(v, bb, &filename)
+        potential_binary(v, &filename)
     } else {
-        potential_plain(v, bb, &filename)
+        potential_plain(v, &filename)
     }
 }
 
@@ -158,13 +158,20 @@ pub fn potential(v: &Array3<f64>, bb: usize, project: &str, binary: bool) -> Res
 /// # Arguments
 /// *`v` - The potential to output
 /// * `filename` - file / directory to save to.
-fn potential_plain(v: &Array3<f64>, bb: usize, filename: &str) -> Result<(), Error> {
-    let mut buffer = File::create(filename)?;
-    let work = grid::get_work_area(v, bb);
-    for ((i, j, k), el) in work.indexed_iter() {
-        let output = format!("{}, {}, {}, {:e}\n", i, j, k, el);
-        buffer.write_all(output.as_bytes())?;
+fn potential_plain(v: &ArrayView3<f64>, filename: &str) -> Result<(), Error> {
+    let mut buffer = csv::WriterBuilder::new()
+        .has_headers(false)
+        .from_path(filename)?;
+    for ((i, j, k), data) in v.indexed_iter() {
+        buffer
+            .serialize(PlainRecord {
+                           i: i,
+                           j: j,
+                           k: k,
+                           data: *data,
+                       })?;
     }
+    buffer.flush()?;
     Ok(())
 }
 
@@ -173,10 +180,10 @@ fn potential_plain(v: &Array3<f64>, bb: usize, filename: &str) -> Result<(), Err
 /// # Arguments
 /// *`v` - The potential to output
 /// * `filename` - file / directory to save to.
-fn potential_binary(v: &Array3<f64>, bb: usize, filename: &str) -> Result<(), Error> {
+fn potential_binary(v: &ArrayView3<f64>, filename: &str) -> Result<(), Error> {
     //NOTE: The code below should work, but we must wait for ndarray to have serde 1.0 compatability.
     //For now, we just output to plain instead.
-    potential_plain(v, bb, filename)
+    potential_plain(v, filename)
     //let mut output = Vec::new();
     //v.serialize(&mut rmps::Serializer::new(&mut output))?;
     //let mut buffer = File::create(filename)?;

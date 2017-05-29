@@ -9,6 +9,7 @@ use std::fmt;
 use config::{Config, Index3, Grid, PotentialType};
 use input;
 use output;
+use grid;
 
 #[derive(Debug)]
 /// Holds the potential arrays for the current simulation.
@@ -131,6 +132,7 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials, Error> {
     let bb = config.central_difference.bb();
     let v: Array3<f64> = match config.potential {
         PotentialType::FromFile => {
+            info!(log, "Loading potential from file");
             let num = &config.grid.size;
             let init_size: [usize; 3] = [num.x + bb, num.y + bb, num.z + bb];
             match input::potential(init_size, bb, config.output.binary_files, log) {
@@ -159,7 +161,8 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials, Error> {
 
     if config.output.save_potential {
         info!(log, "Saving potential to disk");
-        output::potential(&v, bb, &config.project_name, config.output.binary_files)?;
+        let work = grid::get_work_area(&v, config.central_difference.ext());
+        output::potential(&work, &config.project_name, config.output.binary_files)?;
     }
 
     Ok(Potentials { v: v, a: a, b: b })
