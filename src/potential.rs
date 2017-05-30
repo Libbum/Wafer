@@ -140,10 +140,7 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials, Error> {
             match config.script_location {
                 Some(ref file) => {
                     match input::script_potential(&file, &config.grid, bb, log) {
-                        Ok(pot) => {
-                            println!("{:?}", pot);
-                            Ok(pot)
-                        },
+                        Ok(pot) => Ok(pot),
                         Err(err) => Err(Error::Input(err)),
                     }
                 }

@@ -1,6 +1,6 @@
 use csv;
+use std::num;
 use slog::Logger;
-use serde_json;
 use std::fs::create_dir;
 use std::io;
 use std::error;
@@ -38,6 +38,8 @@ pub enum Error {
     Csv(csv::Error),
     /// From `ndarray`.
     Shape(ndarray::ShapeError),
+    /// From parsing float
+    FloatParse(num::ParseFloatError),
 }
 
 impl fmt::Display for Error {
@@ -53,6 +55,7 @@ impl fmt::Display for Error {
                        "Calculated and actual size of input data is not aligned ══▶ {}",
                        err)
             }
+            Error::FloatParse(ref err) => err.fmt(f),
         }
     }
 }
@@ -64,6 +67,7 @@ impl error::Error for Error {
             Error::NotFound { .. } => "File not found",
             Error::Csv(ref err) => err.description(),
             Error::Shape(ref err) => err.description(),
+            Error::FloatParse(ref err) => err.description(),
         }
     }
 
@@ -73,6 +77,7 @@ impl error::Error for Error {
             Error::NotFound { .. } => None,
             Error::Csv(ref err) => Some(err),
             Error::Shape(ref err) => Some(err),
+            Error::FloatParse(ref err) => Some(err),
         }
     }
 }
@@ -92,6 +97,12 @@ impl From<csv::Error> for Error {
 impl From<ndarray::ShapeError> for Error {
     fn from(err: ndarray::ShapeError) -> Error {
         Error::Shape(err)
+    }
+}
+
+impl From<num::ParseFloatError> for Error {
+    fn from(err: num::ParseFloatError) -> Error {
+        Error::FloatParse(err)
     }
 }
 
@@ -167,58 +178,40 @@ fn potential_binary(file: String,
 /// * `bb` - Bounding box value for assigning central difference boundaries
 /// * `log` - Reference to the system logger.
 pub fn script_potential(file: &str, grid: &Grid, bb: usize, log: &Logger) -> Result<Array3<f64>, Error> {
-    //TODO: Would be very nice to remove these panics from the closure.
     let init_size: [usize; 3] = [grid.size.x + bb, grid.size.y + bb, grid.size.z + bb];
-    let generated = Array3::<f64>::from_shape_fn((grid.size.x, grid.size.y, grid.size.z), |(i, j, k)| {
-        //Spawn python script
-        let python = match Command::new(file)
-                        .stdin(Stdio::piped())
-                        .stdout(Stdio::piped())
-                        .spawn() {
-                        Err(err) => panic!("couldn't spawn python script: {}", err),
-                        Ok(python) => python,
-                    };
+    info!(log, "Generating potential from script file: {}", file);
+    //Spawn python script
+    let python = Command::new(file).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()?;
 
-        // Generate some data for the script to process.
-        let input = json!({
-            "grid": {
-                "x": grid.size.x,
-                "y": grid.size.y,
-                "z": grid.size.z,
-                "dn": grid.dn
-            },
-            "idx": {
-                "x": i,
-                "y": j,
-                "z": k
-            }
-        });
-        // Write a string to the stdin of the python script.
-        // stdin has type `Option<ChildStdin>`, but since we know this instance
-        // must have one, we can directly unwrap it.
-        if let Err(err) = python.stdin.unwrap().write_all(input.to_string().as_bytes()) {
-            panic!("couldn't write to python script stdin: {}", err);
+    // Generate some data for the script to process.
+    let input = json!({
+        "grid": {
+            "x": grid.size.x,
+            "y": grid.size.y,
+            "z": grid.size.z,
+            "dn": grid.dn
         }
-
-        // Because stdin does not live after the above calls, it is `drop`ed,
-        // and the pipe is closed.
-        // This is very important, otherwise python wouldn't start processing the
-        // input we just sent.
-        // The stdout field also has type `Option<ChildStdout>` so must be unwrapped.
-        let mut python_stdout = String::new();
-        if let Err(err) = python.stdout.unwrap().read_to_string(&mut python_stdout) {
-            panic!("couldn't read python script stdout: {}", err);
-        }
-        //Remove trailing newline.
-        let len = python_stdout.len();
-        python_stdout.truncate(len - 1);
-        //Finally, parse the captured string.
-        let value = match python_stdout.parse::<f64>() {
-            Ok(value) => value,
-            Err(err) => panic!("Cannot cast result to f64: {}", err),
-        };
-        value
     });
+    // Write a string to the stdin of the python script.
+    // stdin has type `Option<ChildStdin>`, but since we know this instance
+    // must have one, we can directly unwrap it.
+    python.stdin.unwrap().write_all(input.to_string().as_bytes())?;
+
+    // Because stdin does not live after the above calls, it is `drop`ed,
+    // and the pipe is closed.
+    // This is very important, otherwise python wouldn't start processing the
+    // input we just sent.
+    // The stdout field also has type `Option<ChildStdout>` so must be unwrapped.
+    let mut python_stdout = String::new();
+    python.stdout.unwrap().read_to_string(&mut python_stdout)?;
+
+    //Finally, parse the captured string.
+    let mut values: Vec<f64> = Vec::new();
+    for line in python_stdout.lines() {
+        let value = line.parse::<f64>()?;
+        values.push(value);
+    }
+    let generated = Array3::<f64>::from_shape_vec((grid.size.x, grid.size.y, grid.size.z), values)?;
     Ok(generated)
 }
 

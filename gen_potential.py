@@ -13,11 +13,6 @@ Input should be in the form:
         "y": 50,
         "z": 50,
         "dn": 0.01
-    },
-    "idx": {
-        "x": 2,
-        "y": 30,
-        "z": 6
     }
 }
 
@@ -54,19 +49,19 @@ extent_x = (data["grid"]["dn"]*data["grid"]["x"]-data["grid"]["dn"])/2;
 extent_y = (data["grid"]["dn"]*data["grid"]["y"]-data["grid"]["dn"])/2;
 extent_z = (data["grid"]["dn"]*data["grid"]["z"]-data["grid"]["dn"])/2;
 
+# Generate a grid to calculate on
 sx = np.linspace(-extent_x, extent_x, data["grid"]["x"])
 sy = np.linspace(-extent_y, extent_y, data["grid"]["y"])
 sz = np.linspace(-extent_z, extent_z, data["grid"]["z"])
+x, y, z = np.meshgrid(sx, sy, sz, indexing='ij')
 
-# If you need a grid to calculate on:
-#x, y, z = np.meshgrid(sx, sy, sz, indexing='ij')
-# But we just want one value, so:
-x = sx[data["idx"]["x"]]
-y = sy[data["idx"]["y"]]
-z = sz[data["idx"]["z"]]
-
-#Compute potiential
+# Compute potiential
 coeff = -(lam*(lam+1))/2
 V = coeff*(sech(x)*sech(x)) + coeff*(sech(y)*sech(y)) + coeff*(sech(z)*sech(z))
 
-print(V)
+# Output to screen
+for outer in V:
+    for middle in outer:
+        for inner in middle:
+            print(inner)
+
