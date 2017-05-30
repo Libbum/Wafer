@@ -1,15 +1,18 @@
 use csv;
 use slog::Logger;
+use serde_json;
 use std::fs::create_dir;
 use std::io;
 use std::error;
 use std::fmt;
 use std::path::Path;
+use std::process::{Command, Stdio};
+use std::io::prelude::*;
 use ndarray;
 use ndarray::{Array3, Zip};
 use ndarray_parallel::prelude::*;
 use grid;
-use config::Config;
+use config::{Config, Grid};
 
 #[derive(Debug,Deserialize)]
 /// A simple struct to parse data from a plain csv file
@@ -154,6 +157,70 @@ fn potential_binary(file: String,
     potential_plain("./input/potential.csv".to_string(), target_size, bb)
 }
 
+
+/// Loads potential file from a script.
+///
+/// # Arguments
+///
+/// * `file` - Path of script to generate data from.
+/// * `grid` - The `grid` portion of the `config` struct.
+/// * `bb` - Bounding box value for assigning central difference boundaries
+/// * `log` - Reference to the system logger.
+pub fn script_potential(file: &str, grid: &Grid, bb: usize, log: &Logger) -> Result<Array3<f64>, Error> {
+    //TODO: Would be very nice to remove these panics from the closure.
+    let init_size: [usize; 3] = [grid.size.x + bb, grid.size.y + bb, grid.size.z + bb];
+    let generated = Array3::<f64>::from_shape_fn((grid.size.x, grid.size.y, grid.size.z), |(i, j, k)| {
+        //Spawn python script
+        let python = match Command::new(file)
+                        .stdin(Stdio::piped())
+                        .stdout(Stdio::piped())
+                        .spawn() {
+                        Err(err) => panic!("couldn't spawn python script: {}", err),
+                        Ok(python) => python,
+                    };
+
+        // Generate some data for the script to process.
+        let input = json!({
+            "grid": {
+                "x": grid.size.x,
+                "y": grid.size.y,
+                "z": grid.size.z,
+                "dn": grid.dn
+            },
+            "idx": {
+                "x": i,
+                "y": j,
+                "z": k
+            }
+        });
+        // Write a string to the stdin of the python script.
+        // stdin has type `Option<ChildStdin>`, but since we know this instance
+        // must have one, we can directly unwrap it.
+        if let Err(err) = python.stdin.unwrap().write_all(input.to_string().as_bytes()) {
+            panic!("couldn't write to python script stdin: {}", err);
+        }
+
+        // Because stdin does not live after the above calls, it is `drop`ed,
+        // and the pipe is closed.
+        // This is very important, otherwise python wouldn't start processing the
+        // input we just sent.
+        // The stdout field also has type `Option<ChildStdout>` so must be unwrapped.
+        let mut python_stdout = String::new();
+        if let Err(err) = python.stdout.unwrap().read_to_string(&mut python_stdout) {
+            panic!("couldn't read python script stdout: {}", err);
+        }
+        //Remove trailing newline.
+        let len = python_stdout.len();
+        python_stdout.truncate(len - 1);
+        //Finally, parse the captured string.
+        let value = match python_stdout.parse::<f64>() {
+            Ok(value) => value,
+            Err(err) => panic!("Cannot cast result to f64: {}", err),
+        };
+        value
+    });
+    Ok(generated)
+}
 
 /// Loads previously computed wavefunctions from disk.
 pub fn load_wavefunctions(config: &Config,

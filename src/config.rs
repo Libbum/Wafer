@@ -379,7 +379,9 @@ impl Config {
         Config::parse(&decoded_config)?;
 
         if let PotentialType::FromScript = decoded_config.potential {
-            decoded_config.script_location = Some(script.to_owned());
+            let mut locale = "./".to_string();
+            locale.push_str(script);
+            decoded_config.script_location = Some(locale);
         } else {
             decoded_config.script_location = None;
         }
