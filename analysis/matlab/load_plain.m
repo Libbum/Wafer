@@ -30,16 +30,19 @@ fid = fopen(file);
 data = textscan(fid, '%*u, %*u, %*u, %f');
 fclose(fid);
 
-wfn = reshape(data{:},num.x,num.y,num.z);
+%Wafer stores data as {z,y,x}, we permute to {y,x,z} for meshgrid.
+wfn = permute(reshape(data{:},num.z,num.y,num.x),[2 3 1]);
 
 clear data fid;
 
-%% Wavefunction - Slice in center
+%% Wavefunction - Slice in center of y
 
 mid = floor(num.y/2);
 X = linspace(-x,x,num.x);
-Y = linspace(-y,y,num.y);
-pcolor(X,Y,squeeze(abs(wfn(:,mid,:)))); 
+Z = linspace(-z,z,num.z);
+pcolor(X,Z,squeeze(abs(wfn(mid,:,:))).'); 
+xlabel('x');
+ylabel('z');
 shading flat
 
 %% Wavefunction - Isosurfaces
@@ -93,6 +96,9 @@ end
 daspect([1,1,1])
 view([43,12]);
 axis tight
+xlabel('x');
+ylabel('y');
+zlabel('z');
 %xlim([-x x]);
 %ylim([-y y]);
 %zlim([-z z]);
@@ -106,22 +112,24 @@ fid = fopen('potential.csv');
 data = textscan(fid, '%*u, %*u, %*u, %f');
 fclose(fid);
 
-potential = reshape(data{:},num.x,num.y,num.z);
+%Wafer stores data as {z,y,x}, we permute to {y,x,z} for meshgrid.
+potential = permute(reshape(data{:},num.z,num.y,num.x),[2 3 1]);
 
 clear data fid;
 
-%% Potential - Slice in center
+%% Potential - Slice in center of y
 
 mid = floor(num.y/2);
 X = linspace(-x,x,num.x);
-Y = linspace(-y,y,num.y);
-pcolor(X,Y,squeeze(potential(:,mid,:))); 
+Z = linspace(-z,z,num.z);
+pcolor(X,Z,squeeze(potential(mid,:,:)).'); 
+xlabel('x');
+ylabel('z');
 shading flat
-
 
 %% Potential - Isosurface
 
-isoV = min(potential(:))*0.55; %The value at which the isosurface will be calculated.
+isoV = mean(potential(:)); %The value at which the isosurface will be calculated.
 
 [ox,oy,oz] = meshgrid(grx, gry, grz);
 ph = patch(isosurface(ox,oy,oz,potential, isoV)); 
@@ -134,6 +142,9 @@ lighting gouraud
 hold on
 
 axis tight
+xlabel('x');
+ylabel('y');
+zlabel('z');
 %ylim([-x x]);
 %zlim([-y y]);
 %xlim([-z z]);
