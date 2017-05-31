@@ -168,7 +168,6 @@ fn potential_binary(file: String,
     potential_plain("./input/potential.csv".to_string(), target_size, bb)
 }
 
-
 /// Loads potential file from a script.
 ///
 /// # Arguments
@@ -178,9 +177,9 @@ fn potential_binary(file: String,
 /// * `bb` - Bounding box value for assigning central difference boundaries
 /// * `log` - Reference to the system logger.
 pub fn script_potential(file: &str, grid: &Grid, bb: usize, log: &Logger) -> Result<Array3<f64>, Error> {
-    let init_size: [usize; 3] = [grid.size.x + bb, grid.size.y + bb, grid.size.z + bb];
+    let target_size: [usize; 3] = [grid.size.x + bb, grid.size.y + bb, grid.size.z + bb];
     info!(log, "Generating potential from script file: {}", file);
-    //Spawn python script
+    // Spawn python script
     let python = Command::new(file).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()?;
 
     // Generate some data for the script to process.
@@ -205,20 +204,37 @@ pub fn script_potential(file: &str, grid: &Grid, bb: usize, log: &Logger) -> Res
     let mut python_stdout = String::new();
     python.stdout.unwrap().read_to_string(&mut python_stdout)?;
 
-    //Finally, parse the captured string.
+    // Finally, parse the captured string.
+    // NOTE: I investigated passing this using messagepack. Ends up being more bytes.
+    // Well, that may not be totally true, but printing the byte array to screen is problematic...
     let mut values: Vec<f64> = Vec::new();
     for line in python_stdout.lines() {
         let value = line.parse::<f64>()?;
         values.push(value);
     }
     let generated = Array3::<f64>::from_shape_vec((grid.size.x, grid.size.y, grid.size.z), values)?;
-    Ok(generated)
+
+    // generated is now the work area. We need to return a full framed array.
+    let mut complete = Array3::<f64>::zeros(target_size);
+    {
+        let mut work = grid::get_mut_work_area(&mut complete, bb / 2); //NOTE: This is a bit of a hack. But it works.
+        // generated is the right size by definition: copy down.
+        Zip::from(&mut work)
+            .and(generated.view())
+            .par_apply(|work, &generated| *work = generated);
+    }
+    Ok(complete)
 }
 
 /// Loads previously computed wavefunctions from disk.
+///
+/// # Arguments
+///
+/// * `config` - Reference to the `config` struct.
+/// * `log` - Reference to the system logger.
+/// * `wstore` - Vector of stored (calculated) wavefunctions.
 pub fn load_wavefunctions(config: &Config,
                           log: &Logger,
-                          binary: bool,
                           w_store: &mut Vec<Array3<f64>>)
                           -> Result<(), Error> {
     let num = &config.grid.size;
@@ -226,7 +242,7 @@ pub fn load_wavefunctions(config: &Config,
     let init_size: [usize; 3] = [num.x + bb, num.y + bb, num.z + bb];
     // Load required wavefunctions. If the current state resides on disk as well, we load that later.
     for wnum in 0..config.wavenum {
-        let wfn = wavefunction(wnum, init_size, bb, binary, log);
+        let wfn = wavefunction(wnum, init_size, bb, config.output.binary_files, log);
         match wfn {
             Ok(w) => w_store.push(w),
             Err(err) => return Err(err),

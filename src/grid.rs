@@ -113,7 +113,7 @@ pub fn run(config: &Config, log: &Logger) -> Result<(), Error> {
     if config.wavenum > 0 {
         //We require wavefunctions from disk, even if initial condition is not `FromFile`
         //The wavenum = 0 case is handled later
-        input::load_wavefunctions(config, log, config.output.binary_files, &mut w_store)?;
+        input::load_wavefunctions(config, log, &mut w_store)?;
     }
 
     info!(log, "Starting calculation");
