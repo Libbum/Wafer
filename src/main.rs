@@ -39,6 +39,7 @@ extern crate rmp_serde as rmps;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
+#[macro_use]
 extern crate serde_json;
 #[macro_use]
 extern crate slog;
@@ -95,6 +96,12 @@ fn main() {
                                     .value_name("FILE")
                                     .help("The configuration file to use (default is \"wafer.cfg\")")
                                     .takes_value(true))
+                        .arg(Arg::with_name("script")
+                                    .short("s")
+                                    .long("script")
+                                    .value_name("FILE")
+                                    .help("The potential generation script to use (default is \"gen_potential.py\")")
+                                    .takes_value(true))
                         .arg(Arg::with_name("debug")
                                     .short("d")
                                     .multiple(true)
@@ -103,7 +110,8 @@ fn main() {
 
     //Load configuation parameters.
     let config_file = matches.value_of("config").unwrap_or("wafer.cfg");
-    let config = match Config::load(config_file) {
+    let script_file = matches.value_of("script").unwrap_or("gen_potential.py");
+    let config = match Config::load(config_file, script_file) {
         Ok(c) => c,
         Err(err) => {
             println!("Error processing configuration: {}", err);

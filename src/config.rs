@@ -363,23 +363,29 @@ pub struct Config {
     pub sig: f64,
     /// Symmetry contitions forced upon the wavefuntion.
     init_symmetry: SymmetryConstraint,
+    /// Location of the script if using one. This is not required in the input configuration and will
+    /// be set as a default vaule or derrived from command line arguments.
+    #[serde(skip_deserializing)]
+    pub script_location: Option<String>,
 }
 
 impl Config {
-    /// Reads and parses data from the `wafer.cfg` file.
-    ///
-    /// # Panics
-    ///
-    /// Will dump if we see a file i/o error reading `wafer.cfg`; if the
-    /// contents of this file are not valid *json* (soon to be *hjson*
-    /// to minimise this possibility); and finally there are a number of checks
-    /// on bounds of the user input. For example; grid.dt ≤ grid.dn²/3.
-    pub fn load(file: &str) -> Result<Config, Error> {
+    /// Reads and parses data from the `wafer.cfg` file and command line arguments.
+    pub fn load(file: &str, script: &str) -> Result<Config, Error> {
         //Read in configuration file (hjson format)
         let raw_config = read_file(file)?;
         // Decode configuration file.
-        let decoded_config: Config = serde_json::from_str(&raw_config)?;
+        let mut decoded_config: Config = serde_json::from_str(&raw_config)?;
         Config::parse(&decoded_config)?;
+
+        if let PotentialType::FromScript = decoded_config.potential {
+            let mut locale = "./".to_string();
+            locale.push_str(script);
+            decoded_config.script_location = Some(locale);
+        } else {
+            decoded_config.script_location = None;
+        }
+
         Ok(decoded_config)
     }
 

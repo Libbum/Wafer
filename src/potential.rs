@@ -29,6 +29,8 @@ pub enum Error {
     /// In particlular the `from_script` and `from_file` types have limited
     /// functionality here and must be handled separately.
     NotAvailable,
+    /// Something happened with the script handling
+    Script,
     /// From `input`.
     Input(input::Error),
     /// From `output`.
@@ -42,6 +44,7 @@ impl fmt::Display for Error {
                 write!(f,
                        "Not able to calculate potential value at an index for this potential type.")
             }
+            Error::Script => write!(f, "Could not identify location of potential script."),
             Error::Input(ref err) => err.fmt(f),
             Error::Output(ref err) => err.fmt(f),
         }
@@ -52,6 +55,7 @@ impl error::Error for Error {
     fn description(&self) -> &str {
         match *self {
             Error::NotAvailable => "not available",
+            Error::Script => "no script file",
             Error::Input(ref err) => err.description(),
             Error::Output(ref err) => err.description(),
         }
@@ -60,6 +64,7 @@ impl error::Error for Error {
     fn cause(&self) -> Option<&error::Error> {
         match *self {
             Error::NotAvailable => None,
+            Error::Script => None,
             Error::Input(ref err) => Some(err),
             Error::Output(ref err) => Some(err),
         }
@@ -106,16 +111,6 @@ pub fn generate(config: &Config) -> Result<Array3<f64>, Error> {
     Ok(v)
 }
 
-/// Loads a pre-calculated potential from a user defined script.
-pub fn from_script() -> Result<Array3<f64>, Error> {
-    //TODO: This is currently just a placeholder.
-    let ret = 2.3;
-    let mut v = Array3::<f64>::zeros((2, 2, 2));
-
-    Zip::from(&mut v).par_apply(|x| *x = ret);
-    Ok(v)
-}
-
 /// Handles the potential loading from file, or generating depending on configuration
 /// Ancillary arrays are also generated here.
 ///
@@ -141,7 +136,17 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials, Error> {
                 Err(err) => Err(Error::Input(err)),
             }
         }
-        PotentialType::FromScript => from_script(),
+        PotentialType::FromScript => {
+            match config.script_location {
+                Some(ref file) => {
+                    match input::script_potential(&file, &config.grid, bb, log) {
+                        Ok(pot) => Ok(pot),
+                        Err(err) => Err(Error::Input(err)),
+                    }
+                }
+                None => Err(Error::Script),
+            }
+        }
         _ => {
             info!(log, "Calculating potential array");
             generate(config)
@@ -344,11 +349,11 @@ pub fn potential_sub(config: &Config) -> Result<f64, Error> {
         PotentialType::Harmonic |
         PotentialType::ComplexHarmonic |
         PotentialType::Dodecahedron |
+        PotentialType::FromScript | //TODO: Script should be treated differently.
         PotentialType::FromFile => Ok(0.0),
         PotentialType::ElipticalCoulomb => Ok(1. / config.grid.dn),
         PotentialType::SimpleCornell => Ok(4.0 * config.mass),
-        PotentialType::FullCornell |
-        PotentialType::FromScript => Err(Error::NotAvailable), //TODO: Script may not need to error.
+        PotentialType::FullCornell => Err(Error::NotAvailable),
     }
 }
 

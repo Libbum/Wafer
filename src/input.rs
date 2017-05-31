@@ -1,15 +1,18 @@
 use csv;
+use std::num;
 use slog::Logger;
 use std::fs::create_dir;
 use std::io;
 use std::error;
 use std::fmt;
 use std::path::Path;
+use std::process::{Command, Stdio};
+use std::io::prelude::*;
 use ndarray;
 use ndarray::{Array3, Zip};
 use ndarray_parallel::prelude::*;
 use grid;
-use config::Config;
+use config::{Config, Grid};
 
 #[derive(Debug,Deserialize)]
 /// A simple struct to parse data from a plain csv file
@@ -35,6 +38,8 @@ pub enum Error {
     Csv(csv::Error),
     /// From `ndarray`.
     Shape(ndarray::ShapeError),
+    /// From parsing float
+    FloatParse(num::ParseFloatError),
 }
 
 impl fmt::Display for Error {
@@ -50,6 +55,7 @@ impl fmt::Display for Error {
                        "Calculated and actual size of input data is not aligned ══▶ {}",
                        err)
             }
+            Error::FloatParse(ref err) => err.fmt(f),
         }
     }
 }
@@ -61,6 +67,7 @@ impl error::Error for Error {
             Error::NotFound { .. } => "File not found",
             Error::Csv(ref err) => err.description(),
             Error::Shape(ref err) => err.description(),
+            Error::FloatParse(ref err) => err.description(),
         }
     }
 
@@ -70,6 +77,7 @@ impl error::Error for Error {
             Error::NotFound { .. } => None,
             Error::Csv(ref err) => Some(err),
             Error::Shape(ref err) => Some(err),
+            Error::FloatParse(ref err) => Some(err),
         }
     }
 }
@@ -89,6 +97,12 @@ impl From<csv::Error> for Error {
 impl From<ndarray::ShapeError> for Error {
     fn from(err: ndarray::ShapeError) -> Error {
         Error::Shape(err)
+    }
+}
+
+impl From<num::ParseFloatError> for Error {
+    fn from(err: num::ParseFloatError) -> Error {
+        Error::FloatParse(err)
     }
 }
 
@@ -154,11 +168,73 @@ fn potential_binary(file: String,
     potential_plain("./input/potential.csv".to_string(), target_size, bb)
 }
 
+/// Loads potential file from a script.
+///
+/// # Arguments
+///
+/// * `file` - Path of script to generate data from.
+/// * `grid` - The `grid` portion of the `config` struct.
+/// * `bb` - Bounding box value for assigning central difference boundaries
+/// * `log` - Reference to the system logger.
+pub fn script_potential(file: &str, grid: &Grid, bb: usize, log: &Logger) -> Result<Array3<f64>, Error> {
+    let target_size: [usize; 3] = [grid.size.x + bb, grid.size.y + bb, grid.size.z + bb];
+    info!(log, "Generating potential from script file: {}", file);
+    // Spawn python script
+    let python = Command::new(file).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()?;
+
+    // Generate some data for the script to process.
+    let input = json!({
+        "grid": {
+            "x": grid.size.x,
+            "y": grid.size.y,
+            "z": grid.size.z,
+            "dn": grid.dn
+        }
+    });
+    // Write a string to the stdin of the python script.
+    // stdin has type `Option<ChildStdin>`, but since we know this instance
+    // must have one, we can directly unwrap it.
+    python.stdin.unwrap().write_all(input.to_string().as_bytes())?;
+
+    // Because stdin does not live after the above calls, it is `drop`ed,
+    // and the pipe is closed.
+    // This is very important, otherwise python wouldn't start processing the
+    // input we just sent.
+    // The stdout field also has type `Option<ChildStdout>` so must be unwrapped.
+    let mut python_stdout = String::new();
+    python.stdout.unwrap().read_to_string(&mut python_stdout)?;
+
+    // Finally, parse the captured string.
+    // NOTE: I investigated passing this using messagepack. Ends up being more bytes.
+    // Well, that may not be totally true, but printing the byte array to screen is problematic...
+    let mut values: Vec<f64> = Vec::new();
+    for line in python_stdout.lines() {
+        let value = line.parse::<f64>()?;
+        values.push(value);
+    }
+    let generated = Array3::<f64>::from_shape_vec((grid.size.x, grid.size.y, grid.size.z), values)?;
+
+    // generated is now the work area. We need to return a full framed array.
+    let mut complete = Array3::<f64>::zeros(target_size);
+    {
+        let mut work = grid::get_mut_work_area(&mut complete, bb / 2); //NOTE: This is a bit of a hack. But it works.
+        // generated is the right size by definition: copy down.
+        Zip::from(&mut work)
+            .and(generated.view())
+            .par_apply(|work, &generated| *work = generated);
+    }
+    Ok(complete)
+}
 
 /// Loads previously computed wavefunctions from disk.
+///
+/// # Arguments
+///
+/// * `config` - Reference to the `config` struct.
+/// * `log` - Reference to the system logger.
+/// * `wstore` - Vector of stored (calculated) wavefunctions.
 pub fn load_wavefunctions(config: &Config,
                           log: &Logger,
-                          binary: bool,
                           w_store: &mut Vec<Array3<f64>>)
                           -> Result<(), Error> {
     let num = &config.grid.size;
@@ -166,7 +242,7 @@ pub fn load_wavefunctions(config: &Config,
     let init_size: [usize; 3] = [num.x + bb, num.y + bb, num.z + bb];
     // Load required wavefunctions. If the current state resides on disk as well, we load that later.
     for wnum in 0..config.wavenum {
-        let wfn = wavefunction(wnum, init_size, bb, binary, log);
+        let wfn = wavefunction(wnum, init_size, bb, config.output.binary_files, log);
         match wfn {
             Ok(w) => w_store.push(w),
             Err(err) => return Err(err),
