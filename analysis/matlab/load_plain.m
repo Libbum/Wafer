@@ -129,7 +129,7 @@ shading flat
 
 %% Potential - Isosurface
 
-isoV = mean(potential(:)); %The value at which the isosurface will be calculated.
+isoV = quantile(potential(:),0.15); %The value at which the isosurface will be calculated.
 
 [ox,oy,oz] = meshgrid(grx, gry, grz);
 ph = patch(isosurface(ox,oy,oz,potential, isoV)); 
