@@ -20,6 +20,7 @@ addons:
       - gfortran
       - libcurl4-openssl-dev
       - libelf-dev
+      - libbfd-dev
       - libdw-dev
       - cmake
       - gcc
