@@ -1,6 +1,8 @@
 %% Load configuration file
 
-config = loadjson('wafer.cfg');
+% To read yaml data, install this plugin to your path:
+% https://code.google.com/archive/p/yamlmatlab/
+config = ReadYaml('wafer.yaml');
 
 num = config.grid.size;
 dn = config.grid.dn;

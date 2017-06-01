@@ -6,11 +6,10 @@ use slog::Logger;
 use std::error;
 use std::fmt;
 use std::io;
-use std::fs::OpenOptions;
-use std::io::prelude::*;
-use std::path::Path;
-use serde_json;
+use std::fs::File;
+use serde_yaml;
 use input;
+use output;
 
 /// Grid size information.
 #[derive(Serialize, Deserialize, Debug)]
@@ -99,7 +98,7 @@ pub enum PotentialType {
     /// Dodecahedron, because this totally exists in nature.
     Dodecahedron,
     /// Pull data from file. Good to save a little startup time on restart runs,
-    /// or a more complex potential in generated from an external tool.
+    /// or a more complex potential generated from an external tool.
     FromFile,
     /// Calls a python script the user can implement.
     FromScript,
@@ -255,21 +254,23 @@ impl fmt::Display for RunType {
 pub enum Error {
     /// From disk issues.
     Io(io::Error),
-    /// From `serde_json`.
-    DecodeJson(serde_json::Error),
+    /// From `serde_yaml`.
+    DecodeYaml(serde_yaml::Error),
     /// If temporal step `dt` is larger than `dn`^2/3.
     LargeDt,
     /// If `wavenum` is larger than `wavemax`.
     LargeWavenum,
     /// From `input`.
     Input(input::Error),
+    /// From `output`.
+    Output(output::Error),
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Error::Io(ref err) => err.fmt(f),
-            Error::DecodeJson(ref err) => err.fmt(f),
+            Error::DecodeYaml(ref err) => err.fmt(f),
             Error::LargeDt => {
                 write!(f,
                        "Config Error: Temporal step (grid.dt) must be less than or equal to grid.dn²/3")
@@ -278,6 +279,7 @@ impl fmt::Display for Error {
                 write!(f, "Config Error: wavenum can not be larger than wavemax")
             }
             Error::Input(ref err) => err.fmt(f),
+            Error::Output(ref err) => err.fmt(f),
         }
     }
 }
@@ -286,19 +288,21 @@ impl error::Error for Error {
     fn description(&self) -> &str {
         match *self {
             Error::Io(ref err) => err.description(),
-            Error::DecodeJson(ref err) => err.description(),
+            Error::DecodeYaml(ref err) => err.description(),
             Error::LargeDt => "grid.dt >= grid.dn²/3",
             Error::LargeWavenum => "wavenum > wavemax",
             Error::Input(ref err) => err.description(),
+            Error::Output(ref err) => err.description(),
         }
     }
 
     fn cause(&self) -> Option<&error::Error> {
         match *self {
             Error::Io(ref err) => Some(err),
-            Error::DecodeJson(ref err) => Some(err),
+            Error::DecodeYaml(ref err) => Some(err),
             Error::LargeDt | Error::LargeWavenum => None,
             Error::Input(ref err) => Some(err),
+            Error::Output(ref err) => Some(err),
         }
     }
 }
@@ -309,15 +313,21 @@ impl From<io::Error> for Error {
     }
 }
 
-impl From<serde_json::Error> for Error {
-    fn from(err: serde_json::Error) -> Error {
-        Error::DecodeJson(err)
+impl From<serde_yaml::Error> for Error {
+    fn from(err: serde_yaml::Error) -> Error {
+        Error::DecodeYaml(err)
     }
 }
 
 impl From<input::Error> for Error {
     fn from(err: input::Error) -> Error {
         Error::Input(err)
+    }
+}
+
+impl From<output::Error> for Error {
+    fn from(err: output::Error) -> Error {
+        Error::Output(err)
     }
 }
 
@@ -372,10 +382,9 @@ pub struct Config {
 impl Config {
     /// Reads and parses data from the `wafer.cfg` file and command line arguments.
     pub fn load(file: &str, script: &str) -> Result<Config, Error> {
-        //Read in configuration file (hjson format)
-        let raw_config = read_file(file)?;
+        let reader = File::open(file)?;
         // Decode configuration file.
-        let mut decoded_config: Config = serde_json::from_str(&raw_config)?;
+        let mut decoded_config: Config = serde_yaml::from_reader(reader)?;
         Config::parse(&decoded_config)?;
 
         if let PotentialType::FromScript = decoded_config.potential {
@@ -385,6 +394,10 @@ impl Config {
         } else {
             decoded_config.script_location = None;
         }
+
+        // Setup ouput directory and copy configuration.
+        output::check_output_dir(&decoded_config.project_name)?;
+        output::copy_config(&decoded_config.project_name, file)?;
 
         Ok(decoded_config)
     }
@@ -562,30 +575,6 @@ impl Config {
         }
         println!("{:═^width$}", "", width = w);
     }
-}
-
-/// Returns the contents of a file on disk to a string
-///
-/// # Arguments
-///
-/// * `file_path` - A path to the file one wishes to read from disk. This is cast, so can be an `&str`.
-///
-/// # Examples
-///
-/// ```rust
-/// let config = read_file("wafer.cfg");
-/// ```
-///
-/// # Errors
-///
-/// `std::io::Error` are the only types returned here, although they are wrapped into the `config::Error::Io` type.
-fn read_file<P: AsRef<Path>>(file_path: P) -> Result<String, Error> {
-    let mut contents = String::new();
-    OpenOptions::new()
-        .read(true)
-        .open(file_path)?
-        .read_to_string(&mut contents)?;
-    Ok(contents)
 }
 
 /// Sets initial conditions for the wavefunction `w`.

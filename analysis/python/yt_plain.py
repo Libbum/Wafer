@@ -2,12 +2,12 @@
 
 import yt
 from yt.funcs import mylog
-import json
+import yaml
 import numpy as np
 import psutil
 
 # Wavenumber to load?
-number = '4'
+number = '0'
 # Is it partial?
 parital = False
 
@@ -16,8 +16,8 @@ numcpus = psutil.cpu_count(logical=False)
 mylog.setLevel(40)
 
 # Load configuration data
-with open('wafer.cfg') as config_file:
-    config = json.load(config_file)
+with open('wafer.yaml') as config_file:
+    config = yaml.safe_load(config_file)
 
 num = config['grid']['size']
 dn = config['grid']['dn']
@@ -48,6 +48,8 @@ ds = yt.load_uniform_grid(data, potdata.shape, bbox=bbox, length_unit=1, nprocs=
 
 # Plot slices in y
 slc = yt.SlicePlot(ds, 'y', ['potential', 'wavefunction'])
+slc.set_log('wavefunction' , False)
+slc.set_log('potential' , False)
 slc.set_axes_unit('m')
 slc.set_cmap('potential', 'Blues')
 slc.annotate_grids(cmap=None)

@@ -41,6 +41,7 @@ extern crate serde;
 extern crate serde_derive;
 #[macro_use]
 extern crate serde_json;
+extern crate serde_yaml;
 #[macro_use]
 extern crate slog;
 extern crate slog_async;
@@ -94,7 +95,7 @@ fn main() {
                                     .short("c")
                                     .long("config")
                                     .value_name("FILE")
-                                    .help("The configuration file to use (default is \"wafer.cfg\")")
+                                    .help("The configuration file to use (default is \"wafer.yaml\")")
                                     .takes_value(true))
                         .arg(Arg::with_name("script")
                                     .short("s")
@@ -109,7 +110,7 @@ fn main() {
                         .get_matches();
 
     //Load configuation parameters.
-    let config_file = matches.value_of("config").unwrap_or("wafer.cfg");
+    let config_file = matches.value_of("config").unwrap_or("wafer.yaml");
     let script_file = matches.value_of("script").unwrap_or("gen_potential.py");
     let config = match Config::load(config_file, script_file) {
         Ok(c) => c,
@@ -117,10 +118,6 @@ fn main() {
             println!("Error processing configuration: {}", err);
             process::exit(1);
         }
-    };
-    if let Err(err) = output::check_output_dir(&config.project_name) {
-        println!("Could not communicate with output directory: {}", err);
-        process::exit(1);
     };
 
     //Setup logging.
@@ -175,12 +172,6 @@ fn main() {
 
     info!(log, "Loading Configuation from disk");
     config.print(term_width);
-    if let Err(err) = output::copy_config(&config.project_name) {
-        //TODO: Input from CLI if non-default config file
-        warn!(log,
-              "Configuration file not copied to output directory: {}",
-              err);
-    };
 
     if let Err(err) = grid::run(&config, &log) {
         crit!(log, "{}", err);

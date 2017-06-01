@@ -467,8 +467,8 @@ pub fn get_project_dir(project: &str) -> String {
 }
 
 /// Copies the current configuration file to the project folder
-pub fn copy_config(project: &str) -> Result<(), Error> {
-    copy("./wafer.cfg", get_project_dir(project) + "/wafer.cfg")?;
+pub fn copy_config(project: &str, file: &str) -> Result<(), Error> {
+    copy(file, get_project_dir(project) + "/" + file)?;
     Ok(())
 }
 

@@ -1,0 +1,103 @@
+#                    ___
+#   __      ____ _  / __\__ _ __
+#   \ \ /\ / / _` |/ / / _ \ '__|
+#    \ V  V / (_| / _\|  __/ |
+#     \_/\_/ \__,/ /   \___|_|    Configuration file.
+#              \__/
+#
+
+# A string value to call your project for identification.
+project_name: develop
+
+# Number of spatial grid points, step sizes in space and time.
+grid:
+    size: # Number of grid points in Cartesian coordinates.
+        x: 50
+        y: 50
+        z: 50
+    dn: 0.01 # Spatial step
+    dt: 3e-5 # Temporal step. For stability this must be < dn*dn/3.
+
+# Convergence tolerance for energies.
+tolerance: 1e-4
+
+# Precision to use for central differencing. Choices: ThreePoint, FivePoint, SevenPoint.
+# The more points the smaller the error - provided the step size choice is appropreate.
+central_difference: ThreePoint
+
+# Maximum number of steps to try before giving up. This stops us from calculating forever
+# if the system diverges. But this will most likely never happen so it's fine to leave this as default.
+max_steps: 50000000
+
+# Starting wafefunction. New run should be 0 (i.e. ground state). If the ground state is converged,
+# setting this to 1 will 'restart' the calculation at the first excited state. The converged ground
+# state wavefunction is expected in the ./input/ directory when this is requested.
+wavenum: 0
+
+# Maximum excited state to calculate
+wavemax: 1
+
+# Set true to read in data from a cluster file.
+clustrun: false
+
+# Aluminium cluster data (in Angstroms).
+al_clust:
+    x: 1.4
+    y: 500
+    z: 500
+
+# Potential type to simulate. Choices:
+#   NoPotential: V = 0, no potential at all.
+#   Cube: A 3D square (i.e. cubic) well.
+#   QuadWell: Quad well, with short side along the *z*-axis.
+#   Periodic: Periodic (sin squared).
+#   Coulomb: Standard Coulomb.
+#   ComplexCoulomb: Complex Coulomb.
+#   ElipticalCoulomb: Elliptical Coulomb.
+#   SimpleCornell: Cornell with no corrections.
+#   FullCornell: Fully anisotropic screened Cornell + spin correction.
+#   Harmonic: Harmonic oscillator.
+#   ComplexHarmonic: Complex harmonic oscillator.
+#   Dodecahedron: Dodecahedron, because this totally exists in nature right?
+#   FromFile: Pull data from file. Good to save a little startup time on restart runs,
+#             or a more complex potential generated from an external tool.
+#   FromScript: Calls a python script the user can implement.
+potential: Harmonic
+
+# Mass of the particle currently being investigated.
+mass: 15.9994
+
+# Wavefunction initial conditions. Since we usually dont know the form this is
+# usually guess work - unless we have previous information to work with. Choices:
+#   FromFile: Data will be pulled from file. This could be pre-calculated data from some
+#             inferior wavefunction solver, or more likely than not one of two other options.
+#
+#             1. A converged excited state lower than the requested start state: e.g. `wavenum` is
+#             set to 2, and a converged excited state 1 is in the `input` directory.
+#             2. A converged, low resolution version of the current state is in the `input` directory,
+#             which dramatically assists in the calculation time of high resolution runs.
+#   Gaussian: A random value from the Gaussian distribution, using the standard deviation `sig`.
+#   Couloumb: Coulomb-like.
+#   Constant: A constant value of 0.1.
+#   Boolean: A Boolean test grid, good for benchmarks.
+init_condition: Gaussian
+
+# Standard Deviation of initial wavefunction noise.
+sig: 1.0
+
+# Symmetry axes can be applied to assist convergence. Choices:
+#   NotConstrained: Don't constrain system at all.
+#   AboutZ: Symmetric about *z*-axis.
+#   AntisymAboutZ: Antisymmetric about *z*-axis.
+#   AboutY: Symmetric about *y*-axis.
+#   AntisymAboutY: Antisymmetric about *y*-axis.
+init_symmetry: NotConstrained
+
+# Output configuration of simulation.
+output:
+    screen_update: 1000 # Steps before recording measurables.
+    snap_update: 1000 # Steps befode dumping all variables to file, i.e. A 'snapshot'.
+    binary_files: false # Set true to save output in binary format (faster, not human readable).
+    save_wavefns: true # Dump full 3D wavefunctions to disk once calculated.
+    save_potential: true # Save potential at beginning of run.
+
