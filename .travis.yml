@@ -20,11 +20,13 @@ addons:
       - gfortran
       - libcurl4-openssl-dev
       - libelf-dev
-      - libbfd-dev
       - libdw-dev
       - cmake
       - gcc
       - binutils-dev
+      - libiberty-dev
+      - zlib1g-dev
+      - libudev-dev
 # Add clippy
 before_script:
   - |
