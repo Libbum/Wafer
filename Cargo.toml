@@ -7,6 +7,8 @@ Wafer exploits a Wick-rotated time-dependent Schrödinger equation to solve for 
 """
 readme = "README.md"
 homepage = "http://wafer.tcqp.science"
+documentation = "https://libbum.github.io/Wafer/wafer/index.html"
+repository = "https://github.com/Libbum/Wafer"
 license = "MIT"
 build = "build.rs"
 
