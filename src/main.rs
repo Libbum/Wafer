@@ -9,7 +9,7 @@
 //!
 //! If you use Wafer in your research, please reference the following articles:
 //!
-//! M. Strickland and D. Yager-Elorriaga, “A parallel algorithm for solving the 3d
+//! M. Strickland and D. Yager-Elorriaga, “A parallel algorithm for solving the 3D
 //! Schrödinger equation”,
 //! [Journal of Computational Physics __229__, 6015–6026 (2010)](http://dx.doi.org/10.1016/j.jcp.2010.04.032).
 
@@ -58,10 +58,10 @@ use config::Config;
 include!(concat!(env!("OUT_DIR"), "/version.rs"));
 
 /// Config is a (mostly) public module which reads the configuration file `wafer.cfg`
-/// and poplulates the `Config` struct with the information required to run the current
+/// and populates the `Config` struct with the information required to run the current
 /// instance of the application.
 pub mod config;
-/// The meat of the caclulation is performed on a finite grid. Basically all of the computation
+/// The meat of the calculation is performed on a finite grid. Basically all of the computation
 /// work is done within this module.
 mod grid;
 /// Any required file input (apart from configuration) is handled here. Plain text and binary formats.

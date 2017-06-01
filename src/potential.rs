@@ -26,7 +26,7 @@ pub struct Potentials {
 #[derive(Debug)]
 pub enum Error {
     /// Some potential types cannot be called by many functions.
-    /// In particlular the `from_script` and `from_file` types have limited
+    /// In particular the `from_script` and `from_file` types have limited
     /// functionality here and must be handled separately.
     NotAvailable,
     /// Something happened with the script handling
@@ -92,7 +92,7 @@ impl From<output::Error> for Error {
 ///
 /// # Returns
 ///
-/// A 3D array of potential values of the requsted size.
+/// A 3D array of potential values of the requested size.
 /// Or an error if called on the wrong potential type.
 pub fn generate(config: &Config) -> Result<Array3<f64>, Error> {
     let num = &config.grid.size;
@@ -183,7 +183,7 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials, Error> {
 ///
 /// # Returns
 ///
-/// A double with the potential value at the requsted index, or an error if the function
+/// A double with the potential value at the requested index, or an error if the function
 /// is called for an invalid potential type.
 fn potential(config: &Config, idx: &Index3) -> Result<f64, Error> {
     let num = &config.grid.size;
@@ -316,7 +316,7 @@ fn potential(config: &Config, idx: &Index3) -> Result<f64, Error> {
 //TODO: We need potential_sub file outputs for those which require it.
 // Then here from_file can be treated differently.
 /// Calculate binding energy offset (if any). Follows the `potential` input/output arguments.
-/// Used if calculation requires indexing. If not, call `potential_sub` instead. Currenly only
+/// Used if calculation requires indexing. If not, call `potential_sub` instead. Currency only
 /// `FullCornell` requires this routine.
 pub fn potential_sub_idx(config: &Config, idx: &Index3) -> Result<f64, Error> {
     match config.potential {
@@ -337,7 +337,7 @@ pub fn potential_sub_idx(config: &Config, idx: &Index3) -> Result<f64, Error> {
 }
 
 /// Calculate binding energy offset (if any). Follows the `potential` input/output arguments.
-/// `FullCornell`, and subsequnt potentials that require indexed values must call `potential_sub_idx`.
+/// `FullCornell`, and subsequent potentials that require indexed values must call `potential_sub_idx`.
 pub fn potential_sub(config: &Config) -> Result<f64, Error> {
     match config.potential {
         PotentialType::NoPotential |
@@ -383,7 +383,7 @@ fn alphas(mu: f64) -> f64 {
      (b0 * b0 * b0 * b0 * l * l)) / (b0 * l)
 }
 
-/// Debye screening mass. Useed for Cornell potentials.
+/// Debye screening mass. Used for Cornell potentials.
 fn mu(t: f64) -> f64 {
     let nf = 2.0; //TODO: This should be an optional parameter for FullCornell only
     let tc = 0.2; //TODO: This should be an optional parameter for FullCornell only

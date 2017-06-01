@@ -27,7 +27,7 @@ struct PlainRecord {
     data: f64,
 }
 
-/// Error type for handling file output. Effectively a wapper around multiple error types we encounter.
+/// Error type for handling file output. Effectively a wrapper around multiple error types we encounter.
 #[derive(Debug)]
 pub enum Error {
     /// From disk issues.
@@ -113,7 +113,7 @@ impl From<num::ParseFloatError> for Error {
 ///
 /// * `target_size` - Size of the requested work area for this simulation. If the file on disk does
 /// not meet these dimensions, it will be scaled.
-/// * `binary` - Configuation flag concerning binary /  plain file output. Will be used as an arbitrator
+/// * `binary` - Configuration flag concerning binary /  plain file output. Will be used as an arbitrator
 /// when multiple files are detected.
 /// * `log` - Reference to the system logger.
 pub fn potential(target_size: [usize; 3],
@@ -261,7 +261,7 @@ pub fn load_wavefunctions(config: &Config,
 /// * `wnum` - Excited state level of the wavefunction to load.
 /// * `target_size` - Size of the requested work area for this simulation. If the file on disk does
 /// not meet these dimensions, it will be scaled.
-/// * `binary` - Configuation flag concerning binary /  plain file output. Will be used as an arbitrator
+/// * `binary` - Configuration flag concerning binary /  plain file output. Will be used as an arbitrator
 /// when multiple files are detected.
 /// * `log` - Reference to the system logger.
 pub fn wavefunction(wnum: u8,
@@ -340,7 +340,7 @@ pub fn check_input_dir() -> Result<(), Error> {
     Ok(())
 }
 
-/// Given a filename, this funtion reads in the data of a csv file and parses
+/// Given a filename, this function reads in the data of a csv file and parses
 /// the values into a 3D array. There are a few caveats to this as the file
 /// may be of a different shape to the requested size in the configuration file.
 /// The routine therefore attempts to resample/interpolate the data to fit the required
@@ -350,7 +350,7 @@ pub fn check_input_dir() -> Result<(), Error> {
 ///
 /// * `file` - A filename wrapped in an option. This function is called from filename parsers
 /// which may not be able to obtain a valid location.
-/// * `target_size` - Requsted size of the resultant array. If this size does not match the data
+/// * `target_size` - Requested size of the resultant array. If this size does not match the data
 /// pulled from the file, interpolation or resampling will occur.
 ///
 /// # Returns

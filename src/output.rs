@@ -52,7 +52,7 @@ struct PlainRecord {
     data: f64,
 }
 
-/// Error type for handling file output. Effectively a wapper around multiple error types we encounter.
+/// Error type for handling file output. Effectively a wrapper around multiple error types we encounter.
 #[derive(Debug)]
 pub enum Error {
     /// From disk issues.
@@ -191,7 +191,7 @@ fn potential_binary(v: &ArrayView3<f64>, filename: &str) -> Result<(), Error> {
     //Ok(())
 }
 
-/// Saves a wavefunction to disk, and controlls what format (plain text or binary)
+/// Saves a wavefunction to disk, and controls what format (plain text or binary)
 /// the data should be handled as.
 ///
 /// # Arguments
@@ -223,7 +223,7 @@ pub fn wavefunction(phi: &ArrayView3<f64>,
 ///
 /// # Arguments
 /// * `phi` - The wavefunction to output. This should be a view called from `grid::get_work_area()`.
-/// * `filename` - A string indiciting the location of the output.
+/// * `filename` - A string indicting the location of the output.
 fn wavefunction_binary(phi: &ArrayView3<f64>, filename: &str) -> Result<(), Error> {
     //NOTE: The code below should work, but we must wait for ndarray to have serde 1.0 compatability.
     //For now, we just output to plain instead.
@@ -239,7 +239,7 @@ fn wavefunction_binary(phi: &ArrayView3<f64>, filename: &str) -> Result<(), Erro
 ///
 /// # Arguments
 /// * `phi` - The wavefunction to output. This should be a view called from `grid::get_work_area()`.
-/// * `filename` - A string indiciting the location of the output.
+/// * `filename` - A string indicting the location of the output.
 fn wavefunction_plain(phi: &ArrayView3<f64>, filename: &str) -> Result<(), Error> {
     let mut buffer = csv::WriterBuilder::new()
         .has_headers(false)
@@ -348,7 +348,7 @@ pub fn print_measurements(tau: f64, diff: f64, observables: &grid::Observables) 
     }
 }
 
-/// Sets up the final mesasurements for each wavefunction, printing them to screen and saving
+/// Sets up the final measurements for each wavefunction, printing them to screen and saving
 /// them to disk.
 ///
 /// #Arguments
@@ -458,9 +458,9 @@ pub fn check_output_dir(project: &str) -> Result<(), Error> {
 ///
 /// * `project` - The name of the currently active project as set in the configuration file
 ///
-/// # Retuns
+/// # Returns
 ///
-/// A string containting the location of the output folder, comprised of a sanitized
+/// A string containing the location of the output folder, comprised of a sanitized
 /// project name, followed by the start date/time of the simulation.
 pub fn get_project_dir(project: &str) -> String {
     format!("./output/{}_{}", sanitize_string(project), &**PROJDATE)

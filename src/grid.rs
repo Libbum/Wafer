@@ -94,8 +94,8 @@ impl From<potential::Error> for Error {
 pub struct Observables {
     /// Normalised total energy.
     pub energy: f64,
-    /// A squared normalisation. Squareroot occurs later when needed to apply a complete
-    /// normalisation condition. This needs to be separate as we include other adjutsments
+    /// A squared normalisation. Square root occurs later when needed to apply a complete
+    /// normalisation condition. This needs to be separate as we include other adjustments
     /// from time to time.
     pub norm2: f64,
     /// The value of the potential at infinity. This is used to calculate the binding energy.
@@ -264,11 +264,11 @@ fn solve(config: &Config,
     }
 }
 
-/// Estamates completion time for the convergence of the current wavefunction.
+/// Estimates completion time for the convergence of the current wavefunction.
 ///
 /// # Returns
 ///
-/// An estimate of the numer of `screen_update` cycles to go until convergece.
+/// An estimate of the number of `screen_update` cycles to go until convergence.
 /// Uses an option as it may not be finite.
 fn eta(step: u64, diff_old: f64, diff_new: f64, config: &Config) -> Option<f64> {
     //Convergenge is done in exponential time after a short stabilisation stage.
@@ -478,7 +478,7 @@ fn orthogonalise_wavefunction(wnum: u8, w: &mut Array3<f64>, w_store: &[Array3<f
 ///
 /// # Returns
 ///
-/// An arrav view containing only the workable area of the array.
+/// An array view containing only the workable area of the array.
 pub fn get_work_area(arr: &Array3<f64>, ext: usize) -> ArrayView3<f64> {
     let dims = arr.dim();
     let exti = ext as isize;

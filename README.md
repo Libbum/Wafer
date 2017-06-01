@@ -10,4 +10,6 @@ If you use Wa*f*er in your research, please reference the following articles:
 
 M. Strickland and D. Yager-Elorriaga, “A parallel algorithm for solving the 3d Schrödinger equation”, [Journal of Computational Physics __229__, 6015–6026 (2010)](http://dx.doi.org/10.1016/j.jcp.2010.04.032).
 
+[Development Documentation](https://libbum.github.io/Wafer/wafer/index.html)
+
 [![Build Status](https://travis-ci.org/Libbum/Wafer.svg?branch=master)](https://travis-ci.org/Libbum/Wafer)

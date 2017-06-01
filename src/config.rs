@@ -15,7 +15,7 @@ use input;
 /// Grid size information.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Grid {
-    /// Number of grid points (cartesian coordinates).
+    /// Number of grid points (Cartesian coordinates).
     pub size: Index3,
     /// The spatial grid size, i.e. Δ{x,y,z}.
     pub dn: f64,
@@ -46,7 +46,7 @@ pub struct Index3 {
     pub z: usize,
 }
 
-/// Identifies the frequency of ouput to the screen or disk, as
+/// Identifies the frequency of output to the screen or disk, as
 /// well as toggling the output of wavefunction and potential data.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Output {
@@ -65,12 +65,12 @@ pub struct Output {
     pub save_potential: bool,
 }
 
-/// Type of potential the user wishes to invoke. There are many potientials
-/// built in, or the user can opt for two (three) external possibilites:
+/// Type of potential the user wishes to invoke. There are many potentials
+/// built in, or the user can opt for two (three) external possibilities:
 ///
 /// 1. Input a pre-calculated potential: `FromFile`
 /// 2. Use a **python** script called from `potential_generator.py`: `FromScript`
-/// 3. Sumbit an issue or pull request for a potential you deem worthy of
+/// 3. Submit an issue or pull request for a potential you deem worthy of
 /// inclusion to the built in selection.
 #[derive(Serialize, Deserialize, Debug)]
 pub enum PotentialType {
@@ -86,7 +86,7 @@ pub enum PotentialType {
     Coulomb,
     /// Complex Coulomb.
     ComplexCoulomb,
-    /// Eliptical Coulomb.
+    /// Elliptical Coulomb.
     ElipticalCoulomb,
     /// Cornell with no corrections.
     SimpleCornell,
@@ -339,7 +339,7 @@ pub struct Config {
     /// at the ground state, this number should be 0. If it is higher, the solver
     /// expects converged states in the `input` directory before calculating anything.
     pub wavenum: u8,
-    /// The maxixum number of excited states to calculate. For example, if this value is
+    /// The maximum number of excited states to calculate. For example, if this value is
     /// 2, the solver will calculate the ground state (E_0), first excited (E_1) and second
     /// excited (E_2) states.
     pub wavemax: u8,
@@ -361,10 +361,10 @@ pub struct Config {
     /// Standard deviation. This sets sigma for the Gaussian initial condition if used and is also
     /// required for the Cornell potential types.
     pub sig: f64,
-    /// Symmetry contitions forced upon the wavefuntion.
+    /// Symmetry conditions forced upon the wavefuntion.
     init_symmetry: SymmetryConstraint,
     /// Location of the script if using one. This is not required in the input configuration and will
-    /// be set as a default vaule or derrived from command line arguments.
+    /// be set as a default value or derived from command line arguments.
     #[serde(skip_deserializing)]
     pub script_location: Option<String>,
 }
@@ -389,7 +389,7 @@ impl Config {
         Ok(decoded_config)
     }
 
-    /// Additional checks to the configuration file that cannot be done implicily
+    /// Additional checks to the configuration file that cannot be done implicitly
     /// by the type checker.
     fn parse(&self) -> Result<(), Error> {
         if self.grid.dt > self.grid.dn.powi(2) / 3. {
@@ -592,7 +592,7 @@ fn read_file<P: AsRef<Path>>(file_path: P) -> Result<String, Error> {
 ///
 /// # Arguments
 ///
-/// * `config` - a reference to the confguration struct.
+/// * `config` - a reference to the configuration struct.
 /// * `log` - a reference to the logger.
 pub fn set_initial_conditions(config: &Config, log: &Logger) -> Result<Array3<f64>, Error> {
     info!(log, "Setting initial conditions for wavefunction");
@@ -643,7 +643,7 @@ pub fn set_initial_conditions(config: &Config, log: &Logger) -> Result<Array3<f6
 ///
 /// # Arguments
 ///
-/// * `config` - a reference to the confguration struct
+/// * `config` - a reference to the configuration struct
 /// * `init_size` - {x,y,z} dimensions of the required wavefunction
 fn generate_gaussian(config: &Config, init_size: [usize; 3]) -> Array3<f64> {
     let normal = Normal::new(0.0, config.sig);
@@ -657,7 +657,7 @@ fn generate_gaussian(config: &Config, init_size: [usize; 3]) -> Array3<f64> {
 ///
 /// # Arguments
 ///
-/// * `config` - a reference to the confguration struct
+/// * `config` - a reference to the configuration struct
 /// * `init_size` - {x,y,z} dimensions of the required wavefunction
 fn generate_coulomb(config: &Config, init_size: [usize; 3]) -> Array3<f64> {
     let mut w = Array3::<f64>::zeros(init_size);
@@ -679,7 +679,7 @@ fn generate_coulomb(config: &Config, init_size: [usize; 3]) -> Array3<f64> {
     w
 }
 
-// Builds a Boolean test grid initial condition.
+/// Builds a Boolean test grid initial condition.
 ///
 /// # Arguments
 ///
@@ -696,7 +696,7 @@ fn generate_boolean(init_size: [usize; 3]) -> Array3<f64> {
 ///
 /// # Arguments
 ///
-/// * `config` - a reference to the confguration struct
+/// * `config` - a reference to the configuration struct
 /// * `w` - Reference to a wavefunction to impose symmetry conditions on.
 pub fn symmetrise_wavefunction(config: &Config, w: &mut Array3<f64>) {
     let num = &config.grid.size;
