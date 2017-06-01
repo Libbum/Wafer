@@ -72,7 +72,7 @@ mod output;
 /// if needed etc.
 mod potential;
 
-/// Exits (no error) after a short pause. Because we're using async logs, sometimes we dump before
+/// Exits (with error, but no display) after a short pause. Because we're using async logs, sometimes we dump before
 /// the log system outputs information. We spool for a little first in these instances so we get the
 /// logging info.
 fn exit_with_pause() {

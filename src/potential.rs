@@ -63,7 +63,7 @@ impl error::Error for Error {
 
     fn cause(&self) -> Option<&error::Error> {
         match *self {
-            Error::NotAvailable => None,
+            Error::NotAvailable |
             Error::Script => None,
             Error::Input(ref err) => Some(err),
             Error::Output(ref err) => Some(err),
@@ -139,7 +139,7 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials, Error> {
         PotentialType::FromScript => {
             match config.script_location {
                 Some(ref file) => {
-                    match input::script_potential(&file, &config.grid, bb, log) {
+                    match input::script_potential(file, &config.grid, bb, log) {
                         Ok(pot) => Ok(pot),
                         Err(err) => Err(Error::Input(err)),
                     }

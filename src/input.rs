@@ -32,13 +32,16 @@ struct PlainRecord {
 pub enum Error {
     /// From disk issues.
     Io(io::Error),
-    // If files are not found on disk
-    NotFound { value: String },
+    /// If files are not found on disk,
+    NotFound {
+        /// Filename or wildcard of missing item.
+        value: String
+    },
     /// From `csv`.
     Csv(csv::Error),
     /// From `ndarray`.
     Shape(ndarray::ShapeError),
-    /// From parsing float
+    /// From parsing float.
     FloatParse(num::ParseFloatError),
 }
 
