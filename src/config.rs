@@ -260,8 +260,6 @@ pub enum Error {
     LargeDt,
     /// If `wavenum` is larger than `wavemax`.
     LargeWavenum,
-    /// From `input`.
-    Input(input::Error),
     /// From `output`.
     Output(output::Error),
 }
@@ -278,7 +276,6 @@ impl fmt::Display for Error {
             Error::LargeWavenum => {
                 write!(f, "Config Error: wavenum can not be larger than wavemax")
             }
-            Error::Input(ref err) => err.fmt(f),
             Error::Output(ref err) => err.fmt(f),
         }
     }
@@ -291,7 +288,6 @@ impl error::Error for Error {
             Error::DecodeYaml(ref err) => err.description(),
             Error::LargeDt => "grid.dt >= grid.dn²/3",
             Error::LargeWavenum => "wavenum > wavemax",
-            Error::Input(ref err) => err.description(),
             Error::Output(ref err) => err.description(),
         }
     }
@@ -301,7 +297,6 @@ impl error::Error for Error {
             Error::Io(ref err) => Some(err),
             Error::DecodeYaml(ref err) => Some(err),
             Error::LargeDt | Error::LargeWavenum => None,
-            Error::Input(ref err) => Some(err),
             Error::Output(ref err) => Some(err),
         }
     }
@@ -316,12 +311,6 @@ impl From<io::Error> for Error {
 impl From<serde_yaml::Error> for Error {
     fn from(err: serde_yaml::Error) -> Error {
         Error::DecodeYaml(err)
-    }
-}
-
-impl From<input::Error> for Error {
-    fn from(err: input::Error) -> Error {
-        Error::Input(err)
     }
 }
 

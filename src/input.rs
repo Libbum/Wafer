@@ -3,16 +3,16 @@ use std::num;
 use slog::Logger;
 use std::fs::create_dir;
 use std::io;
-use std::error;
 use std::fmt;
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::io::prelude::*;
 use ndarray;
-use ndarray::{Array3, Zip};
+use ndarray::{Array3, Zip, Ix3};
 use ndarray_parallel::prelude::*;
 use grid;
 use config::{Config, Grid};
+use errors::*;
 
 #[derive(Debug,Deserialize)]
 /// A simple struct to parse data from a plain csv file
@@ -27,88 +27,23 @@ struct PlainRecord {
     data: f64,
 }
 
-/// Error type for handling file output. Effectively a wrapper around multiple error types we encounter.
-#[derive(Debug)]
-pub enum Error {
-    /// From disk issues.
-    Io(io::Error),
-    /// If files are not found on disk,
-    NotFound {
-        /// Filename or wildcard of missing item.
-        value: String
-    },
-    /// From `csv`.
-    Csv(csv::Error),
-    /// From `ndarray`.
-    Shape(ndarray::ShapeError),
-    /// From parsing float.
-    FloatParse(num::ParseFloatError),
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Error::Io(ref err) => err.fmt(f),
-            Error::NotFound { value: ref file } => {
-                write!(f, "Cannot find {} in input directory.", file)
-            }
-            Error::Csv(ref err) => err.fmt(f),
-            Error::Shape(ref err) => {
-                write!(f,
-                       "Calculated and actual size of input data is not aligned ══▶ {}",
-                       err)
-            }
-            Error::FloatParse(ref err) => err.fmt(f),
-        }
-    }
-}
-
-impl error::Error for Error {
-    fn description(&self) -> &str {
-        match *self {
-            Error::Io(ref err) => err.description(),
-            Error::NotFound { .. } => "File not found",
-            Error::Csv(ref err) => err.description(),
-            Error::Shape(ref err) => err.description(),
-            Error::FloatParse(ref err) => err.description(),
-        }
-    }
-
-    fn cause(&self) -> Option<&error::Error> {
-        match *self {
-            Error::Io(ref err) => Some(err),
-            Error::NotFound { .. } => None,
-            Error::Csv(ref err) => Some(err),
-            Error::Shape(ref err) => Some(err),
-            Error::FloatParse(ref err) => Some(err),
-        }
-    }
-}
-
-impl From<io::Error> for Error {
-    fn from(err: io::Error) -> Error {
-        Error::Io(err)
-    }
-}
-
-impl From<csv::Error> for Error {
-    fn from(err: csv::Error) -> Error {
-        Error::Csv(err)
-    }
-}
-
-impl From<ndarray::ShapeError> for Error {
-    fn from(err: ndarray::ShapeError) -> Error {
-        Error::Shape(err)
-    }
-}
-
-impl From<num::ParseFloatError> for Error {
-    fn from(err: num::ParseFloatError) -> Error {
-        Error::FloatParse(err)
-    }
-}
-
+//impl fmt::Display for Error {
+//    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//        match *self {
+//            Error::Io(ref err) => err.fmt(f),
+//            Error::NotFound { value: ref file } => {
+//                write!(f, "Cannot find {} in input directory.", file)
+//            }
+//            Error::Csv(ref err) => err.fmt(f),
+//            Error::Shape(ref err) => {
+//                write!(f,
+//                       "Calculated and actual size of input data is not aligned ══▶ {}",
+//                       err)
+//            }
+//            Error::FloatParse(ref err) => err.fmt(f),
+//        }
+//    }
+//}
 
 /// Loads potential file from disk. Handles cases where multiple files exist.
 ///
@@ -123,7 +58,7 @@ pub fn potential(target_size: [usize; 3],
                  bb: usize,
                  binary: bool,
                  log: &Logger)
-                 -> Result<Array3<f64>, Error> {
+                 -> Result<Array3<f64>> {
     let plain_path = "./input/potential.csv";
     let binary_path = "./input/potential.mpk";
     let plain_file = if Path::new(&plain_path).exists() {
@@ -151,12 +86,12 @@ pub fn potential(target_size: [usize; 3],
     } else if binary_file.is_some() {
         potential_binary(binary_file.unwrap(), target_size, bb)
     } else {
-        Err(Error::NotFound { value: "potential.*".to_string() })
+        Err(ErrorKind::FileNotFound("input/potential.*".to_string()).into())
     }
 }
 
 /// Loads a potential from a csv file on disk.
-fn potential_plain(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<f64>, Error> {
+fn potential_plain(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<f64>> {
     //No need for anything more here, just call the general parser.
     parse_csv_to_array3(file, target_size, bb)
 }
@@ -165,7 +100,7 @@ fn potential_plain(file: String, target_size: [usize; 3], bb: usize) -> Result<A
 fn potential_binary(file: String,
                     target_size: [usize; 3],
                     bb: usize)
-                    -> Result<Array3<f64>, Error> {
+                    -> Result<Array3<f64>> {
     //TODO: Not implemented yet, for now call plain
     let _none = file;
     potential_plain("./input/potential.csv".to_string(), target_size, bb)
@@ -179,11 +114,11 @@ fn potential_binary(file: String,
 /// * `grid` - The `grid` portion of the `config` struct.
 /// * `bb` - Bounding box value for assigning central difference boundaries
 /// * `log` - Reference to the system logger.
-pub fn script_potential(file: &str, grid: &Grid, bb: usize, log: &Logger) -> Result<Array3<f64>, Error> {
+pub fn script_potential(file: &str, grid: &Grid, bb: usize, log: &Logger) -> Result<Array3<f64>> {
     let target_size: [usize; 3] = [grid.size.x + bb, grid.size.y + bb, grid.size.z + bb];
     info!(log, "Generating potential from script file: {}", file);
     // Spawn python script
-    let python = Command::new(file).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()?;
+    let python = Command::new(file).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().chain_err(|| ErrorKind::SpawnPython)?;
 
     // Generate some data for the script to process.
     let input = json!({
@@ -197,7 +132,7 @@ pub fn script_potential(file: &str, grid: &Grid, bb: usize, log: &Logger) -> Res
     // Write a string to the stdin of the python script.
     // stdin has type `Option<ChildStdin>`, but since we know this instance
     // must have one, we can directly unwrap it.
-    python.stdin.unwrap().write_all(input.to_string().as_bytes())?;
+    python.stdin.unwrap().write_all(input.to_string().as_bytes()).chain_err(|| ErrorKind::StdIn)?;
 
     // Because stdin does not live after the above calls, it is `drop`ed,
     // and the pipe is closed.
@@ -205,17 +140,17 @@ pub fn script_potential(file: &str, grid: &Grid, bb: usize, log: &Logger) -> Res
     // input we just sent.
     // The stdout field also has type `Option<ChildStdout>` so must be unwrapped.
     let mut python_stdout = String::new();
-    python.stdout.unwrap().read_to_string(&mut python_stdout)?;
+    python.stdout.unwrap().read_to_string(&mut python_stdout).chain_err(|| ErrorKind::StdOut)?;
 
     // Finally, parse the captured string.
     // NOTE: I investigated passing this using messagepack. Ends up being more bytes.
     // Well, that may not be totally true, but printing the byte array to screen is problematic...
     let mut values: Vec<f64> = Vec::new();
     for line in python_stdout.lines() {
-        let value = line.parse::<f64>()?;
+        let value = line.parse::<f64>().chain_err(|| ErrorKind::ParseFloat)?;
         values.push(value);
     }
-    let generated = Array3::<f64>::from_shape_vec((grid.size.x, grid.size.y, grid.size.z), values)?;
+    let generated = Array3::<f64>::from_shape_vec((grid.size.x, grid.size.y, grid.size.z), values).chain_err(|| ErrorKind::ArrayShape(values.len(), [grid.size.x, grid.size.y, grid.size.z]))?;
 
     // generated is now the work area. We need to return a full framed array.
     let mut complete = Array3::<f64>::zeros(target_size);
@@ -239,7 +174,7 @@ pub fn script_potential(file: &str, grid: &Grid, bb: usize, log: &Logger) -> Res
 pub fn load_wavefunctions(config: &Config,
                           log: &Logger,
                           w_store: &mut Vec<Array3<f64>>)
-                          -> Result<(), Error> {
+                          -> Result<()> {
     let num = &config.grid.size;
     let bb = config.central_difference.bb();
     let init_size: [usize; 3] = [num.x + bb, num.y + bb, num.z + bb];
@@ -272,7 +207,7 @@ pub fn wavefunction(wnum: u8,
                     bb: usize,
                     binary: bool,
                     log: &Logger)
-                    -> Result<Array3<f64>, Error> {
+                    -> Result<Array3<f64>> {
     let plain_path = format!("./input/wavefunction_{}.csv", wnum);
     let plain_path_partial = format!("./input/wavefunction_{}_partial.csv", wnum);
     let plain_file = if Path::new(&plain_path).exists() {
@@ -308,8 +243,8 @@ pub fn wavefunction(wnum: u8,
     } else if binary_file.is_some() {
         wavefunction_binary(binary_file.unwrap(), target_size, bb)
     } else {
-        let missing = format!("wavefunction_{}*.*", wnum);
-        Err(Error::NotFound { value: missing })
+        let missing = format!("input/wavefunction_{}*.*", wnum);
+        Err(ErrorKind::FileNotFound(missing.to_string()).into())
     }
 }
 
@@ -317,7 +252,7 @@ pub fn wavefunction(wnum: u8,
 fn wavefunction_plain(file: String,
                       target_size: [usize; 3],
                       bb: usize)
-                      -> Result<Array3<f64>, Error> {
+                      -> Result<Array3<f64>> {
     //No more to add here, just parse the file in the generic parser.
     parse_csv_to_array3(file, target_size, bb)
 }
@@ -326,7 +261,7 @@ fn wavefunction_plain(file: String,
 fn wavefunction_binary(file: String,
                        target_size: [usize; 3],
                        bb: usize)
-                       -> Result<Array3<f64>, Error> {
+                       -> Result<Array3<f64>> {
     //TODO: Not implemented yet, call plain
     //NOTE: This will guarentee a failure from the file name.
     wavefunction_plain(file, target_size, bb)
@@ -335,10 +270,9 @@ fn wavefunction_binary(file: String,
 /// Checks that the folder `input` exists. If not, creates it.
 /// This doesn't specifically need to happen for all instances,
 /// but we may want to put restart values in there later on.
-pub fn check_input_dir() -> Result<(), Error> {
-    //std::io::Error
+pub fn check_input_dir() -> Result<()> {
     if !Path::new("./input").exists() {
-        create_dir("./input")?;
+        create_dir("./input").chain_err(|| ErrorKind::CreateInputDir)?;
     }
     Ok(())
 }
@@ -363,16 +297,17 @@ pub fn check_input_dir() -> Result<(), Error> {
 fn parse_csv_to_array3(file: String,
                        target_size: [usize; 3],
                        bb: usize)
-                       -> Result<Array3<f64>, Error> {
+                       -> Result<Array3<f64>> {
     let mut rdr = csv::ReaderBuilder::new()
         .has_headers(false)
-        .from_path(file)?;
+        .from_path(file)
+        .chain_err(|| ErrorKind::CreateFile(file))?;
     let mut max_i = 0;
     let mut max_j = 0;
     let mut max_k = 0;
     let mut data: Vec<f64> = Vec::new();
     for result in rdr.deserialize() {
-        let record: PlainRecord = result?;
+        let record: PlainRecord = result.chain_err(|| ErrorKind::ParsePlainRecord(file))?;
         if record.i > max_i {
             max_i = record.i
         };
@@ -420,6 +355,6 @@ fn parse_csv_to_array3(file: String,
             }
             Ok(complete)
         }
-        Err(err) => Err(Error::Shape(err)),
+        Err(err) => Err(ErrorKind::ArrayShape(data.len(), [numx, numy, numz]).into()),
     }
 }
