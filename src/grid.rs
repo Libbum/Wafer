@@ -415,11 +415,16 @@ fn normalise_wavefunction(w: &mut Array3<f64>, norm2: f64) {
 
 /// Uses Gram Schmidt orthogonalisation to identify the next excited state's wavefunction, even if it's degenerate
 fn orthogonalise_wavefunction(wnum: u8, w: &mut Array3<f64>, w_store: &[Array3<f64>]) {
+    let mut overlap = Array3::<f64>::zeros(w.dim()); //We can create this once, but overwrite it each time.
     for lower in w_store.iter().take(wnum as usize) {
-        let overlap = (lower * &w.view()).scalar_sum(); //TODO: par this multiplication if possible. A temp work array and par_applied zip is slower, even with an unassigned array
+        Zip::from(&mut overlap)
+            .and(lower)
+            .and(w.view())
+            .par_apply(|overlap, &lower, &w| *overlap = lower * w);
+        let overlap_sum = overlap.scalar_sum();
         Zip::from(w.view_mut())
             .and(lower)
-            .par_apply(|w, &lower| *w -= lower * overlap);
+            .par_apply(|w, &lower| *w -= lower * overlap_sum);
     }
 }
 
