@@ -50,8 +50,8 @@ pub struct Index3 {
 pub struct Output {
     /// How many steps should the system evolve before outputting information to the screen.
     pub screen_update: u64,
-    /// How many steps should the system evolve before saving a partially converged wavefunction.
-    pub snap_update: u64,
+    /// Optional: How many steps should the system evolve before saving a partially converged wavefunction.
+    pub snap_update: Option<u64>,
     /// Set `true` for files to be saved in a binary format (messagepack). Smaller files, faster save time, but not
     /// human readable. Set `false` for human readable files (csv and json), which take up more disk space and
     /// are slower to write.
@@ -362,7 +362,11 @@ impl Config {
             println!("{:5}{:<width$}{:<width$}{:<width$}{:<width$}",
                      "",
                      format!("Screen update: {}", self.output.screen_update),
-                     format!("Snapshot update: {}", self.output.snap_update),
+                     if self.output.snap_update.is_some() {
+                         format!("Snapshot update: {}", self.output.snap_update.unwrap())
+                     } else {
+                         "Snapshot update: Off".to_string()
+                     },
                      format!("Save wavefns: {}", self.output.save_wavefns),
                      format!("Save potential: {}", self.output.save_potential),
                      width = colwidth);
@@ -433,7 +437,11 @@ impl Config {
             println!("{:5}{:<width$}{:<width$}",
                      "",
                      format!("Screen update: {}", self.output.screen_update),
-                     format!("Snapshot update: {}", self.output.snap_update),
+                     if self.output.snap_update.is_some() {
+                         format!("Snapshot update: {}", self.output.snap_update.unwrap())
+                     } else {
+                         "Snapshot update: Off".to_string()
+                     },
                      width = colwidth);
             println!("{:5}{:<width$}{:<width$}",
                      "",

@@ -6,7 +6,7 @@ use rayon;
 use serde::Serialize;
 use serde_json;
 use rmps;
-use std::fs::{copy, create_dir_all, File};
+use std::fs::{copy, create_dir_all, File, remove_file};
 use std::io::prelude::*;
 use term_size;
 use ansi_term::Colour::Blue;
@@ -154,6 +154,7 @@ pub fn wavefunction(phi: &ArrayView3<f64>,
 /// Outputs a wavefunction to disk in the messagepack binary format.
 ///
 /// # Arguments
+///
 /// * `phi` - The wavefunction to output. This should be a view called from `grid::get_work_area()`.
 /// * `filename` - A string indicting the location of the output.
 fn wavefunction_binary(phi: &ArrayView3<f64>, filename: &str) -> Result<()> {
@@ -170,6 +171,7 @@ fn wavefunction_binary(phi: &ArrayView3<f64>, filename: &str) -> Result<()> {
 /// Outputs a wavefunction to disk in a plain, csv format.
 ///
 /// # Arguments
+///
 /// * `phi` - The wavefunction to output. This should be a view called from `grid::get_work_area()`.
 /// * `filename` - A string indicting the location of the output.
 fn wavefunction_plain(phi: &ArrayView3<f64>, filename: &str) -> Result<()> {
@@ -188,6 +190,24 @@ fn wavefunction_plain(phi: &ArrayView3<f64>, filename: &str) -> Result<()> {
             .chain_err(|| ErrorKind::Serialize)?;
     }
     buffer.flush().chain_err(|| ErrorKind::Flush)?;
+    Ok(())
+}
+
+/// Removes a temporary `_partial` file from the current output directory.
+/// Should only be called if a converged file is written.
+///
+/// # Arguments
+///
+/// * `wnum` - The current wavenumber.
+/// * `project` - Project name of the current simulation.
+/// * `binary` - Boolean telling us if we've been outputing plain or binary temp files.
+pub fn remove_partial(wnum: u8, project: &str, binary: bool) -> Result<()> {
+    let filename = format!("{}/wavefunction_{}_partial.{}",
+                           get_project_dir(project),
+                           wnum,
+                           if binary { "mpk" } else { "csv" });
+    remove_file(&filename)
+        .chain_err(|| ErrorKind::DeletePartial(wnum))?;
     Ok(())
 }
 

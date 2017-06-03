@@ -107,40 +107,70 @@ fn solve(config: &Config,
     let mut converged = false;
     let mut last_energy = MAX; //std::f64::MAX
     let mut diff_old = MAX;
-    let mut display_energy = MAX;
     while !done {
 
         let observables = compute_observables(config, potentials, &phi);
         let norm_energy = observables.energy / observables.norm2;
         let tau = (step as f64) * config.grid.dt;
+        normalise_wavefunction(&mut phi, observables.norm2);
+
         // Orthoganalise wavefunction
         if wnum > 0 {
-            normalise_wavefunction(&mut phi, observables.norm2);
             orthogonalise_wavefunction(wnum, &mut phi, w_store);
         }
-        //NOTE: Need to do a floating point comparison here if we want steps to be more than 2^64 (~1e19)
-        // But I think it's just best to not have this option. 1e19 max.
-        if step % config.output.snap_update == 0 {
-            //TODO: I think we can do away with SNAPUPDATE now. Kill this if.
+        // Save partial if requested
+        if config.output.snap_update.is_some() && step % config.output.snap_update.unwrap() == 0 {
             config::symmetrise_wavefunction(config, &mut phi);
             normalise_wavefunction(&mut phi, observables.norm2);
-            let diff = (norm_energy - last_energy).abs();
-            if diff < config.tolerance {
-                prog_bar.finish_and_clear();
-                println!("{}", output::print_measurements(tau, diff, &observables));
-                output::finalise_measurement(&observables,
-                                             wnum,
-                                             config.grid.size.x as f64,
-                                             &config.project_name,
-                                             config.output.binary_files)?;
-                converged = true;
-                break;
-            } else {
-                display_energy = last_energy;
-                last_energy = norm_energy;
+            let ext = config.central_difference.ext();
+            let work = get_work_area(&phi, ext);
+            info!(log,
+                  "Saving partially converged wavefunction {} to disk.",
+                  wnum);
+            if let Err(err) = output::wavefunction(&work,
+                                                   wnum,
+                                                   false,
+                                                   &config.project_name,
+                                                   config.output.binary_files) {
+                warn!(log,
+                      "Could not output partial wavefunction per snap_update request: {}",
+                      err);
             }
         }
-        let diff = (display_energy - norm_energy).abs();
+
+        // Check convergence state and break loop if succesful
+        let diff = (norm_energy - last_energy).abs();
+        if diff < config.tolerance {
+            prog_bar.finish_and_clear();
+            println!("{}", output::print_measurements(tau, diff, &observables));
+            output::finalise_measurement(&observables,
+                                         wnum,
+                                         config.grid.size.x as f64,
+                                         &config.project_name,
+                                         config.output.binary_files)?;
+            if config.output.snap_update.is_some() {
+                info!(log,
+                      "Removing partially converged wavefunction {} from disk.",
+                      wnum);
+                if let Err(err) = output::remove_partial(wnum,
+                                                         &config.project_name,
+                                                         config.output.binary_files) {
+                    warn!(log,
+                          "The temporary wavefunction_{}_partial.{} file could not be removed from the output directory: {}",
+                          wnum,
+                          if config.output.binary_files {
+                              "mpk"
+                          } else {
+                              "csv"
+                          },
+                          err);
+                }
+            }
+            converged = true;
+            break;
+        } else {
+            last_energy = norm_energy;
+        }
 
         // Output status to screen
         if let Some(estimate) = eta(step, diff_old, diff, config) {
@@ -159,6 +189,8 @@ fn solve(config: &Config,
         if step < config.max_steps {
             evolve(wnum, config, potentials, &mut phi, w_store);
         }
+
+        // Ready next iteration
         diff_old = diff;
         step += config.output.screen_update;
         done = step > config.max_steps;

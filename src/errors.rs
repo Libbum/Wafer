@@ -108,5 +108,9 @@ error_chain!{
                 description("Cannot load potential")
                 display("Unable to load potential from disk")
         }
+        DeletePartial(wnum: u8) {
+                description("Cannot delete partial")
+                display("Unable remove the temporary file of wavefunction {}", wnum)
+        }
     }
 }

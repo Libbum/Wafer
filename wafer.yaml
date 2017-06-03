@@ -6,6 +6,9 @@
 #              \__/
 #
 
+# Any variables listed as OPTIONAL may be commented out if they are not required in your simulation.
+# Note: the YAML markup requires a space between a '#' and the next character to be considered valid.
+
 # A string value to call your project for identification.
 project_name: develop
 
@@ -96,7 +99,7 @@ init_symmetry: NotConstrained
 # Output configuration of simulation.
 output:
     screen_update: 1000 # Steps before recording measurables.
-    snap_update: 1000 # Steps befode dumping all variables to file, i.e. A 'snapshot'.
+    # snap_update: 10000 # OPTIONAL: Steps befode dumping all variables to file, i.e. A 'snapshot'.
     binary_files: false # Set true to save output in binary format (faster, not human readable).
     save_wavefns: true # Dump full 3D wavefunctions to disk once calculated.
     save_potential: true # Save potential at beginning of run.

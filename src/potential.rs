@@ -102,7 +102,9 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials> {
     if config.output.save_potential {
         info!(log, "Saving potential to disk");
         let work = grid::get_work_area(&v, config.central_difference.ext());
-        if let Err(err) = output::potential(&work, &config.project_name, config.output.binary_files) {
+        if let Err(err) = output::potential(&work,
+                                            &config.project_name,
+                                            config.output.binary_files) {
             warn!(log, "Could not write potential to disk: {}", err);
         }
     }
