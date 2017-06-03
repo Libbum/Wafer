@@ -619,6 +619,8 @@ fn generate_boolean(init_size: [usize; 3]) -> Array3<f64> {
 /// * `w` - Reference to a wavefunction to impose symmetry conditions on.
 pub fn symmetrise_wavefunction(config: &Config, w: &mut Array3<f64>) {
     let num = &config.grid.size;
+    let bb = config.central_difference.bb();
+    let ext = config.central_difference.ext();
     let sign = match config.init_symmetry {
         SymmetryConstraint::NotConstrained => 0.,
         SymmetryConstraint::AntisymAboutY |
@@ -631,12 +633,12 @@ pub fn symmetrise_wavefunction(config: &Config, w: &mut Array3<f64>) {
         SymmetryConstraint::NotConstrained => {}
         SymmetryConstraint::AboutZ |
         SymmetryConstraint::AntisymAboutZ => {
-            for sx in 0..(num.x + 6) {
-                for sy in 3..(3 + num.y + 1) {
-                    for sz in 3..(3 + num.z + 1) {
+            for sx in 0..(num.x + bb) {
+                for sy in ext..(ext + num.y + 1) {
+                    for sz in ext..(ext + num.z + 1) {
                         let mut z = sz;
-                        if z > (3 + num.z) / 2 {
-                            z = (3 + num.z) + 1 - z;
+                        if z > (ext + num.z) / 2 {
+                            z = (ext + num.z) + 1 - z;
                         }
                         w[[sx, sy, sz]] = sign * w[[sx, sy, z]]; //We have to resort to the loops because of this indexing.
                     }
@@ -645,13 +647,13 @@ pub fn symmetrise_wavefunction(config: &Config, w: &mut Array3<f64>) {
         }
         SymmetryConstraint::AboutY |
         SymmetryConstraint::AntisymAboutY => {
-            for sx in 0..(num.x + 6) {
-                for sy in 3..(3 + num.y + 1) {
+            for sx in 0..(num.x + bb) {
+                for sy in ext..(ext + num.y + 1) {
                     let mut y = sy;
-                    if y > (3 + num.y) / 2 {
-                        y = (3 + num.y) + 1 - y;
+                    if y > (ext + num.y) / 2 {
+                        y = (ext + num.y) + 1 - y;
                     }
-                    for sz in 3..(3 + num.z + 1) {
+                    for sz in ext..(ext + num.z + 1) {
                         w[[sx, sy, sz]] = sign * w[[sx, y, sz]];
                     }
                 }

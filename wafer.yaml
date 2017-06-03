@@ -94,7 +94,7 @@ sig: 1.0
 #   AntisymAboutZ: Antisymmetric about *z*-axis.
 #   AboutY: Symmetric about *y*-axis.
 #   AntisymAboutY: Antisymmetric about *y*-axis.
-init_symmetry: NotConstrained
+init_symmetry: AboutZ
 
 # Output configuration of simulation.
 output:
