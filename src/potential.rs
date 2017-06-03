@@ -68,13 +68,13 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials> {
             info!(log, "Loading potential from file");
             let num = &config.grid.size;
             let init_size: [usize; 3] = [num.x + bb, num.y + bb, num.z + bb];
-            let pot = input::potential(init_size, bb, config.output.binary_files, log)?;
+            let pot = input::potential(init_size, bb, config.output.binary_files, log).chain_err(|| ErrorKind::LoadPotential)?;
             Ok(pot)
         }
         PotentialType::FromScript => {
             match config.script_location {
                 Some(ref file) => {
-                    let pot = input::script_potential(file, &config.grid, bb, log)?;
+                    let pot = input::script_potential(file, &config.grid, bb, log).chain_err(|| ErrorKind::LoadPotential)?;
                     Ok(pot)
                 }
                 None => Err(ErrorKind::ScriptNotFound.into()),
@@ -84,7 +84,7 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials> {
             info!(log, "Calculating potential array");
             generate(config)
         }
-    }?; //Note the try here.
+    }?;
 
     let b = 1. / (1. + config.grid.dt * &v / 2.);
     let a = (1. - config.grid.dt * &v / 2.) * &b;
@@ -100,7 +100,7 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials> {
     if config.output.save_potential {
         info!(log, "Saving potential to disk");
         let work = grid::get_work_area(&v, config.central_difference.ext());
-        output::potential(&work, &config.project_name, config.output.binary_files)?;
+        output::potential(&work, &config.project_name, config.output.binary_files).chain_err(|| ErrorKind::SavePotential)?;
     }
 
     Ok(Potentials { v: v, a: a, b: b })

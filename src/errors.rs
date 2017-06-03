@@ -10,6 +10,10 @@ error_chain!{
             display("an error occurred trying to parse the configuratation file")
         }
 
+        SetInitialConditions {
+            description("Error setting initial conditions")
+            display("an error occurred trying to set the initialisation conditions on the starting wavefunction")
+        }
         LargeDt {
             description("grid.dt >= grid.dn²/3")
             display("Temporal step (grid.dt) must be less than or equal to grid.dn²/3")
@@ -91,6 +95,26 @@ error_chain!{
         ScriptNotFound {
                 description("Cannot find script")
                 display("Unable to locate potential script")
+        }
+        CopyConfig(file: String) {
+                description("Cannot copy configuration")
+                display("Unable to copy configuration file '{}' to output directory", file)
+        }
+        LoadWavefunction(wnum: u8) {
+                description("Cannot load wavefunction")
+                display("Unable to load wavefunction {} from disk", wnum)
+        }
+        LoadPotential {
+                description("Cannot load potential")
+                display("Unable to load potential from disk")
+        }
+        SaveWavefunction(wnum: u8) {
+                description("Cannot save wavefunction")
+                display("Unable to save wavefunction {} to disk", wnum)
+        }
+        SavePotential {
+                description("Cannot save potential")
+                display("Unable to save potential to disk")
         }
     }
 }

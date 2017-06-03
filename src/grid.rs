@@ -91,7 +91,7 @@ fn solve(config: &Config,
         }
     } else {
         //This sorts out loading from disk if we are on wavefunction 0.
-        config::set_initial_conditions(config, log)?
+        config::set_initial_conditions(config, log).chain_err(|| ErrorKind::SetInitialConditions)?
     };
 
     output::print_observable_header(wnum);

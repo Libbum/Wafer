@@ -67,7 +67,7 @@ pub fn potential(target_size: [usize; 3],
     } else {
         None
     };
-    println!("{:?}, {:?}", plain_file, binary_file);
+
     if plain_file.is_some() && binary_file.is_some() {
         warn!(log,
               "Multiple potential files found in input directory. Chosing 'potential.{}' based on configuration settings.",
@@ -180,9 +180,7 @@ pub fn load_wavefunctions(config: &Config,
         let wfn = wavefunction(wnum, init_size, bb, config.output.binary_files, log);
         match wfn {
             Ok(w) => w_store.push(w),
-            Err(err) => return Err(err),
-            //TODO: Probably need to make these errors a litte more expressive in thier format sections. For example:
-            //    panic!("Cannot load any wavefunction_{}* file from input folder: {}", wnum, err)
+            Err(_) => return Err(ErrorKind::LoadWavefunction(wnum).into()),
         }
         info!(log, "Loaded (previous) wavefunction {} from disk", wnum);
     }

@@ -122,8 +122,11 @@ fn main() {
     let script_file = matches.value_of("script").unwrap_or("gen_potential.py");
     let config = match Config::load(config_file, script_file) {
         Ok(c) => c,
-        Err(err) => {
-            println!("Error processing configuration: {}", err);
+        Err(ref err) => {
+            println!("Error loading configuration: {}", err);
+            for e in err.iter().skip(1) {
+                println!("caused by: {}", e);
+            }
             process::exit(1);
         }
     };
@@ -139,7 +142,7 @@ fn main() {
                   .chain_err(|| ErrorKind::CreateLog(log_location.to_string())) {
             Ok(f) => f,
             Err(ref err) => {
-                println!("Error: {}", err);
+                println!("Error initialising log file: {}", err);
                 for e in err.iter().skip(1) {
                     println!("caused by: {}", e);
                 }
@@ -189,8 +192,11 @@ fn main() {
     info!(log, "Loading Configuation from disk");
     config.print(term_width);
 
-    if let Err(err) = grid::run(&config, &log) {
+    if let Err(ref err) = grid::run(&config, &log) {
         crit!(log, "{}", err);
+        for e in err.iter().skip(1) {
+            crit!(log, "caused by: {}", e);
+        }
         exit_with_pause();
     };
 
