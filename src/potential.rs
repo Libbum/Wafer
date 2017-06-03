@@ -68,13 +68,15 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials> {
             info!(log, "Loading potential from file");
             let num = &config.grid.size;
             let init_size: [usize; 3] = [num.x + bb, num.y + bb, num.z + bb];
-            let pot = input::potential(init_size, bb, config.output.binary_files, log).chain_err(|| ErrorKind::LoadPotential)?;
+            let pot = input::potential(init_size, bb, config.output.binary_files, log)
+                .chain_err(|| ErrorKind::LoadPotential)?;
             Ok(pot)
         }
         PotentialType::FromScript => {
             match config.script_location {
                 Some(ref file) => {
-                    let pot = input::script_potential(file, &config.grid, bb, log).chain_err(|| ErrorKind::LoadPotential)?;
+                    let pot = input::script_potential(file, &config.grid, bb, log)
+                        .chain_err(|| ErrorKind::LoadPotential)?;
                     Ok(pot)
                 }
                 None => Err(ErrorKind::ScriptNotFound.into()),
@@ -100,7 +102,9 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials> {
     if config.output.save_potential {
         info!(log, "Saving potential to disk");
         let work = grid::get_work_area(&v, config.central_difference.ext());
-        output::potential(&work, &config.project_name, config.output.binary_files).chain_err(|| ErrorKind::SavePotential)?;
+        if let Err(err) = output::potential(&work, &config.project_name, config.output.binary_files) {
+            warn!(log, "Could not write potential to disk: {}", err);
+        }
     }
 
     Ok(Potentials { v: v, a: a, b: b })
@@ -349,7 +353,11 @@ mod tests {
 
     #[test]
     fn distance_squared() {
-        let grid = Grid { size: Index3 { x: 5, y: 6, z: 3 }, dn: 0.1, dt: 3e-5 };
+        let grid = Grid {
+            size: Index3 { x: 5, y: 6, z: 3 },
+            dn: 0.1,
+            dt: 3e-5,
+        };
         let idx = Index3 { x: 3, y: 3, z: 3 };
         assert_approx_eq!(calculate_r2(&idx, &grid), 1.25);
     }

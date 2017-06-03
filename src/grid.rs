@@ -67,8 +67,7 @@ fn solve(config: &Config,
         // If not, we start with the previously converged function
         if let Ok(wfn) = input::wavefunction(wnum, init_size, bb, config.output.binary_files, log) {
             info!(log, "Loaded (current) wavefunction {} from disk", wnum);
-            // If people are lazy or forget, their input files may contaminate
-            // the run here.
+            // If people are lazy or forget, their input files may contaminate the run here.
             // For example: starting wfn = 0 with random gaussian, max = 3.
             // User has wavefunction_{0,1}.csv in `input` from old run.
             // System will generate the random ground state and calculate it fine,
@@ -91,7 +90,8 @@ fn solve(config: &Config,
         }
     } else {
         //This sorts out loading from disk if we are on wavefunction 0.
-        config::set_initial_conditions(config, log).chain_err(|| ErrorKind::SetInitialConditions)?
+        config::set_initial_conditions(config, log)
+            .chain_err(|| ErrorKind::SetInitialConditions)?
     };
 
     output::print_observable_header(wnum);
@@ -592,7 +592,7 @@ mod tests {
 
     #[test]
     fn work_area() {
-        let test = Array3::<f64>::zeros((5,8,7));
+        let test = Array3::<f64>::zeros((5, 8, 7));
         let work = get_work_area(&test, 1);
         let dims = work.dim();
         assert_eq!(dims.0, 3);

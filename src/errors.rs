@@ -108,13 +108,5 @@ error_chain!{
                 description("Cannot load potential")
                 display("Unable to load potential from disk")
         }
-        SaveWavefunction(wnum: u8) {
-                description("Cannot save wavefunction")
-                display("Unable to save wavefunction {} to disk", wnum)
-        }
-        SavePotential {
-                description("Cannot save potential")
-                display("Unable to save potential to disk")
-        }
     }
 }

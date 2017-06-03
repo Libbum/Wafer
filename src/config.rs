@@ -299,10 +299,13 @@ pub struct Config {
 impl Config {
     /// Reads and parses data from the `wafer.cfg` file and command line arguments.
     pub fn load(file: &str, script: &str) -> Result<Config> {
-        let reader = File::open(file).chain_err(|| ErrorKind::ConfigLoad(file.to_string()))?;
+        let reader = File::open(file)
+            .chain_err(|| ErrorKind::ConfigLoad(file.to_string()))?;
         // Decode configuration file.
-        let mut decoded_config: Config = serde_yaml::from_reader(reader).chain_err(|| ErrorKind::Deserialize)?;
-        Config::parse(&decoded_config).chain_err(|| ErrorKind::ConfigParse)?;
+        let mut decoded_config: Config = serde_yaml::from_reader(reader)
+            .chain_err(|| ErrorKind::Deserialize)?;
+        Config::parse(&decoded_config)
+            .chain_err(|| ErrorKind::ConfigParse)?;
 
         if let PotentialType::FromScript = decoded_config.potential {
             let mut locale = "./".to_string();
@@ -314,7 +317,8 @@ impl Config {
 
         // Setup ouput directory and copy configuration.
         output::check_output_dir(&decoded_config.project_name)?;
-        output::copy_config(&decoded_config.project_name, &file).chain_err(|| ErrorKind::CopyConfig(file.to_string()))?;
+        output::copy_config(&decoded_config.project_name, file)
+            .chain_err(|| ErrorKind::CopyConfig(file.to_string()))?;
 
         Ok(decoded_config)
     }
@@ -513,7 +517,8 @@ pub fn set_initial_conditions(config: &Config, log: &Logger) -> Result<Array3<f6
                                 init_size,
                                 bb,
                                 config.output.binary_files,
-                                log).chain_err(|| ErrorKind::LoadWavefunction(config.wavenum))?
+                                log)
+                    .chain_err(|| ErrorKind::LoadWavefunction(config.wavenum))?
         }
         InitialCondition::Gaussian => generate_gaussian(config, init_size),
         InitialCondition::Coulomb => generate_coulomb(config, init_size),

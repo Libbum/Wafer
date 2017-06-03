@@ -23,24 +23,6 @@ struct PlainRecord {
     data: f64,
 }
 
-//impl fmt::Display for Error {
-//    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-//        match *self {
-//            Error::Io(ref err) => err.fmt(f),
-//            Error::NotFound { value: ref file } => {
-//                write!(f, "Cannot find {} in input directory.", file)
-//            }
-//            Error::Csv(ref err) => err.fmt(f),
-//            Error::Shape(ref err) => {
-//                write!(f,
-//                       "Calculated and actual size of input data is not aligned ══▶ {}",
-//                       err)
-//            }
-//            Error::FloatParse(ref err) => err.fmt(f),
-//        }
-//    }
-//}
-
 /// Loads potential file from disk. Handles cases where multiple files exist.
 ///
 /// # Arguments
@@ -93,10 +75,7 @@ fn potential_plain(file: String, target_size: [usize; 3], bb: usize) -> Result<A
 }
 
 /// Loads a potential from a mpk file on disk.
-fn potential_binary(file: String,
-                    target_size: [usize; 3],
-                    bb: usize)
-                    -> Result<Array3<f64>> {
+fn potential_binary(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<f64>> {
     //TODO: Not implemented yet, for now call plain
     let _none = file;
     potential_plain("./input/potential.csv".to_string(), target_size, bb)
@@ -114,7 +93,11 @@ pub fn script_potential(file: &str, grid: &Grid, bb: usize, log: &Logger) -> Res
     let target_size: [usize; 3] = [grid.size.x + bb, grid.size.y + bb, grid.size.z + bb];
     info!(log, "Generating potential from script file: {}", file);
     // Spawn python script
-    let python = Command::new(file).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().chain_err(|| ErrorKind::SpawnPython)?;
+    let python = Command::new(file)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .chain_err(|| ErrorKind::SpawnPython)?;
 
     // Generate some data for the script to process.
     let input = json!({
@@ -128,7 +111,11 @@ pub fn script_potential(file: &str, grid: &Grid, bb: usize, log: &Logger) -> Res
     // Write a string to the stdin of the python script.
     // stdin has type `Option<ChildStdin>`, but since we know this instance
     // must have one, we can directly unwrap it.
-    python.stdin.unwrap().write_all(input.to_string().as_bytes()).chain_err(|| ErrorKind::StdIn)?;
+    python
+        .stdin
+        .unwrap()
+        .write_all(input.to_string().as_bytes())
+        .chain_err(|| ErrorKind::StdIn)?;
 
     // Because stdin does not live after the above calls, it is `drop`ed,
     // and the pipe is closed.
@@ -136,7 +123,11 @@ pub fn script_potential(file: &str, grid: &Grid, bb: usize, log: &Logger) -> Res
     // input we just sent.
     // The stdout field also has type `Option<ChildStdout>` so must be unwrapped.
     let mut python_stdout = String::new();
-    python.stdout.unwrap().read_to_string(&mut python_stdout).chain_err(|| ErrorKind::StdOut)?;
+    python
+        .stdout
+        .unwrap()
+        .read_to_string(&mut python_stdout)
+        .chain_err(|| ErrorKind::StdOut)?;
 
     // Finally, parse the captured string.
     // NOTE: I investigated passing this using messagepack. Ends up being more bytes.
@@ -147,7 +138,9 @@ pub fn script_potential(file: &str, grid: &Grid, bb: usize, log: &Logger) -> Res
         values.push(value);
     }
     let vlen = values.len();
-    let generated = Array3::<f64>::from_shape_vec((grid.size.x, grid.size.y, grid.size.z), values).chain_err(|| ErrorKind::ArrayShape(vlen, [grid.size.x, grid.size.y, grid.size.z]))?;
+    let generated =
+        Array3::<f64>::from_shape_vec((grid.size.x, grid.size.y, grid.size.z), values)
+            .chain_err(|| ErrorKind::ArrayShape(vlen, [grid.size.x, grid.size.y, grid.size.z]))?;
 
     // generated is now the work area. We need to return a full framed array.
     let mut complete = Array3::<f64>::zeros(target_size);
@@ -244,19 +237,13 @@ pub fn wavefunction(wnum: u8,
 }
 
 /// Loads a wafefunction from a csv file on disk.
-fn wavefunction_plain(file: String,
-                      target_size: [usize; 3],
-                      bb: usize)
-                      -> Result<Array3<f64>> {
+fn wavefunction_plain(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<f64>> {
     //No more to add here, just parse the file in the generic parser.
     parse_csv_to_array3(file, target_size, bb)
 }
 
 /// Loads a wafefunction from a mpk file on disk.
-fn wavefunction_binary(file: String,
-                       target_size: [usize; 3],
-                       bb: usize)
-                       -> Result<Array3<f64>> {
+fn wavefunction_binary(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<f64>> {
     //TODO: Not implemented yet, call plain
     //NOTE: This will guarentee a failure from the file name.
     wavefunction_plain(file, target_size, bb)
@@ -267,7 +254,8 @@ fn wavefunction_binary(file: String,
 /// but we may want to put restart values in there later on.
 pub fn check_input_dir() -> Result<()> {
     if !Path::new("./input").exists() {
-        create_dir("./input").chain_err(|| ErrorKind::CreateInputDir)?;
+        create_dir("./input")
+            .chain_err(|| ErrorKind::CreateInputDir)?;
     }
     Ok(())
 }
@@ -289,10 +277,7 @@ pub fn check_input_dir() -> Result<()> {
 ///
 /// * A 3D array loaded with data from the file and resampled/interpolated if required.
 /// If something goes wrong in the parsing or file handling, a `csv::Error` is passed.
-fn parse_csv_to_array3(file: String,
-                       target_size: [usize; 3],
-                       bb: usize)
-                       -> Result<Array3<f64>> {
+fn parse_csv_to_array3(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<f64>> {
     let parse_file = &file.to_owned();
     let mut rdr = csv::ReaderBuilder::new()
         .has_headers(false)
@@ -303,7 +288,9 @@ fn parse_csv_to_array3(file: String,
     let mut max_k = 0;
     let mut data: Vec<f64> = Vec::new();
     for result in rdr.deserialize() {
-        let record: PlainRecord = result.chain_err(|| ErrorKind::ParsePlainRecord(parse_file.to_string()))?;
+        let record: PlainRecord =
+            result
+                .chain_err(|| ErrorKind::ParsePlainRecord(parse_file.to_string()))?;
         if record.i > max_i {
             max_i = record.i
         };

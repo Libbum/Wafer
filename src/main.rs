@@ -133,22 +133,21 @@ fn main() {
 
     //Setup logging.
     let log_location = output::get_project_dir(&config.project_name) + "/simulation.log";
-    let log_file =
-        match OpenOptions::new()
-                  .create(true)
-                  .write(true)
-                  .truncate(true)
-                  .open(&log_location)
-                  .chain_err(|| ErrorKind::CreateLog(log_location.to_string())) {
-            Ok(f) => f,
-            Err(ref err) => {
-                println!("Error initialising log file: {}", err);
-                for e in err.iter().skip(1) {
-                    println!("caused by: {}", e);
-                }
-                process::exit(1);
+    let log_file = match OpenOptions::new()
+              .create(true)
+              .write(true)
+              .truncate(true)
+              .open(&log_location)
+              .chain_err(|| ErrorKind::CreateLog(log_location.to_string())) {
+        Ok(f) => f,
+        Err(ref err) => {
+            println!("Error initialising log file: {}", err);
+            for e in err.iter().skip(1) {
+                println!("caused by: {}", e);
             }
-        };
+            process::exit(1);
+        }
+    };
     let syslog = slog_term::PlainDecorator::new(log_file);
     let sys_drain = slog_term::FullFormat::new(syslog).build().fuse();
     let sys_drain = slog_async::Async::new(sys_drain).build().fuse();
@@ -226,4 +225,3 @@ fn main() {
     }
     info!(log, "Simulation completed");
 }
-
