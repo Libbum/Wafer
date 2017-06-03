@@ -23,6 +23,10 @@ error_chain!{
                 description("Cannot create input dir")
                 display("Unable to create an input directory")
         }
+        CreateOutputDir(path: String) {
+                description("Cannot create output dir")
+                display("Unable to create the output directory '{}'", path)
+        }
         CreateFile(file: String) {
                 description("Cannot create file")
                 display("Unable to create {}", file)
@@ -50,6 +54,22 @@ error_chain!{
         SpawnPython {
                 description("Cannot spawn script")
                 display("Unable to spawn a python script process")
+        }
+        SaveObservables {
+                description("Cannot save observables")
+                display("Unable to save observables data to disk")
+        }
+        Serialize {
+                description("Cannot serialize data")
+                display("Unable to serialize data from struct")
+        }
+        Deserialize {
+                description("Cannot deserialize data")
+                display("Unable to deserialize data to required struct")
+        }
+        Flush {
+                description("Cannot flush")
+                display("Unable to flush io buffer")
         }
     }
 }

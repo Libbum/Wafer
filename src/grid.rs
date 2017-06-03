@@ -3,91 +3,13 @@ use ndarray::{Array3, ArrayView3, ArrayViewMut3, Zip};
 use ndarray_parallel::prelude::*;
 use slog::Logger;
 use std::f64::MAX;
-use std::error;
-use std::fmt;
 use config;
 use config::{Config, CentralDifference, Grid, Index3, InitialCondition, PotentialType};
 use potential;
 use potential::Potentials;
 use input;
 use output;
-
-
-/// Error type for handling data on the grid. Mostly wrappers around the other modules.
-#[derive(Debug)]
-pub enum Error {
-    /// From `config`.
-    Config(config::Error),
-    /// From `input`.
-    Input(input::Error),
-    /// From `output`.
-    Output(output::Error),
-    /// From `potential`.
-    Potential(potential::Error),
-    /// Maximum step reached.
-    MaxStep,
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Error::Config(ref err) => err.fmt(f),
-            Error::Input(ref err) => err.fmt(f),
-            Error::Output(ref err) => err.fmt(f),
-            Error::Potential(ref err) => err.fmt(f),
-            Error::MaxStep => {
-                write!(f,
-                       "Maximum step limit reached. Cannot continue, but restart files have been output.")
-            }
-        }
-    }
-}
-
-impl error::Error for Error {
-    fn description(&self) -> &str {
-        match *self {
-            Error::Config(ref err) => err.description(),
-            Error::Input(ref err) => err.description(),
-            Error::Output(ref err) => err.description(),
-            Error::Potential(ref err) => err.description(),
-            Error::MaxStep => "Maximum step limit reached",
-        }
-    }
-
-    fn cause(&self) -> Option<&error::Error> {
-        match *self {
-            Error::Config(ref err) => Some(err),
-            Error::Input(ref err) => Some(err),
-            Error::Output(ref err) => Some(err),
-            Error::Potential(ref err) => Some(err),
-            Error::MaxStep => None,
-        }
-    }
-}
-
-impl From<config::Error> for Error {
-    fn from(err: config::Error) -> Error {
-        Error::Config(err)
-    }
-}
-
-impl From<input::Error> for Error {
-    fn from(err: input::Error) -> Error {
-        Error::Input(err)
-    }
-}
-
-impl From<output::Error> for Error {
-    fn from(err: output::Error) -> Error {
-        Error::Output(err)
-    }
-}
-
-impl From<potential::Error> for Error {
-    fn from(err: potential::Error) -> Error {
-        Error::Potential(err)
-    }
-}
+use errors::*;
 
 #[derive(Debug)]
 /// Holds all computed observables for the current wavefunction.
@@ -105,7 +27,7 @@ pub struct Observables {
 }
 
 /// Runs the calculation and holds long term (system time) wavefunction storage
-pub fn run(config: &Config, log: &Logger) -> Result<(), Error> {
+pub fn run(config: &Config, log: &Logger) -> Result<()> {
 
     let potentials = potential::load_arrays(config, log)?;
 
@@ -131,7 +53,7 @@ fn solve(config: &Config,
          potentials: &Potentials,
          wnum: u8,
          w_store: &mut Vec<Array3<f64>>)
-         -> Result<(), Error> {
+         -> Result<()> {
 
     // Initial conditions from config file if ground state,
     // but start from previously converged wfn if we're an excited state.
