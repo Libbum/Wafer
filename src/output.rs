@@ -7,7 +7,6 @@ use serde::Serialize;
 use serde_json;
 use rmps;
 use std::fs::{copy, create_dir_all, File};
-use std::io;
 use std::io::prelude::*;
 use term_size;
 use ansi_term::Colour::Blue;
@@ -360,7 +359,7 @@ fn observables_binary(observables: &ObservablesOutput, project: &str) -> Result<
                            observables.state);
     let mut output = Vec::new();
     observables.serialize(&mut rmps::Serializer::new(&mut output)).chain_err(|| ErrorKind::Serialize)?;
-    let mut buffer = File::create(filename).chain_err(|| ErrorKind::CreateFile(filename))?;
+    let mut buffer = File::create(&filename).chain_err(|| ErrorKind::CreateFile(filename))?;
     buffer.write_all(&output).chain_err(|| ErrorKind::SaveObservables)?;
     Ok(())
 }
@@ -370,7 +369,7 @@ fn observables_plain(observables: &ObservablesOutput, project: &str) -> Result<(
     let filename = format!("{}/observables_{}.json",
                            get_project_dir(project),
                            observables.state);
-    let buffer = File::create(filename).chain_err(|| ErrorKind::CreateFile(filename))?;
+    let buffer = File::create(&filename).chain_err(|| ErrorKind::CreateFile(filename))?;
     serde_json::to_writer_pretty(buffer, observables).chain_err(|| ErrorKind::SaveObservables)?;
     Ok(())
 }
@@ -378,7 +377,7 @@ fn observables_plain(observables: &ObservablesOutput, project: &str) -> Result<(
 /// Generates a unique folder inside an `output` directory for the current simulation.
 pub fn check_output_dir(project: &str) -> Result<()> {
     let proj_dir = get_project_dir(project);
-    create_dir_all(proj_dir).chain_err(|| ErrorKind::CreateOutputDir(proj_dir))?;
+    create_dir_all(&proj_dir).chain_err(|| ErrorKind::CreateOutputDir(proj_dir))?;
     Ok(())
 }
 
@@ -400,7 +399,7 @@ pub fn get_project_dir(project: &str) -> String {
 /// Copies the current configuration file to the project folder
 pub fn copy_config(project: &str, file: &str) -> Result<()> {
     let copy_file = get_project_dir(project) + "/" + file;
-    copy(file, copy_file).chain_err(|| ErrorKind::CreateFile(copy_file))?;
+    copy(file, &copy_file).chain_err(|| ErrorKind::CreateFile(copy_file))?;
     Ok(())
 }
 

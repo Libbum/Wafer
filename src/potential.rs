@@ -21,12 +21,6 @@ pub struct Potentials {
     pub b: Array3<f64>,
 }
 
-            //Error::NotAvailable => {
-            //    write!(f,
-            //           "Not able to calculate potential value at an index for this potential type.")
-            //}
-            //Error::Script => write!(f, "Could not identify location of potential script."),
-
 /// A public wrapper around `potential`. Where `potential` does the calculation for a
 /// single point, `generate` builds the entire grid.
 ///
@@ -74,21 +68,16 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials> {
             info!(log, "Loading potential from file");
             let num = &config.grid.size;
             let init_size: [usize; 3] = [num.x + bb, num.y + bb, num.z + bb];
-            match input::potential(init_size, bb, config.output.binary_files, log) {
-                Ok(pot) => Ok(pot),
-                // Have to explicity cast this result.
-                Err(err) => Err(Error::Input(err)),
-            }
+            let pot = input::potential(init_size, bb, config.output.binary_files, log)?;
+            Ok(pot)
         }
         PotentialType::FromScript => {
             match config.script_location {
                 Some(ref file) => {
-                    match input::script_potential(file, &config.grid, bb, log) {
-                        Ok(pot) => Ok(pot),
-                        Err(err) => Err(Error::Input(err)),
-                    }
+                    let pot = input::script_potential(file, &config.grid, bb, log)?;
+                    Ok(pot)
                 }
-                None => Err(Error::Script),
+                None => Err(ErrorKind::ScriptNotFound.into()),
             }
         }
         _ => {
@@ -251,7 +240,7 @@ fn potential(config: &Config, idx: &Index3) -> Result<f64> {
             }
         }
         PotentialType::FromFile |
-        PotentialType::FromScript => Err(Error::NotAvailable), //TODO: Script may not need to error.
+        PotentialType::FromScript => Err(ErrorKind::PotentialNotAvailable.into()), //TODO: Script may not need to error.
     }
 }
 
@@ -276,7 +265,7 @@ pub fn potential_sub_idx(config: &Config, idx: &Index3) -> Result<f64> {
                      (1. + xi).powf(-0.29);
             Ok(config.sig / md + 4. * config.mass)
         }
-        _ => Err(Error::NotAvailable),
+        _ => Err(ErrorKind::PotentialNotAvailable.into()),
     }
 }
 
@@ -297,7 +286,7 @@ pub fn potential_sub(config: &Config) -> Result<f64> {
         PotentialType::FromFile => Ok(0.0),
         PotentialType::ElipticalCoulomb => Ok(1. / config.grid.dn),
         PotentialType::SimpleCornell => Ok(4.0 * config.mass),
-        PotentialType::FullCornell => Err(Error::NotAvailable),
+        PotentialType::FullCornell => Err(ErrorKind::PotentialNotAvailable.into()),
     }
 }
 

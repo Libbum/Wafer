@@ -182,7 +182,7 @@ fn solve(config: &Config,
         w_store.push(phi); //Save state
         Ok(())
     } else {
-        Err(Error::MaxStep)
+        Err(ErrorKind::MaxStep.into())
     }
 }
 

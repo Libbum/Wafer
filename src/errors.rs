@@ -10,6 +10,15 @@ error_chain!{
             display("an error occurred trying to parse the configuratation file")
         }
 
+        LargeDt {
+            description("grid.dt >= grid.dn²/3")
+            display("Temporal step (grid.dt) must be less than or equal to grid.dn²/3")
+        }
+        LargeWavenum {
+            description("wavenum > wavemax")
+            display("Wavenum can not be larger than wavemax")
+        }
+
         CreateLog(path: String) {
                 description("Cannot write log file")
                 display("Unable to write log file `{}`", path)
@@ -70,6 +79,18 @@ error_chain!{
         Flush {
                 description("Cannot flush")
                 display("Unable to flush io buffer")
+        }
+        MaxStep {
+                description("Maximum step reached")
+                display("Maximum step limit reached, halting operation")
+        }
+        PotentialNotAvailable {
+                description("Not available for PotentialType")
+                display("Invalid call for current potential type")
+        }
+        ScriptNotFound {
+                description("Cannot find script")
+                display("Unable to locate potential script")
         }
     }
 }

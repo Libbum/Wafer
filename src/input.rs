@@ -1,14 +1,10 @@
 use csv;
-use std::num;
 use slog::Logger;
 use std::fs::create_dir;
-use std::io;
-use std::fmt;
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::io::prelude::*;
-use ndarray;
-use ndarray::{Array3, Zip, Ix3};
+use ndarray::{Array3, Zip};
 use ndarray_parallel::prelude::*;
 use grid;
 use config::{Config, Grid};
@@ -150,7 +146,8 @@ pub fn script_potential(file: &str, grid: &Grid, bb: usize, log: &Logger) -> Res
         let value = line.parse::<f64>().chain_err(|| ErrorKind::ParseFloat)?;
         values.push(value);
     }
-    let generated = Array3::<f64>::from_shape_vec((grid.size.x, grid.size.y, grid.size.z), values).chain_err(|| ErrorKind::ArrayShape(values.len(), [grid.size.x, grid.size.y, grid.size.z]))?;
+    let vlen = values.len();
+    let generated = Array3::<f64>::from_shape_vec((grid.size.x, grid.size.y, grid.size.z), values).chain_err(|| ErrorKind::ArrayShape(vlen, [grid.size.x, grid.size.y, grid.size.z]))?;
 
     // generated is now the work area. We need to return a full framed array.
     let mut complete = Array3::<f64>::zeros(target_size);
@@ -298,16 +295,17 @@ fn parse_csv_to_array3(file: String,
                        target_size: [usize; 3],
                        bb: usize)
                        -> Result<Array3<f64>> {
+    let parse_file = &file.to_owned();
     let mut rdr = csv::ReaderBuilder::new()
         .has_headers(false)
-        .from_path(file)
+        .from_path(&file)
         .chain_err(|| ErrorKind::CreateFile(file))?;
     let mut max_i = 0;
     let mut max_j = 0;
     let mut max_k = 0;
     let mut data: Vec<f64> = Vec::new();
     for result in rdr.deserialize() {
-        let record: PlainRecord = result.chain_err(|| ErrorKind::ParsePlainRecord(file))?;
+        let record: PlainRecord = result.chain_err(|| ErrorKind::ParsePlainRecord(parse_file.to_string()))?;
         if record.i > max_i {
             max_i = record.i
         };
@@ -322,6 +320,7 @@ fn parse_csv_to_array3(file: String,
     let numx = max_i + 1;
     let numy = max_j + 1;
     let numz = max_k + 1;
+    let dlen = data.len();
     match Array3::<f64>::from_shape_vec((numx, numy, numz), data) {
         Ok(result) => {
             //result is now a parsed Array3 with the work area inside.
@@ -355,6 +354,6 @@ fn parse_csv_to_array3(file: String,
             }
             Ok(complete)
         }
-        Err(err) => Err(ErrorKind::ArrayShape(data.len(), [numx, numy, numz]).into()),
+        Err(_) => Err(ErrorKind::ArrayShape(dlen, [numx, numy, numz]).into()),
     }
 }
