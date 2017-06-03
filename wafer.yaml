@@ -28,9 +28,9 @@ tolerance: 1e-4
 # The more points the smaller the error - provided the step size choice is appropreate.
 central_difference: ThreePoint
 
-# Maximum number of steps to try before giving up. This stops us from calculating forever
+# OPTIONAL: Maximum number of steps to try before giving up. This stops us from calculating forever
 # if the system diverges. But this will most likely never happen so it's fine to leave this as default.
-max_steps: 50000000
+# max_steps: 50000000
 
 # Starting wafefunction. New run should be 0 (i.e. ground state). If the ground state is converged,
 # setting this to 1 will 'restart' the calculation at the first excited state. The converged ground

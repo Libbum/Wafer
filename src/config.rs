@@ -260,8 +260,8 @@ pub struct Config {
     /// Precision of the central difference formalism. The higher the value here the
     /// lower the resultant error will be, provided the step size has been optimally chosen.
     pub central_difference: CentralDifference,
-    /// The maximum amount of steps the solver should attempt before giving up.
-    pub max_steps: u64,
+    /// Optional: The maximum amount of steps the solver should attempt before giving up.
+    pub max_steps: Option<u64>,
     /// A starting number pertaining to an excited state energy level. To start
     /// at the ground state, this number should be 0. If it is higher, the solver
     /// expects converged states in the `input` directory before calculating anything.
@@ -389,7 +389,11 @@ impl Config {
             println!("{:5}{:<width$}{:<width$}",
                      "",
                      format!("Energy covergence tolerance: {:.3e}", self.tolerance),
-                     format!("Maximum number of steps: {:.3e}", self.max_steps as f64),
+                     if self.max_steps.is_some() {
+                         format!("Maximum number of steps: {:.3e}", self.max_steps.unwrap() as f64)
+                     } else {
+                         "Maximum number of steps: ∞".to_string()
+                     },
                      width = dcolwidth);
             println!("{:5}{:<width$}{:<width$}",
                      "",
@@ -467,7 +471,11 @@ impl Config {
             println!("{:5}{:<width$}{:<width$}",
                      "",
                      format!("Energy covergence tolerance: {:.3e}", self.tolerance),
-                     format!("Maximum number of steps: {:.3e}", self.max_steps as f64),
+                     if self.max_steps.is_some() {
+                         format!("Maximum number of steps: {:.3e}", self.max_steps.unwrap() as f64)
+                     } else {
+                         "Maximum number of steps: ∞".to_string()
+                     },
                      width = colwidth);
             println!("{:5}{:<width$}{:<width$}",
                      "",

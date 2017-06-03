@@ -103,11 +103,10 @@ fn solve(config: &Config,
     prog_bar.set_position(0);
 
     let mut step = 0;
-    let mut done = false;
     let mut converged = false;
     let mut last_energy = MAX; //std::f64::MAX
     let mut diff_old = MAX;
-    while !done {
+    loop {
 
         let observables = compute_observables(config, potentials, &phi);
         let norm_energy = observables.energy / observables.norm2;
@@ -185,15 +184,17 @@ fn solve(config: &Config,
         }
         prog_bar.set_message(&output::print_measurements(tau, diff, &observables));
 
-        // Evolve solution until next screen update
-        if step < config.max_steps {
-            evolve(wnum, config, potentials, &mut phi, w_store);
+        // Make sure we don't evolve too far if we are not allowed
+        if config.max_steps.is_some() && step > config.max_steps.unwrap() {
+            break;
         }
+
+        // Evolve solution until next screen update
+        evolve(wnum, config, potentials, &mut phi, w_store);
 
         // Ready next iteration
         diff_old = diff;
         step += config.output.screen_update;
-        done = step > config.max_steps;
     }
 
     if config.output.save_wavefns {
