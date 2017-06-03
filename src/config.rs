@@ -3,13 +3,12 @@ use ndarray_parallel::prelude::*;
 use rand::distributions::{Normal, IndependentSample};
 use rand;
 use slog::Logger;
-use std::error;
 use std::fmt;
-use std::io;
 use std::fs::File;
 use serde_yaml;
 use input;
 use output;
+use errors::*;
 
 /// Grid size information.
 #[derive(Serialize, Deserialize, Debug)]
@@ -249,88 +248,6 @@ impl fmt::Display for RunType {
     }
 }
 
-/// Error type for handling the configuration stucts.
-#[derive(Debug)]
-pub enum Error {
-    /// From disk issues.
-    Io(io::Error),
-    /// From `serde_yaml`.
-    DecodeYaml(serde_yaml::Error),
-    /// If temporal step `dt` is larger than `dn`^2/3.
-    LargeDt,
-    /// If `wavenum` is larger than `wavemax`.
-    LargeWavenum,
-    /// From `input`.
-    Input(input::Error),
-    /// From `output`.
-    Output(output::Error),
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Error::Io(ref err) => err.fmt(f),
-            Error::DecodeYaml(ref err) => err.fmt(f),
-            Error::LargeDt => {
-                write!(f,
-                       "Config Error: Temporal step (grid.dt) must be less than or equal to grid.dn²/3")
-            }
-            Error::LargeWavenum => {
-                write!(f, "Config Error: wavenum can not be larger than wavemax")
-            }
-            Error::Input(ref err) => err.fmt(f),
-            Error::Output(ref err) => err.fmt(f),
-        }
-    }
-}
-
-impl error::Error for Error {
-    fn description(&self) -> &str {
-        match *self {
-            Error::Io(ref err) => err.description(),
-            Error::DecodeYaml(ref err) => err.description(),
-            Error::LargeDt => "grid.dt >= grid.dn²/3",
-            Error::LargeWavenum => "wavenum > wavemax",
-            Error::Input(ref err) => err.description(),
-            Error::Output(ref err) => err.description(),
-        }
-    }
-
-    fn cause(&self) -> Option<&error::Error> {
-        match *self {
-            Error::Io(ref err) => Some(err),
-            Error::DecodeYaml(ref err) => Some(err),
-            Error::LargeDt | Error::LargeWavenum => None,
-            Error::Input(ref err) => Some(err),
-            Error::Output(ref err) => Some(err),
-        }
-    }
-}
-
-impl From<io::Error> for Error {
-    fn from(err: io::Error) -> Error {
-        Error::Io(err)
-    }
-}
-
-impl From<serde_yaml::Error> for Error {
-    fn from(err: serde_yaml::Error) -> Error {
-        Error::DecodeYaml(err)
-    }
-}
-
-impl From<input::Error> for Error {
-    fn from(err: input::Error) -> Error {
-        Error::Input(err)
-    }
-}
-
-impl From<output::Error> for Error {
-    fn from(err: output::Error) -> Error {
-        Error::Output(err)
-    }
-}
-
 /// The main struct which all input data from `wafer.cfg` is pushed into.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Config {
@@ -381,11 +298,11 @@ pub struct Config {
 
 impl Config {
     /// Reads and parses data from the `wafer.cfg` file and command line arguments.
-    pub fn load(file: &str, script: &str) -> Result<Config, Error> {
-        let reader = File::open(file)?;
+    pub fn load(file: &str, script: &str) -> Result<Config> {
+        let reader = File::open(file).chain_err(|| ErrorKind::ConfigLoad(file.to_string()))?;
         // Decode configuration file.
-        let mut decoded_config: Config = serde_yaml::from_reader(reader)?;
-        Config::parse(&decoded_config)?;
+        let mut decoded_config: Config = serde_yaml::from_reader(reader).chain_err(|| ErrorKind::Deserialize)?;
+        Config::parse(&decoded_config).chain_err(|| ErrorKind::ConfigParse)?;
 
         if let PotentialType::FromScript = decoded_config.potential {
             let mut locale = "./".to_string();
@@ -397,19 +314,19 @@ impl Config {
 
         // Setup ouput directory and copy configuration.
         output::check_output_dir(&decoded_config.project_name)?;
-        output::copy_config(&decoded_config.project_name, file)?;
+        output::copy_config(&decoded_config.project_name, &file).chain_err(|| ErrorKind::CopyConfig(file.to_string()))?;
 
         Ok(decoded_config)
     }
 
     /// Additional checks to the configuration file that cannot be done implicitly
     /// by the type checker.
-    fn parse(&self) -> Result<(), Error> {
+    fn parse(&self) -> Result<()> {
         if self.grid.dt > self.grid.dn.powi(2) / 3. {
-            return Err(Error::LargeDt);
+            return Err(ErrorKind::LargeDt.into());
         }
         if self.wavenum > self.wavemax {
-            return Err(Error::LargeWavenum);
+            return Err(ErrorKind::LargeWavenum.into());
         }
         Ok(())
     }
@@ -583,7 +500,7 @@ impl Config {
 ///
 /// * `config` - a reference to the configuration struct.
 /// * `log` - a reference to the logger.
-pub fn set_initial_conditions(config: &Config, log: &Logger) -> Result<Array3<f64>, Error> {
+pub fn set_initial_conditions(config: &Config, log: &Logger) -> Result<Array3<f64>> {
     info!(log, "Setting initial conditions for wavefunction");
     let num = &config.grid.size;
     let bb = config.central_difference.bb();
@@ -596,7 +513,7 @@ pub fn set_initial_conditions(config: &Config, log: &Logger) -> Result<Array3<f6
                                 init_size,
                                 bb,
                                 config.output.binary_files,
-                                log)?
+                                log).chain_err(|| ErrorKind::LoadWavefunction(config.wavenum))?
         }
         InitialCondition::Gaussian => generate_gaussian(config, init_size),
         InitialCondition::Coulomb => generate_coulomb(config, init_size),

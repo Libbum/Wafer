@@ -19,11 +19,16 @@
 #![cfg_attr(feature="clippy", warn(missing_docs_in_private_items))]
 #![cfg_attr(feature="clippy", warn(single_match_else))]
 
+// `error_chain!` can recurse deeply
+#![recursion_limit = "1024"]
+
 extern crate ansi_term;
 extern crate chrono;
 #[macro_use]
 extern crate clap;
 extern crate csv;
+#[macro_use]
+extern crate error_chain;
 extern crate indicatif;
 #[macro_use]
 extern crate lazy_static;
@@ -55,6 +60,7 @@ use std::process;
 use std::thread;
 use std::time::{Duration, Instant};
 use config::Config;
+use errors::*;
 
 include!(concat!(env!("OUT_DIR"), "/version.rs"));
 
@@ -72,6 +78,8 @@ mod output;
 /// Handles the potential generation, binding energy offsets, callouts to files or scripts
 /// if needed etc.
 mod potential;
+/// Handles the error chain of the program.
+mod errors;
 
 /// Exits (with error, but no display) after a short pause. Because we're using async logs, sometimes we dump before
 /// the log system outputs information. We spool for a little first in these instances so we get the
@@ -114,22 +122,30 @@ fn main() {
     let script_file = matches.value_of("script").unwrap_or("gen_potential.py");
     let config = match Config::load(config_file, script_file) {
         Ok(c) => c,
-        Err(err) => {
-            println!("Error processing configuration: {}", err);
+        Err(ref err) => {
+            println!("Error loading configuration: {}", err);
+            for e in err.iter().skip(1) {
+                println!("caused by: {}", e);
+            }
             process::exit(1);
         }
     };
 
     //Setup logging.
+    let log_location = output::get_project_dir(&config.project_name) + "/simulation.log";
     let log_file =
         match OpenOptions::new()
                   .create(true)
                   .write(true)
                   .truncate(true)
-                  .open(output::get_project_dir(&config.project_name) + "/simulation.log") {
+                  .open(&log_location)
+                  .chain_err(|| ErrorKind::CreateLog(log_location.to_string())) {
             Ok(f) => f,
-            Err(err) => {
-                println!("Could not connect to log file: {}", err);
+            Err(ref err) => {
+                println!("Error initialising log file: {}", err);
+                for e in err.iter().skip(1) {
+                    println!("caused by: {}", e);
+                }
                 process::exit(1);
             }
         };
@@ -152,8 +168,11 @@ fn main() {
     info!(log, "Starting Wafer solver"; "version" => crate_version!(), "build-id" => short_sha());
 
     info!(log, "Checking/creating directories");
-    if let Err(err) = input::check_input_dir() {
-        crit!(log, "Could not communicate with input directory: {}", err);
+    if let Err(ref err) = input::check_input_dir() {
+        crit!(log, "{}", err);
+        for e in err.iter().skip(1) {
+            crit!(log, "caused by: {}", e);
+        }
         exit_with_pause();
     };
 
@@ -173,8 +192,11 @@ fn main() {
     info!(log, "Loading Configuation from disk");
     config.print(term_width);
 
-    if let Err(err) = grid::run(&config, &log) {
+    if let Err(ref err) = grid::run(&config, &log) {
         crit!(log, "{}", err);
+        for e in err.iter().skip(1) {
+            crit!(log, "caused by: {}", e);
+        }
         exit_with_pause();
     };
 

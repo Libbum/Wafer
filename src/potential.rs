@@ -1,15 +1,14 @@
 use ndarray::{Array3, Zip};
 use ndarray_parallel::prelude::*;
 use slog::Logger;
-use std::error;
 use std::f64::MAX;
 use std::f64::consts::PI;
-use std::fmt;
 
 use config::{Config, Index3, Grid, PotentialType};
 use input;
 use output;
 use grid;
+use errors::*;
 
 #[derive(Debug)]
 /// Holds the potential arrays for the current simulation.
@@ -20,67 +19,6 @@ pub struct Potentials {
     pub a: Array3<f64>,
     /// Ancillary array `b`
     pub b: Array3<f64>,
-}
-
-/// Error type for handling potentials.
-#[derive(Debug)]
-pub enum Error {
-    /// Some potential types cannot be called by many functions.
-    /// In particular the `from_script` and `from_file` types have limited
-    /// functionality here and must be handled separately.
-    NotAvailable,
-    /// Something happened with the script handling
-    Script,
-    /// From `input`.
-    Input(input::Error),
-    /// From `output`.
-    Output(output::Error),
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Error::NotAvailable => {
-                write!(f,
-                       "Not able to calculate potential value at an index for this potential type.")
-            }
-            Error::Script => write!(f, "Could not identify location of potential script."),
-            Error::Input(ref err) => err.fmt(f),
-            Error::Output(ref err) => err.fmt(f),
-        }
-    }
-}
-
-impl error::Error for Error {
-    fn description(&self) -> &str {
-        match *self {
-            Error::NotAvailable => "not available",
-            Error::Script => "no script file",
-            Error::Input(ref err) => err.description(),
-            Error::Output(ref err) => err.description(),
-        }
-    }
-
-    fn cause(&self) -> Option<&error::Error> {
-        match *self {
-            Error::NotAvailable |
-            Error::Script => None,
-            Error::Input(ref err) => Some(err),
-            Error::Output(ref err) => Some(err),
-        }
-    }
-}
-
-impl From<input::Error> for Error {
-    fn from(err: input::Error) -> Error {
-        Error::Input(err)
-    }
-}
-
-impl From<output::Error> for Error {
-    fn from(err: output::Error) -> Error {
-        Error::Output(err)
-    }
 }
 
 /// A public wrapper around `potential`. Where `potential` does the calculation for a
@@ -94,7 +32,7 @@ impl From<output::Error> for Error {
 ///
 /// A 3D array of potential values of the requested size.
 /// Or an error if called on the wrong potential type.
-pub fn generate(config: &Config) -> Result<Array3<f64>, Error> {
+pub fn generate(config: &Config) -> Result<Array3<f64>> {
     let num = &config.grid.size;
     let bb = config.central_difference.bb();
     let init_size: [usize; 3] = [num.x + bb, num.y + bb, num.z + bb];
@@ -122,7 +60,7 @@ pub fn generate(config: &Config) -> Result<Array3<f64>, Error> {
 /// # Returns
 ///
 /// A `Potentials` struct with the potential `v` and ancillary arrays `a` and `b`.
-pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials, Error> {
+pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials> {
     let mut minima: f64 = MAX;
     let bb = config.central_difference.bb();
     let v: Array3<f64> = match config.potential {
@@ -130,28 +68,23 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials, Error> {
             info!(log, "Loading potential from file");
             let num = &config.grid.size;
             let init_size: [usize; 3] = [num.x + bb, num.y + bb, num.z + bb];
-            match input::potential(init_size, bb, config.output.binary_files, log) {
-                Ok(pot) => Ok(pot),
-                // Have to explicity cast this result.
-                Err(err) => Err(Error::Input(err)),
-            }
+            let pot = input::potential(init_size, bb, config.output.binary_files, log).chain_err(|| ErrorKind::LoadPotential)?;
+            Ok(pot)
         }
         PotentialType::FromScript => {
             match config.script_location {
                 Some(ref file) => {
-                    match input::script_potential(file, &config.grid, bb, log) {
-                        Ok(pot) => Ok(pot),
-                        Err(err) => Err(Error::Input(err)),
-                    }
+                    let pot = input::script_potential(file, &config.grid, bb, log).chain_err(|| ErrorKind::LoadPotential)?;
+                    Ok(pot)
                 }
-                None => Err(Error::Script),
+                None => Err(ErrorKind::ScriptNotFound.into()),
             }
         }
         _ => {
             info!(log, "Calculating potential array");
             generate(config)
         }
-    }?; //Note the try here.
+    }?;
 
     let b = 1. / (1. + config.grid.dt * &v / 2.);
     let a = (1. - config.grid.dt * &v / 2.) * &b;
@@ -167,7 +100,7 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials, Error> {
     if config.output.save_potential {
         info!(log, "Saving potential to disk");
         let work = grid::get_work_area(&v, config.central_difference.ext());
-        output::potential(&work, &config.project_name, config.output.binary_files)?;
+        output::potential(&work, &config.project_name, config.output.binary_files).chain_err(|| ErrorKind::SavePotential)?;
     }
 
     Ok(Potentials { v: v, a: a, b: b })
@@ -185,7 +118,7 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials, Error> {
 ///
 /// A double with the potential value at the requested index, or an error if the function
 /// is called for an invalid potential type.
-fn potential(config: &Config, idx: &Index3) -> Result<f64, Error> {
+fn potential(config: &Config, idx: &Index3) -> Result<f64> {
     let num = &config.grid.size;
     match config.potential {
         PotentialType::NoPotential => Ok(0.0),
@@ -307,7 +240,7 @@ fn potential(config: &Config, idx: &Index3) -> Result<f64, Error> {
             }
         }
         PotentialType::FromFile |
-        PotentialType::FromScript => Err(Error::NotAvailable), //TODO: Script may not need to error.
+        PotentialType::FromScript => Err(ErrorKind::PotentialNotAvailable.into()), //TODO: Script may not need to error.
     }
 }
 
@@ -318,7 +251,7 @@ fn potential(config: &Config, idx: &Index3) -> Result<f64, Error> {
 /// Calculate binding energy offset (if any). Follows the `potential` input/output arguments.
 /// Used if calculation requires indexing. If not, call `potential_sub` instead. Currency only
 /// `FullCornell` requires this routine.
-pub fn potential_sub_idx(config: &Config, idx: &Index3) -> Result<f64, Error> {
+pub fn potential_sub_idx(config: &Config, idx: &Index3) -> Result<f64> {
     match config.potential {
         PotentialType::FullCornell => {
             let dz = idx.z as f64 - (config.grid.size.z as f64 + 1.) / 2.;
@@ -332,13 +265,13 @@ pub fn potential_sub_idx(config: &Config, idx: &Index3) -> Result<f64, Error> {
                      (1. + xi).powf(-0.29);
             Ok(config.sig / md + 4. * config.mass)
         }
-        _ => Err(Error::NotAvailable),
+        _ => Err(ErrorKind::PotentialNotAvailable.into()),
     }
 }
 
 /// Calculate binding energy offset (if any). Follows the `potential` input/output arguments.
 /// `FullCornell`, and subsequent potentials that require indexed values must call `potential_sub_idx`.
-pub fn potential_sub(config: &Config) -> Result<f64, Error> {
+pub fn potential_sub(config: &Config) -> Result<f64> {
     match config.potential {
         PotentialType::NoPotential |
         PotentialType::Cube |
@@ -353,7 +286,7 @@ pub fn potential_sub(config: &Config) -> Result<f64, Error> {
         PotentialType::FromFile => Ok(0.0),
         PotentialType::ElipticalCoulomb => Ok(1. / config.grid.dn),
         PotentialType::SimpleCornell => Ok(4.0 * config.mass),
-        PotentialType::FullCornell => Err(Error::NotAvailable),
+        PotentialType::FullCornell => Err(ErrorKind::PotentialNotAvailable.into()),
     }
 }
 
