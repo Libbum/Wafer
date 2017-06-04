@@ -271,10 +271,94 @@ fn eta(step: u64, diff_old: f64, diff_new: f64, config: &Config) -> Option<f64> 
 /// Previously each of the variables were calculated in their own function.
 /// The current implementation seems to be much faster though...
 fn compute_observables(config: &Config, potentials: &Potentials, phi: &Array3<f64>) -> Observables {
-    let phi_work = get_work_area(phi, config.central_difference.ext());
+    let ext = config.central_difference.ext();
+    let phi_work = get_work_area(phi, ext);
     let mut work = Array3::<f64>::zeros(phi_work.dim());
 
-    let energy = wfnc_energy(config, potentials, phi);
+    let energy = {
+        let v = get_work_area(&potentials.v, ext);
+
+        //TODO: We don't have any complex conjugation here.
+        match config.central_difference {
+            CentralDifference::ThreePoint => {
+                let denominator = 2. * config.grid.dn * config.grid.dn * config.mass;
+                Zip::indexed(&mut work)
+                    .and(v)
+                    .and(phi_work)
+                    .par_apply(|(i, j, k), work, &v, &w| {
+                        // Offset indexes as we are already in a slice
+                        let lx = i as isize + 1;
+                        let ly = j as isize + 1;
+                        let lz = k as isize + 1;
+                        let o = 1;
+                        // get a slice which gives us our matrix of central difference points
+                        let l = phi.slice(s![lx - 1..lx + 2, ly - 1..ly + 2, lz - 1..lz + 2]);
+                        // l can now be indexed with local offset `o` and modifiers
+                        *work = v * w * w -
+                                w *
+                                (l[[o + 1, o, o]] + l[[o - 1, o, o]] + l[[o, o + 1, o]] +
+                                 l[[o, o - 1, o]] + l[[o, o, o + 1]] +
+                                 l[[o, o, o - 1]] - 6. * w) / denominator;
+                    });
+            }
+            CentralDifference::FivePoint => {
+                let denominator = 24. * config.grid.dn * config.grid.dn * config.mass;
+                Zip::indexed(&mut work)
+                    .and(v)
+                    .and(phi_work)
+                    .par_apply(|(i, j, k), work, &v, &w| {
+                        // Offset indexes as we are already in a slice
+                        let lx = i as isize + 2;
+                        let ly = j as isize + 2;
+                        let lz = k as isize + 2;
+                        let o = 2;
+                        // get a slice which gives us our matrix of central difference points
+                        let l = phi.slice(s![lx - 2..lx + 3, ly - 2..ly + 3, lz - 2..lz + 3]);
+                        // l can now be indexed with local offset `o` and modifiers
+                        *work = v * w * w -
+                                w *
+                                (-l[[o + 2, o, o]] + 16. * l[[o + 1, o, o]] + 16. * l[[o - 1, o, o]] -
+                                 l[[o - 2, o, o]] - l[[o, o + 2, o]] +
+                                 16. * l[[o, o + 1, o]] +
+                                 16. * l[[o, o - 1, o]] -
+                                 l[[o, o - 2, o]] - l[[o, o, o + 2]] +
+                                 16. * l[[o, o, o + 1]] +
+                                 16. * l[[o, o, o - 1]] -
+                                 l[[o, o, o - 2]] - 90. * w) / denominator;
+                    });
+            }
+            CentralDifference::SevenPoint => {
+                let denominator = 360. * config.grid.dn * config.grid.dn * config.mass;
+                Zip::indexed(&mut work)
+                    .and(v)
+                    .and(phi_work)
+                    .par_apply(|(i, j, k), work, &v, &w| {
+                        // Offset indexes as we are already in a slice
+                        let lx = i as isize + 3;
+                        let ly = j as isize + 3;
+                        let lz = k as isize + 3;
+                        let o = 3;
+                        // get a slice which gives us our matrix of central difference points
+                        let l = phi.slice(s![lx - 3..lx + 4, ly - 3..ly + 4, lz - 3..lz + 4]);
+                        // l can now be indexed with local offset `o` and modifiers
+                        *work =
+                            v * w * w -
+                            w *
+                            (2. * l[[o + 3, o, o]] - 27. * l[[o + 2, o, o]] + 270. * l[[o + 1, o, o]] +
+                             270. * l[[o - 1, o, o]] - 27. * l[[o - 2, o, o]] +
+                             2. * l[[o - 3, o, o]] + 2. * l[[o, o + 3, o]] -
+                             27. * l[[o, o + 2, o]] + 270. * l[[o, o + 1, o]] +
+                             270. * l[[o, o - 1, o]] - 27. * l[[o, o - 2, o]] +
+                             2. * l[[o, o - 3, o]] + 2. * l[[o, o, o + 3]] -
+                             27. * l[[o, o, o + 2]] + 270. * l[[o, o, o + 1]] +
+                             270. * l[[o, o, o - 1]] - 27. * l[[o, o, o - 2]] +
+                             2. * l[[o, o, o - 3]] - 1470. * w) / denominator;
+                    });
+            }
+        }
+        // Sum result for total energy.
+        work.into_par_iter().sum()
+    };
     let norm2 = phi_work.into_par_iter().map(|&el| el * el).sum();
     let v_infinity = {
         if let PotentialType::FullCornell = config.potential {
@@ -330,102 +414,6 @@ fn get_norm_squared(w: &ArrayView3<f64>) -> f64 {
     w.into_par_iter().map(|&el| el * el).sum()
 }
 
-/// Gets energy of the corresponding wavefunction
-///
-/// # Arguments
-///
-/// * `config` - Reference to the configuration struct.
-/// * `potentials` - Reference to the Potentials struct.
-/// * `phi` - Current, active wavefunction array.
-/// * `temp_array` - A work array that can be written to, but is not used in output.
-fn wfnc_energy(config: &Config, potentials: &Potentials, phi: &Array3<f64>) -> f64 {
-    let ext = config.central_difference.ext();
-    let w = get_work_area(phi, ext);
-    let v = get_work_area(&potentials.v, ext);
-
-    let mut work = Array3::<f64>::zeros(w.dim());
-    //TODO: We don't have any complex conjugation here.
-    match config.central_difference {
-        CentralDifference::ThreePoint => {
-            let denominator = 2. * config.grid.dn * config.grid.dn * config.mass;
-            Zip::indexed(&mut work)
-                .and(v)
-                .and(w)
-                .par_apply(|(i, j, k), work, &v, &w| {
-                    // Offset indexes as we are already in a slice
-                    let lx = i as isize + 1;
-                    let ly = j as isize + 1;
-                    let lz = k as isize + 1;
-                    let o = 1;
-                    // get a slice which gives us our matrix of central difference points
-                    let l = phi.slice(s![lx - 1..lx + 2, ly - 1..ly + 2, lz - 1..lz + 2]);
-                    // l can now be indexed with local offset `o` and modifiers
-                    *work = v * w * w -
-                            w *
-                            (l[[o + 1, o, o]] + l[[o - 1, o, o]] + l[[o, o + 1, o]] +
-                             l[[o, o - 1, o]] + l[[o, o, o + 1]] +
-                             l[[o, o, o - 1]] - 6. * w) / denominator;
-                });
-        }
-        CentralDifference::FivePoint => {
-            let denominator = 24. * config.grid.dn * config.grid.dn * config.mass;
-            Zip::indexed(&mut work)
-                .and(v)
-                .and(w)
-                .par_apply(|(i, j, k), work, &v, &w| {
-                    // Offset indexes as we are already in a slice
-                    let lx = i as isize + 2;
-                    let ly = j as isize + 2;
-                    let lz = k as isize + 2;
-                    let o = 2;
-                    // get a slice which gives us our matrix of central difference points
-                    let l = phi.slice(s![lx - 2..lx + 3, ly - 2..ly + 3, lz - 2..lz + 3]);
-                    // l can now be indexed with local offset `o` and modifiers
-                    *work = v * w * w -
-                            w *
-                            (-l[[o + 2, o, o]] + 16. * l[[o + 1, o, o]] + 16. * l[[o - 1, o, o]] -
-                             l[[o - 2, o, o]] - l[[o, o + 2, o]] +
-                             16. * l[[o, o + 1, o]] +
-                             16. * l[[o, o - 1, o]] -
-                             l[[o, o - 2, o]] - l[[o, o, o + 2]] +
-                             16. * l[[o, o, o + 1]] +
-                             16. * l[[o, o, o - 1]] -
-                             l[[o, o, o - 2]] - 90. * w) / denominator;
-                });
-        }
-        CentralDifference::SevenPoint => {
-            let denominator = 360. * config.grid.dn * config.grid.dn * config.mass;
-            Zip::indexed(&mut work)
-                .and(v)
-                .and(w)
-                .par_apply(|(i, j, k), work, &v, &w| {
-                    // Offset indexes as we are already in a slice
-                    let lx = i as isize + 3;
-                    let ly = j as isize + 3;
-                    let lz = k as isize + 3;
-                    let o = 3;
-                    // get a slice which gives us our matrix of central difference points
-                    let l = phi.slice(s![lx - 3..lx + 4, ly - 3..ly + 4, lz - 3..lz + 4]);
-                    // l can now be indexed with local offset `o` and modifiers
-                    *work =
-                        v * w * w -
-                        w *
-                        (2. * l[[o + 3, o, o]] - 27. * l[[o + 2, o, o]] + 270. * l[[o + 1, o, o]] +
-                         270. * l[[o - 1, o, o]] - 27. * l[[o - 2, o, o]] +
-                         2. * l[[o - 3, o, o]] + 2. * l[[o, o + 3, o]] -
-                         27. * l[[o, o + 2, o]] + 270. * l[[o, o + 1, o]] +
-                         270. * l[[o, o - 1, o]] - 27. * l[[o, o - 2, o]] +
-                         2. * l[[o, o - 3, o]] + 2. * l[[o, o, o + 3]] -
-                         27. * l[[o, o, o + 2]] + 270. * l[[o, o, o + 1]] +
-                         270. * l[[o, o, o - 1]] - 27. * l[[o, o, o - 2]] +
-                         2. * l[[o, o, o - 3]] - 1470. * w) / denominator;
-                });
-        }
-    }
-    // Sum result for total energy.
-    work.into_par_iter().sum()
-}
-
 /// Normalisation of the wavefunction
 ///
 /// # Arguments
@@ -447,7 +435,7 @@ fn normalise_wavefunction(w: &mut Array3<f64>, norm2: f64) {
 fn orthogonalise_wavefunction(wnum: u8, w: &mut Array3<f64>, w_store: &[Array3<f64>]) {
 //    let mut overlap = Array3::<f64>::zeros(w.dim()); //We can create this once, but overwrite it each time.
     for lower in w_store.iter().take(wnum as usize) {
-        let overlap = (lower * &w.view()).scalar_sum();
+        let overlap: f64 = (lower * &w.view()).into_par_iter().sum();
   //      Zip::from(&mut overlap)
   //          .and(lower)
   //          .and(w.view())
