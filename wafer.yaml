@@ -10,7 +10,7 @@
 # Note: the YAML markup requires a space between a '#' and the next character to be considered valid.
 
 # A string value to call your project for identification.
-project_name: bench
+project_name: binary
 
 # Number of spatial grid points, step sizes in space and time.
 grid:
@@ -102,5 +102,5 @@ output:
     # snap_update: 10000 # OPTIONAL: Steps befode dumping all variables to file, i.e. A 'snapshot'.
     binary_files: false # Set true to save output in binary format (faster, not human readable).
     save_wavefns: true # Dump full 3D wavefunctions to disk once calculated.
-    save_potential: false # Save potential at beginning of run.
+    save_potential: true # Save potential at beginning of run.
 

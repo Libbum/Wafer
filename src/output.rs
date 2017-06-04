@@ -113,14 +113,11 @@ fn potential_plain(v: &ArrayView3<f64>, filename: &str) -> Result<()> {
 /// *`v` - The potential to output
 /// * `filename` - file / directory to save to.
 fn potential_binary(v: &ArrayView3<f64>, filename: &str) -> Result<()> {
-    //NOTE: The code below should work, but we must wait for ndarray to have serde 1.0 compatability.
-    //For now, we just output to plain instead.
-    potential_plain(v, filename)
-    //let mut output = Vec::new();
-    //v.serialize(&mut rmps::Serializer::new(&mut output))?;
-    //let mut buffer = File::create(filename)?;
-    //buffer.write_all(&output)?;
-    //Ok(())
+    let mut output = Vec::new();
+    v.serialize(&mut rmps::Serializer::new(&mut output)).chain_err(|| ErrorKind::Serialize)?;
+    let mut buffer = File::create(filename).chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
+    buffer.write_all(&output).chain_err(|| ErrorKind::WriteToFile(filename.to_string()))?;
+    Ok(())
 }
 
 /// Saves a wavefunction to disk, and controls what format (plain text or binary)
@@ -158,14 +155,11 @@ pub fn wavefunction(phi: &ArrayView3<f64>,
 /// * `phi` - The wavefunction to output. This should be a view called from `grid::get_work_area()`.
 /// * `filename` - A string indicting the location of the output.
 fn wavefunction_binary(phi: &ArrayView3<f64>, filename: &str) -> Result<()> {
-    //NOTE: The code below should work, but we must wait for ndarray to have serde 1.0 compatability.
-    //For now, we just output to plain instead.
-    wavefunction_plain(phi, filename)
-    //let mut output = Vec::new();
-    //phi.serialize(&mut rmps::Serializer::new(&mut output))?;
-    //let mut buffer = File::create(filename)?;
-    //buffer.write_all(&output)?;
-    //Ok(())
+    let mut output = Vec::new();
+    phi.serialize(&mut rmps::Serializer::new(&mut output)).chain_err(|| ErrorKind::Serialize)?;
+    let mut buffer = File::create(filename).chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
+    buffer.write_all(&output).chain_err(|| ErrorKind::WriteToFile(filename.to_string()))?;
+    Ok(())
 }
 
 /// Outputs a wavefunction to disk in a plain, csv format.
@@ -190,6 +184,20 @@ fn wavefunction_plain(phi: &ArrayView3<f64>, filename: &str) -> Result<()> {
             .chain_err(|| ErrorKind::Serialize)?;
     }
     buffer.flush().chain_err(|| ErrorKind::Flush)?;
+    Ok(())
+}
+
+/// Outputs a wavefunction to disk in json format.
+///
+/// # Arguments
+///
+/// * `phi` - The wavefunction to output. This should be a view called from `grid::get_work_area()`.
+/// * `filename` - A string indicting the location of the output.
+fn wavefunction_json(phi: &ArrayView3<f64>, filename: &str) -> Result<()> {
+    let buffer = File::create(&filename)
+        .chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
+    serde_json::to_writer_pretty(buffer, phi)
+        .chain_err(|| ErrorKind::SaveObservables)?;
     Ok(())
 }
 
