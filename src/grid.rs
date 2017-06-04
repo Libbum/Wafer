@@ -433,17 +433,19 @@ fn normalise_wavefunction(w: &mut Array3<f64>, norm2: f64) {
 /// * `w` - Current, active wavefunction array.
 /// * `w_store` - Vector of currently converged wavefunctions.
 fn orthogonalise_wavefunction(wnum: u8, w: &mut Array3<f64>, w_store: &[Array3<f64>]) {
-//    let mut overlap = Array3::<f64>::zeros(w.dim()); //We can create this once, but overwrite it each time.
     for lower in w_store.iter().take(wnum as usize) {
-        let overlap: f64 = (lower * &w.view()).into_par_iter().sum();
-  //      Zip::from(&mut overlap)
-  //          .and(lower)
-  //          .and(w.view())
-  //          .par_apply(|overlap, &lower, &w| *overlap = lower * w);
-  //      let overlap_sum = overlap.scalar_sum();
+        // This MUST be created inside the loop or else we throw nans.
+        // I've tried a number of ways to treat this method as it's
+        // pretty expensive. Here is the best one I've identified.
+        let mut overlap = Array3::<f64>::zeros(w.dim());
+        Zip::from(&mut overlap)
+            .and(lower)
+            .and(w.view())
+            .par_apply(|overlap, &lower, &w| *overlap = lower * w);
+        let overlap_sum: f64 = overlap.into_par_iter().sum();
         Zip::from(w.view_mut())
             .and(lower)
-            .par_apply(|w, &lower| *w -= lower * overlap);
+            .par_apply(|w, &lower| *w -= lower * overlap_sum);
     }
 }
 
@@ -492,7 +494,6 @@ pub fn get_mut_work_area(arr: &mut Array3<f64>, ext: usize) -> ArrayViewMut3<f64
 /// * `wnum` - Current exited state value.
 /// * `config` - Reference to the configuration struct.
 /// * `phi` - Current, active wavefunction array.
-/// * `temp_array` - A work array that can be written to, but is not used in output.
 /// * `w_store` - Vector of currently converged wavefunctions.
 fn evolve(wnum: u8,
           config: &Config,
