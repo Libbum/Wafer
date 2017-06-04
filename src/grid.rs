@@ -253,6 +253,13 @@ fn eta(step: u64, diff_old: f64, diff_new: f64, config: &Config) -> Option<f64> 
 }
 
 /// Computes observable values of the system, for example the energy
+///
+/// # Arguments
+///
+/// * `config` - Reference to the configuration struct.
+/// * `potentials` - Reference to the Potentials struct.
+/// * `phi` - Current, active wavefunction array.
+/// * `temp_array` - A work array that can be written to, but is not used in output.
 fn compute_observables(config: &Config, potentials: &Potentials, phi: &Array3<f64>) -> Observables {
     let energy = wfnc_energy(config, potentials, phi);
     let work = get_work_area(phi, config.central_difference.ext());
@@ -268,13 +275,25 @@ fn compute_observables(config: &Config, potentials: &Potentials, phi: &Array3<f6
     }
 }
 
-/// Normalisation of wavefunction
+/// Calculate the normalisation condition of a wavefunction.
+/// The square root portion of this calculation happens later as we sometimes require
+/// just this condition.
+///
+/// # Arguments
+///
+/// * `w` - Current wavefunction array.
 fn get_norm_squared(w: &ArrayView3<f64>) -> f64 {
     //NOTE: No complex conjugation due to all real input for now
     w.into_par_iter().map(|&el| el * el).sum()
 }
 
-/// Get v infinity
+/// Get the potential offset at infinity. This is used to estimate the binding energy.
+///
+/// # Arguments
+///
+/// * `w` - Current wavefunction array.
+/// * `work` - A work array that can be written to, but is not used in output.
+/// * `config` - Reference to the configuration struct.
 fn get_v_infinity_expectation_value(w: &ArrayView3<f64>, config: &Config) -> f64 {
     //NOTE: No complex conjugation due to all real input for now
     let mut work = Array3::<f64>::zeros(w.dim());
@@ -304,7 +323,13 @@ fn get_v_infinity_expectation_value(w: &ArrayView3<f64>, config: &Config) -> f64
     work.scalar_sum()
 }
 
-/// Get r2
+/// Get r²
+///
+/// # Arguments
+///
+/// * `w` - Current wavefunction array.
+/// * `work` - A work array that can be written to, but is not used in output.
+/// * `grid` - Reference to the grid portion of the configuration struct.
 fn get_r_squared_expectation_value(w: &ArrayView3<f64>, grid: &Grid) -> f64 {
     //NOTE: No complex conjugation due to all real input for now
     let mut work = Array3::<f64>::zeros(w.dim());
@@ -319,6 +344,13 @@ fn get_r_squared_expectation_value(w: &ArrayView3<f64>, grid: &Grid) -> f64 {
 }
 
 /// Gets energy of the corresponding wavefunction
+///
+/// # Arguments
+///
+/// * `config` - Reference to the configuration struct.
+/// * `potentials` - Reference to the Potentials struct.
+/// * `phi` - Current, active wavefunction array.
+/// * `temp_array` - A work array that can be written to, but is not used in output.
 fn wfnc_energy(config: &Config, potentials: &Potentials, phi: &Array3<f64>) -> f64 {
     let ext = config.central_difference.ext();
     let w = get_work_area(phi, ext);
@@ -408,12 +440,23 @@ fn wfnc_energy(config: &Config, potentials: &Potentials, phi: &Array3<f64>) -> f
 }
 
 /// Normalisation of the wavefunction
+///
+/// # Arguments
+///
+/// * `w` - Wavefunction to normalise.
+/// * `norm2` - The squared normalisation observable.
 fn normalise_wavefunction(w: &mut Array3<f64>, norm2: f64) {
     let norm = norm2.sqrt();
     w.par_map_inplace(|el| *el /= norm);
 }
 
 /// Uses Gram Schmidt orthogonalisation to identify the next excited state's wavefunction, even if it's degenerate
+///
+/// # Arguments
+///
+/// * `wnum` - Current exited state value.
+/// * `w` - Current, active wavefunction array.
+/// * `w_store` - Vector of currently converged wavefunctions.
 fn orthogonalise_wavefunction(wnum: u8, w: &mut Array3<f64>, w_store: &[Array3<f64>]) {
     let mut overlap = Array3::<f64>::zeros(w.dim()); //We can create this once, but overwrite it each time.
     for lower in w_store.iter().take(wnum as usize) {
@@ -467,6 +510,14 @@ pub fn get_mut_work_area(arr: &mut Array3<f64>, ext: usize) -> ArrayViewMut3<f64
 }
 
 /// Evolves the solution a number of `steps`
+///
+/// # Arguments
+///
+/// * `wnum` - Current exited state value.
+/// * `config` - Reference to the configuration struct.
+/// * `phi` - Current, active wavefunction array.
+/// * `temp_array` - A work array that can be written to, but is not used in output.
+/// * `w_store` - Vector of currently converged wavefunctions.
 fn evolve(wnum: u8,
           config: &Config,
           potentials: &Potentials,

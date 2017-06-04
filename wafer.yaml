@@ -10,7 +10,7 @@
 # Note: the YAML markup requires a space between a '#' and the next character to be considered valid.
 
 # A string value to call your project for identification.
-project_name: develop
+project_name: bench
 
 # Number of spatial grid points, step sizes in space and time.
 grid:
@@ -38,7 +38,7 @@ central_difference: ThreePoint
 wavenum: 0
 
 # Maximum excited state to calculate
-wavemax: 1
+wavemax: 2
 
 # Set true to read in data from a cluster file.
 clustrun: false
@@ -83,7 +83,7 @@ mass: 15.9994
 #   Couloumb: Coulomb-like.
 #   Constant: A constant value of 0.1.
 #   Boolean: A Boolean test grid, good for benchmarks.
-init_condition: Gaussian
+init_condition: Boolean
 
 # Standard Deviation of initial wavefunction noise.
 sig: 1.0
@@ -102,5 +102,5 @@ output:
     # snap_update: 10000 # OPTIONAL: Steps befode dumping all variables to file, i.e. A 'snapshot'.
     binary_files: false # Set true to save output in binary format (faster, not human readable).
     save_wavefns: true # Dump full 3D wavefunctions to disk once calculated.
-    save_potential: true # Save potential at beginning of run.
+    save_potential: false # Save potential at beginning of run.
 
