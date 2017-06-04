@@ -4,7 +4,7 @@ use ndarray_parallel::prelude::*;
 use slog::Logger;
 use std::f64::MAX;
 use config;
-use config::{Config, CentralDifference, Grid, Index3, InitialCondition, PotentialType};
+use config::{Config, CentralDifference, Index3, InitialCondition, PotentialType};
 use potential;
 use potential::Potentials;
 use input;
@@ -259,13 +259,56 @@ fn eta(step: u64, diff_old: f64, diff_new: f64, config: &Config) -> Option<f64> 
 /// * `config` - Reference to the configuration struct.
 /// * `potentials` - Reference to the Potentials struct.
 /// * `phi` - Current, active wavefunction array.
-/// * `temp_array` - A work array that can be written to, but is not used in output.
+///
+/// # Returns
+///
+/// A struct containing the energy and normalisation condition of the system,
+/// as well as the potential energy value at infinity (used for the binding energy calulation)
+/// and the r² expectation value.
+///
+/// # Remarks
+///
+/// Previously each of the variables were calculated in their own function.
+/// The current implementation seems to be much faster though...
 fn compute_observables(config: &Config, potentials: &Potentials, phi: &Array3<f64>) -> Observables {
+    let phi_work = get_work_area(phi, config.central_difference.ext());
+    let mut work = Array3::<f64>::zeros(phi_work.dim());
+
     let energy = wfnc_energy(config, potentials, phi);
-    let work = get_work_area(phi, config.central_difference.ext());
-    let norm2 = get_norm_squared(&work);
-    let v_infinity = get_v_infinity_expectation_value(&work, config);
-    let r2 = get_r_squared_expectation_value(&work, &config.grid);
+    let norm2 = phi_work.into_par_iter().map(|&el| el * el).sum();
+    let v_infinity = {
+        if let PotentialType::FullCornell = config.potential {
+            Zip::indexed(&mut work)
+                .and(phi_work)
+                .par_apply(|(i, j, k), work, &w| {
+                               let idx = Index3 { x: i, y: j, z: k };
+                               let potsub = match potential::potential_sub_idx(config, &idx) {
+                                   Ok(p) => p,
+                                   Err(err) => panic!("Calling invalid potential_sub routine: {}", err),
+                               };
+                               *work = w * w * potsub;
+                           });
+        } else {
+            let potsub = match potential::potential_sub(config) {
+                Ok(p) => p,
+                Err(err) => panic!("Calling invalid potential_sub routine: {}", err),
+            };
+            Zip::from(&mut work)
+                .and(phi_work)
+                .par_apply(|work, &w| { *work = w * w * potsub; });
+        }
+        work.into_par_iter().sum()
+    };
+    let r2 = {
+        Zip::indexed(&mut work)
+            .and(phi_work)
+            .par_apply(|(i, j, k), work, &w| {
+                           let idx = Index3 { x: i, y: j, z: k };
+                           let r2 = potential::calculate_r2(&idx, &config.grid);
+                           *work = w * w * r2;
+                       });
+        work.into_par_iter().sum()
+    };
 
     Observables {
         energy: energy,
@@ -285,62 +328,6 @@ fn compute_observables(config: &Config, potentials: &Potentials, phi: &Array3<f6
 fn get_norm_squared(w: &ArrayView3<f64>) -> f64 {
     //NOTE: No complex conjugation due to all real input for now
     w.into_par_iter().map(|&el| el * el).sum()
-}
-
-/// Get the potential offset at infinity. This is used to estimate the binding energy.
-///
-/// # Arguments
-///
-/// * `w` - Current wavefunction array.
-/// * `work` - A work array that can be written to, but is not used in output.
-/// * `config` - Reference to the configuration struct.
-fn get_v_infinity_expectation_value(w: &ArrayView3<f64>, config: &Config) -> f64 {
-    //NOTE: No complex conjugation due to all real input for now
-    let mut work = Array3::<f64>::zeros(w.dim());
-    //NOTE: I'm unsure if we really need the errors here. We already match types.
-    //It may be overkill. If so, then this is just added complexity. Consider removing them.
-    //The non indexed version could be sent up the chain too.
-    if let PotentialType::FullCornell = config.potential {
-        Zip::indexed(&mut work)
-            .and(w)
-            .par_apply(|(i, j, k), work, &w| {
-                           let idx = Index3 { x: i, y: j, z: k };
-                           let potsub = match potential::potential_sub_idx(config, &idx) {
-                               Ok(p) => p,
-                               Err(err) => panic!("Calling invalid potential_sub routine: {}", err),
-                           };
-                           *work = w * w * potsub;
-                       });
-    } else {
-        let potsub = match potential::potential_sub(config) {
-            Ok(p) => p,
-            Err(err) => panic!("Calling invalid potential_sub routine: {}", err),
-        };
-        Zip::from(&mut work)
-            .and(w)
-            .par_apply(|work, &w| { *work = w * w * potsub; });
-    }
-    work.scalar_sum()
-}
-
-/// Get r²
-///
-/// # Arguments
-///
-/// * `w` - Current wavefunction array.
-/// * `work` - A work array that can be written to, but is not used in output.
-/// * `grid` - Reference to the grid portion of the configuration struct.
-fn get_r_squared_expectation_value(w: &ArrayView3<f64>, grid: &Grid) -> f64 {
-    //NOTE: No complex conjugation due to all real input for now
-    let mut work = Array3::<f64>::zeros(w.dim());
-    Zip::indexed(&mut work)
-        .and(w)
-        .par_apply(|(i, j, k), work, &w| {
-                       let idx = Index3 { x: i, y: j, z: k };
-                       let r2 = potential::calculate_r2(&idx, grid);
-                       *work = w * w * r2;
-                   });
-    work.scalar_sum()
 }
 
 /// Gets energy of the corresponding wavefunction
@@ -436,7 +423,7 @@ fn wfnc_energy(config: &Config, potentials: &Potentials, phi: &Array3<f64>) -> f
         }
     }
     // Sum result for total energy.
-    work.scalar_sum()
+    work.into_par_iter().sum()
 }
 
 /// Normalisation of the wavefunction
@@ -458,16 +445,17 @@ fn normalise_wavefunction(w: &mut Array3<f64>, norm2: f64) {
 /// * `w` - Current, active wavefunction array.
 /// * `w_store` - Vector of currently converged wavefunctions.
 fn orthogonalise_wavefunction(wnum: u8, w: &mut Array3<f64>, w_store: &[Array3<f64>]) {
-    let mut overlap = Array3::<f64>::zeros(w.dim()); //We can create this once, but overwrite it each time.
+//    let mut overlap = Array3::<f64>::zeros(w.dim()); //We can create this once, but overwrite it each time.
     for lower in w_store.iter().take(wnum as usize) {
-        Zip::from(&mut overlap)
-            .and(lower)
-            .and(w.view())
-            .par_apply(|overlap, &lower, &w| *overlap = lower * w);
-        let overlap_sum = overlap.scalar_sum();
+        let overlap = (lower * &w.view()).scalar_sum();
+  //      Zip::from(&mut overlap)
+  //          .and(lower)
+  //          .and(w.view())
+  //          .par_apply(|overlap, &lower, &w| *overlap = lower * w);
+  //      let overlap_sum = overlap.scalar_sum();
         Zip::from(w.view_mut())
             .and(lower)
-            .par_apply(|w, &lower| *w -= lower * overlap_sum);
+            .par_apply(|w, &lower| *w -= lower * overlap);
     }
 }
 
@@ -530,14 +518,14 @@ fn evolve(wnum: u8,
     work_dims.0 -= bb;
     work_dims.1 -= bb;
     work_dims.2 -= bb;
+    let pa = get_work_area(&potentials.a, ext);
+    let pb = get_work_area(&potentials.b, ext);
+    let mut work = Array3::<f64>::zeros(work_dims);
     let mut steps = 0;
     loop {
 
-        let mut work = Array3::<f64>::zeros(work_dims);
         {
             let w = get_work_area(phi, ext);
-            let pa = get_work_area(&potentials.a, ext);
-            let pb = get_work_area(&potentials.b, ext);
 
 
             //TODO: We don't have any complex conjugation here.
@@ -644,8 +632,8 @@ fn evolve(wnum: u8,
         }
         if wnum > 0 {
             let norm2 = {
-                let work = get_work_area(phi, ext);
-                get_norm_squared(&work)
+                let phi_work = get_work_area(phi, ext);
+                get_norm_squared(&phi_work)
             };
             normalise_wavefunction(phi, norm2);
             orthogonalise_wavefunction(wnum, phi, w_store);

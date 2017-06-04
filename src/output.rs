@@ -322,7 +322,7 @@ pub fn finalise_measurement(observables: &grid::Observables,
     let output = ObservablesOutput {
         state: wnum,
         energy: observables.energy / observables.norm2,
-        binding_energy: observables.energy - observables.v_infinity / observables.norm2,
+        binding_energy: (observables.energy - observables.v_infinity) / observables.norm2,
         r: r_norm,
         l_r: numx / r_norm,
     };
