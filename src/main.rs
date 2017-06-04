@@ -201,27 +201,23 @@ fn main() {
 
     let elapsed = start_time.elapsed();
     let time_taken = (elapsed.as_secs() as f64) + (elapsed.subsec_nanos() as f64 / 1000_000_000.0);
-    match time_taken {
-        0.0...60.0 => {
-            println!("Simulation complete. Elapsed time: {:.3} seconds.",
+    if time_taken < 60.0 {
+        println!("Simulation complete. Elapsed time: {:.3} seconds.",
                      time_taken)
-        }
-        60.0...3600.0 => {
-            let minutes = (time_taken / 60.).floor();
-            let seconds = time_taken - 60. * minutes;
-            println!("Simulation complete. Elapsed time: {} minutes, {:.3} seconds.",
-                     minutes,
-                     seconds);
-        }
-        _ => {
-            let hours = (time_taken / 3600.).floor();
-            let minutes = ((time_taken - 3600. * hours) / 60.).floor();
-            let seconds = time_taken - 3600. * hours - 60. * minutes;
-            println!("Simulation complete. Elapsed time: {} hours, {} minutes, {:.3} seconds.",
-                     hours,
-                     minutes,
-                     seconds);
-        }
+    } else if time_taken >= 60.0 && time_taken < 3600.0 {
+        let minutes = (time_taken / 60.).floor();
+        let seconds = time_taken - 60. * minutes;
+        println!("Simulation complete. Elapsed time: {} minutes, {:.3} seconds.",
+                 minutes,
+                 seconds);
+    } else {
+        let hours = (time_taken / 3600.).floor();
+        let minutes = ((time_taken - 3600. * hours) / 60.).floor();
+        let seconds = time_taken - 3600. * hours - 60. * minutes;
+        println!("Simulation complete. Elapsed time: {} hours, {} minutes, {:.3} seconds.",
+                 hours,
+                 minutes,
+                 seconds);
     }
     info!(log, "Simulation completed");
 }
