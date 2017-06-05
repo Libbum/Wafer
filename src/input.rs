@@ -1,13 +1,16 @@
 use csv;
 use slog::Logger;
-use std::fs::create_dir;
+use std::fs::{create_dir, File};
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::io::prelude::*;
+use serde_json;
+use serde_yaml;
+use rmps;
 use ndarray::{Array3, Zip};
 use ndarray_parallel::prelude::*;
 use grid;
-use config::{Config, Grid};
+use config::{Config, Grid, FileType};
 use errors::*;
 
 #[derive(Debug,Deserialize)]
@@ -23,62 +26,109 @@ struct PlainRecord {
     data: f64,
 }
 
+/// Checks if a potential file exists in the input directory
+///
+/// #Arguments
+///
+/// * `extension` - File extension
+fn check_potential_file(extension: &str) -> Option<String> {
+    let file_path = format!("./input/potential.{}", extension);
+    if Path::new(&file_path).exists() {
+        Some(file_path)
+    } else {
+        None
+    }
+}
+
 /// Loads potential file from disk. Handles cases where multiple files exist.
 ///
 /// # Arguments
 ///
 /// * `target_size` - Size of the requested work area for this simulation. If the file on disk does
 /// not meet these dimensions, it will be scaled.
-/// * `binary` - Configuration flag concerning binary /  plain file output. Will be used as an arbitrator
+/// * `file_type` - What type of file format to use in the output. Will be used as an arbitrator
 /// when multiple files are detected.
 /// * `log` - Reference to the system logger.
 pub fn potential(target_size: [usize; 3],
                  bb: usize,
-                 binary: bool,
+                 file_type: &FileType,
                  log: &Logger)
                  -> Result<Array3<f64>> {
-    let plain_path = "./input/potential.csv";
-    let binary_path = "./input/potential.mpk";
-    let plain_file = if Path::new(&plain_path).exists() {
-        Some(plain_path.to_string())
-    } else {
-        None
-    };
-    let binary_file = if Path::new(&binary_path).exists() {
-        Some(binary_path.to_string())
-    } else {
-        None
-    };
+    let mpk_file = check_potential_file("mpk");
+    let csv_file = check_potential_file("csv");
+    let json_file = check_potential_file("json");
+    let yaml_file = check_potential_file("yaml");
 
-    if plain_file.is_some() && binary_file.is_some() {
+    let file_count = {
+        let files = [&mpk_file, &csv_file, &json_file, &yaml_file];
+        files.iter().filter(|x| x.is_some()).count()
+    };
+    if  file_count > 1 {
         warn!(log,
-              "Multiple potential files found in input directory. Chosing 'potential.{}' based on configuration settings.",
-              if binary { "mpk" } else { "csv" });
-        if binary {
-            potential_plain(plain_file.unwrap(), target_size, bb)
-        } else {
-            potential_binary(binary_file.unwrap(), target_size, bb)
+              "Multiple potential files found in input directory. Chosing '{}' based on configuration settings.",
+              file_type);
+        match *file_type {
+            FileType::Messagepack => read_mpk(mpk_file.unwrap(), target_size, bb),
+            FileType::Csv => read_csv(csv_file.unwrap(), target_size, bb),
+            FileType::Json => read_json(json_file.unwrap(), target_size, bb),
+            FileType::Yaml => read_yaml(yaml_file.unwrap(), target_size, bb),
         }
-    } else if plain_file.is_some() {
-        potential_plain(plain_file.unwrap(), target_size, bb)
-    } else if binary_file.is_some() {
-        potential_binary(binary_file.unwrap(), target_size, bb)
+    } else if mpk_file.is_some() {
+        read_mpk(mpk_file.unwrap(), target_size, bb)
+    } else if csv_file.is_some() {
+        read_csv(csv_file.unwrap(), target_size, bb)
+    } else if json_file.is_some() {
+        read_json(json_file.unwrap(), target_size, bb)
+    } else if yaml_file.is_some() {
+        read_yaml(yaml_file.unwrap(), target_size, bb)
     } else {
         Err(ErrorKind::FileNotFound("input/potential.*".to_string()).into())
     }
 }
 
-/// Loads a potential from a csv file on disk.
-fn potential_plain(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<f64>> {
-    //No need for anything more here, just call the general parser.
-    parse_csv_to_array3(file, target_size, bb)
+/// Loads an array from a mpk file on disk.
+fn read_mpk(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<f64>> {
+    let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file))?;
+    let data: Array3<f64> = rmps::decode::from_read(reader).chain_err(|| ErrorKind::Deserialize)?;
+
+    let mut complete = Array3::<f64>::zeros(target_size);
+    {
+        //TODO: Error checking and resampling
+        let mut work = grid::get_mut_work_area(&mut complete, bb / 2); //NOTE: This is a bit of a hack. But it works.
+        // Assume Input is the same size, copy down.
+        Zip::from(&mut work).and(data.view()).par_apply(|work, &data| *work = data);
+    }
+    Ok(complete)
 }
 
-/// Loads a potential from a mpk file on disk.
-fn potential_binary(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<f64>> {
-    //TODO: Not implemented yet, for now call plain
-    let _none = file;
-    potential_plain("./input/potential.csv".to_string(), target_size, bb)
+/// Loads an array from a json file on disk.
+fn read_json(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<f64>> {
+    let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file))?;
+    let data: Array3<f64> = serde_json::from_reader(reader).chain_err(|| ErrorKind::Deserialize)?;
+
+    let mut complete = Array3::<f64>::zeros(target_size);
+    {
+        //TODO: Error checking and resampling
+        let mut work = grid::get_mut_work_area(&mut complete, bb / 2); //NOTE: This is a bit of a hack. But it works.
+        // Assume Input is the same size, copy down.
+        Zip::from(&mut work).and(data.view()).par_apply(|work, &data| *work = data);
+    }
+    Ok(complete)
+}
+
+/// Loads an array from a yaml file on disk.
+fn read_yaml(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<f64>> {
+    let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file))?;
+    let data: Array3<f64> = serde_yaml::from_reader(reader).chain_err(|| ErrorKind::Deserialize)?;
+
+    let mut complete = Array3::<f64>::zeros(target_size);
+    {
+        //TODO: Error checking and resampling
+        let mut work = grid::get_mut_work_area(&mut complete, bb / 2); //NOTE: This is a bit of a hack. But it works.
+        // Assume Input is the same size, copy down.
+        Zip::from(&mut work).and(data.view()).par_apply(|work, &data| *work = data);
+    }
+    Ok(complete)
 }
 
 /// Loads potential file from a script.
@@ -170,7 +220,7 @@ pub fn load_wavefunctions(config: &Config,
     let init_size: [usize; 3] = [num.x + bb, num.y + bb, num.z + bb];
     // Load required wavefunctions. If the current state resides on disk as well, we load that later.
     for wnum in 0..config.wavenum {
-        let wfn = wavefunction(wnum, init_size, bb, config.output.binary_files, log);
+        let wfn = wavefunction(wnum, init_size, bb, &config.output.file_type, log);
         match wfn {
             Ok(w) => w_store.push(w),
             Err(_) => return Err(ErrorKind::LoadWavefunction(wnum).into()),
@@ -180,6 +230,24 @@ pub fn load_wavefunctions(config: &Config,
     Ok(())
 }
 
+/// Checks if a wavefunction file exists in the input directory
+///
+/// #Arguments
+///
+/// * `wnum` - Excited state level of the wavefunction.
+/// * `extension` - File extension
+fn check_wavefunction_file(wnum: u8, extension: &str) -> Option<String> {
+    let file_path = format!("./input/wavefunction_{}.{}", wnum, extension);
+    let file_path_partial = format!("./input/wavefunction_{}_partial.{}", wnum, extension);
+    if Path::new(&file_path).exists() {
+        Some(file_path)
+    } else if Path::new(&file_path_partial).exists() {
+        Some(file_path_partial)
+    } else {
+        None
+    }
+}
+
 /// Loads wavefunction file from disk. Handles cases where multiple files exist.
 ///
 /// # Arguments
@@ -187,66 +255,48 @@ pub fn load_wavefunctions(config: &Config,
 /// * `wnum` - Excited state level of the wavefunction to load.
 /// * `target_size` - Size of the requested work area for this simulation. If the file on disk does
 /// not meet these dimensions, it will be scaled.
-/// * `binary` - Configuration flag concerning binary /  plain file output. Will be used as an arbitrator
+/// * `file_type` - Configuration flag concerning output file types. Will be used as an arbitrator
 /// when multiple files are detected.
 /// * `log` - Reference to the system logger.
 pub fn wavefunction(wnum: u8,
                     target_size: [usize; 3],
                     bb: usize,
-                    binary: bool,
+                    file_type: &FileType,
                     log: &Logger)
                     -> Result<Array3<f64>> {
-    let plain_path = format!("./input/wavefunction_{}.csv", wnum);
-    let plain_path_partial = format!("./input/wavefunction_{}_partial.csv", wnum);
-    let plain_file = if Path::new(&plain_path).exists() {
-        Some(plain_path)
-    } else if Path::new(&plain_path_partial).exists() {
-        Some(plain_path_partial)
-    } else {
-        None
-    };
 
-    let binary_path = format!("./input/wavefunction_{}.mpk", wnum);
-    let binary_path_partial = format!("./input/wavefunction_{}_partial.mpk", wnum);
-    let binary_file = if Path::new(&binary_path).exists() {
-        Some(binary_path)
-    } else if Path::new(&binary_path_partial).exists() {
-        Some(binary_path_partial)
-    } else {
-        None
-    };
+    let mpk_file = check_wavefunction_file(wnum, "mpk");
+    let csv_file = check_wavefunction_file(wnum, "csv");
+    let json_file = check_wavefunction_file(wnum, "json");
+    let yaml_file = check_wavefunction_file(wnum, "yaml");
 
-    if plain_file.is_some() && binary_file.is_some() {
+    let file_count = {
+        let files = [&mpk_file, &csv_file, &json_file, &yaml_file];
+        files.iter().filter(|x| x.is_some()).count()
+    };
+    if file_count > 1 {
         warn!(log,
               "Multiple wavefunction_{} files found in input directory. Chosing '{}' version based on configuration settings.",
               wnum,
-              if binary { "mpk" } else { "csv" });
-        if binary {
-            wavefunction_plain(plain_file.unwrap(), target_size, bb)
-        } else {
-            wavefunction_binary(binary_file.unwrap(), target_size, bb)
+              file_type);
+        match *file_type {
+            FileType::Messagepack => read_mpk(mpk_file.unwrap(), target_size, bb),
+            FileType::Csv => read_csv(csv_file.unwrap(), target_size, bb),
+            FileType::Json => read_json(json_file.unwrap(), target_size, bb),
+            FileType::Yaml => read_yaml(yaml_file.unwrap(), target_size, bb),
         }
-    } else if plain_file.is_some() {
-        wavefunction_plain(plain_file.unwrap(), target_size, bb)
-    } else if binary_file.is_some() {
-        wavefunction_binary(binary_file.unwrap(), target_size, bb)
+    } else if mpk_file.is_some() {
+        read_mpk(mpk_file.unwrap(), target_size, bb)
+    } else if csv_file.is_some() {
+        read_csv(csv_file.unwrap(), target_size, bb)
+    } else if json_file.is_some() {
+        read_json(json_file.unwrap(), target_size, bb)
+    } else if yaml_file.is_some() {
+        read_yaml(yaml_file.unwrap(), target_size, bb)
     } else {
         let missing = format!("input/wavefunction_{}*.*", wnum);
         Err(ErrorKind::FileNotFound(missing.to_string()).into())
     }
-}
-
-/// Loads a wafefunction from a csv file on disk.
-fn wavefunction_plain(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<f64>> {
-    //No more to add here, just parse the file in the generic parser.
-    parse_csv_to_array3(file, target_size, bb)
-}
-
-/// Loads a wafefunction from a mpk file on disk.
-fn wavefunction_binary(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<f64>> {
-    //TODO: Not implemented yet, call plain
-    //NOTE: This will guarentee a failure from the file name.
-    wavefunction_plain(file, target_size, bb)
 }
 
 /// Checks that the folder `input` exists. If not, creates it.
@@ -277,7 +327,7 @@ pub fn check_input_dir() -> Result<()> {
 ///
 /// * A 3D array loaded with data from the file and resampled/interpolated if required.
 /// If something goes wrong in the parsing or file handling, a `csv::Error` is passed.
-fn parse_csv_to_array3(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<f64>> {
+fn read_csv(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<f64>> {
     let parse_file = &file.to_owned();
     let mut rdr = csv::ReaderBuilder::new()
         .has_headers(false)

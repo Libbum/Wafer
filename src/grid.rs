@@ -65,7 +65,7 @@ fn solve(config: &Config,
                                      num.z as usize + bb];
         // Try to load current wavefunction from disk.
         // If not, we start with the previously converged function
-        if let Ok(wfn) = input::wavefunction(wnum, init_size, bb, config.output.binary_files, log) {
+        if let Ok(wfn) = input::wavefunction(wnum, init_size, bb, &config.output.file_type, log) {
             info!(log, "Loaded (current) wavefunction {} from disk", wnum);
             // If people are lazy or forget, their input files may contaminate the run here.
             // For example: starting wfn = 0 with random gaussian, max = 3.
@@ -130,7 +130,7 @@ fn solve(config: &Config,
                                                    wnum,
                                                    false,
                                                    &config.project_name,
-                                                   config.output.binary_files) {
+                                                   &config.output.file_type) {
                 warn!(log,
                       "Could not output partial wavefunction per snap_update request: {}",
                       err);
@@ -146,22 +146,18 @@ fn solve(config: &Config,
                                          wnum,
                                          config.grid.size.x as f64,
                                          &config.project_name,
-                                         config.output.binary_files)?;
+                                         &config.output.file_type)?;
             if config.output.snap_update.is_some() {
                 info!(log,
                       "Removing partially converged wavefunction {} from disk.",
                       wnum);
                 if let Err(err) = output::remove_partial(wnum,
                                                          &config.project_name,
-                                                         config.output.binary_files) {
+                                                         &config.output.file_type) {
                     warn!(log,
-                          "The temporary wavefunction_{}_partial.{} file could not be removed from the output directory: {}",
+                          "The temporary wavefunction_{}_partial{} file could not be removed from the output directory: {}",
                           wnum,
-                          if config.output.binary_files {
-                              "mpk"
-                          } else {
-                              "csv"
-                          },
+                          config.output.file_type.extentsion(),
                           err);
                 }
             }
@@ -205,7 +201,7 @@ fn solve(config: &Config,
                                                wnum,
                                                converged,
                                                &config.project_name,
-                                               config.output.binary_files) {
+                                               &config.output.file_type) {
             warn!(log, "Could not write wavefunction to disk: {}", err);
         }
     }

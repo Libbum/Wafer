@@ -52,10 +52,9 @@ pub struct Output {
     pub screen_update: u64,
     /// Optional: How many steps should the system evolve before saving a partially converged wavefunction.
     pub snap_update: Option<u64>,
-    /// Set `true` for files to be saved in a binary format (messagepack). Smaller files, faster save time, but not
-    /// human readable. Set `false` for human readable files (csv and json), which take up more disk space and
-    /// are slower to write.
-    pub binary_files: bool,
+    /// File format to be used for output. `Messagepack` is the smallest (and fastest) option, but not human readable.
+    /// Structured text options are `json` and `yaml`, then for a complete plain text option there is `csv`.
+    pub file_type: FileType,
     /// Should wavefunctions be saved at all? Not necessary if energy values are the only interest.
     /// Each excited state is saved once it is converged or if `max_steps` is reached.
     pub save_wavefns: bool,
@@ -226,6 +225,41 @@ impl fmt::Display for CentralDifference {
     }
 }
 
+/// File formats available for data output.
+#[derive(Serialize, Deserialize, Debug)]
+pub enum FileType {
+    /// Messagepack: a binary option. Small file sizes (comparatively), but not human readable - can be converted to be however.
+    Messagepack,
+    /// CSV: a plain text file with comma separated values.
+    Csv,
+    /// JSON: a popular structured text format found on the web, but also good for Wafer output.
+    Json,
+    /// YAML: another structured text format that is a little more feature rich than JSON.
+    Yaml,
+}
+
+impl fmt::Display for FileType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            FileType::Messagepack => write!(f, "Messagepack"),
+            FileType::Csv => write!(f, "CSV"),
+            FileType::Json => write!(f, "JSON"),
+            FileType::Yaml => write!(f, "YAML"),
+        }
+    }
+}
+
+impl FileType {
+    /// Returns the file extension of the current output type.
+    pub fn extentsion(&self) -> String {
+        match *self {
+            FileType::Messagepack => ".mpk".to_string(),
+            FileType::Csv => ".csv".to_string(),
+            FileType::Json => ".json".to_string(),
+            FileType::Yaml => ".yaml".to_string(),
+        }
+    }
+}
 //TODO: This isn't implimented at all yet. May not be needed.
 #[derive(Serialize, Deserialize, Debug)]
 /// Sets the type of run Wafer will execute.
@@ -373,12 +407,7 @@ impl Config {
             println!("{:5}{:<width$}{:<width$}",
                      "",
                      format!("CD precision: {}", self.central_difference),
-                     format!("Output file format: {}",
-                             if self.output.binary_files {
-                                 "Binary"
-                             } else {
-                                 "Plaintext"
-                             }),
+                     format!("Output file format: {}", self.output.file_type),
                      width = dcolwidth);
             println!("{:5}{:<twidth$}{:<width$}",
                      "",
@@ -455,12 +484,7 @@ impl Config {
             println!("{:5}{:<width$}{:<width$}",
                      "",
                      format!("CD precision: {}", self.central_difference),
-                     format!("Output file format: {}",
-                             if self.output.binary_files {
-                                 "Binary"
-                             } else {
-                                 "Plaintext"
-                             }),
+                     format!("Output file format: {}", self.output.file_type),
                      width = colwidth);
             println!("{:5}{:<twidth$}{:<width$}",
                      "",
@@ -532,7 +556,7 @@ pub fn set_initial_conditions(config: &Config, log: &Logger) -> Result<Array3<f6
             input::wavefunction(config.wavenum,
                                 init_size,
                                 bb,
-                                config.output.binary_files,
+                                &config.output.file_type,
                                 log)
                     .chain_err(|| ErrorKind::LoadWavefunction(config.wavenum))?
         }

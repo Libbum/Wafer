@@ -76,6 +76,14 @@ error_chain!{
                 description("Cannot save observables")
                 display("Unable to save observables data to disk")
         }
+        SavePotential {
+                description("Cannot save potential")
+                display("Unable to save potential data to disk")
+        }
+        SaveWavefunction {
+                description("Cannot save wavefunction")
+                display("Unable to save wavefunction data to disk")
+        }
         Serialize {
                 description("Cannot serialize data")
                 display("Unable to serialize data from struct")

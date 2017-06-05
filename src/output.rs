@@ -5,6 +5,7 @@ use ordinal::Ordinal;
 use rayon;
 use serde::Serialize;
 use serde_json;
+use serde_yaml;
 use rmps;
 use std::fs::{copy, create_dir_all, File, remove_file};
 use std::io::prelude::*;
@@ -12,6 +13,7 @@ use term_size;
 use ansi_term::Colour::Blue;
 
 use grid;
+use config::FileType;
 use errors::*;
 
 lazy_static! {
@@ -70,30 +72,30 @@ pub fn print_banner(sha: &str) {
 /// # Arguments
 /// *`v` - The potential to output.
 /// * `project` - The project name (for directory to save to).
-/// * `binary` - Bool to identify what type of file to be output (plain text or messagepack).
-pub fn potential(v: &ArrayView3<f64>, project: &str, binary: bool) -> Result<()> {
-    let filename = format!("{}/potential.{}",
+/// * `file_type` - What type of file format to use in the output.
+pub fn potential(v: &ArrayView3<f64>, project: &str, file_type: &FileType) -> Result<()> {
+    let filename = format!("{}/potential{}",
                            get_project_dir(project),
-                           if binary { "mpk" } else { "csv" });
-
-    if binary {
-        potential_binary(v, &filename)
-    } else {
-        potential_plain(v, &filename)
+                           file_type.extentsion());
+    match *file_type {
+        FileType::Messagepack => write_mpk(v, &filename),
+        FileType::Csv => write_csv(v, &filename),
+        FileType::Json => write_json(v, &filename),
+        FileType::Yaml => write_yaml(v, &filename),
     }
 }
 
-/// Outputs the current potential to disk in a plain, csv format
+/// Outputs an array to disk in a plain, csv format
 ///
 /// # Arguments
-/// *`v` - The potential to output
+/// *`array` - The array to output
 /// * `filename` - file / directory to save to.
-fn potential_plain(v: &ArrayView3<f64>, filename: &str) -> Result<()> {
+fn write_csv(array: &ArrayView3<f64>, filename: &str) -> Result<()> {
     let mut buffer = csv::WriterBuilder::new()
         .has_headers(false)
         .from_path(filename)
         .chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
-    for ((i, j, k), data) in v.indexed_iter() {
+    for ((i, j, k), data) in array.indexed_iter() {
         buffer
             .serialize(PlainRecord {
                            i: i,
@@ -107,16 +109,42 @@ fn potential_plain(v: &ArrayView3<f64>, filename: &str) -> Result<()> {
     Ok(())
 }
 
-/// Outputs the current potential to disk in the messagepack binary format
+/// Outputs an array to disk in the messagepack binary format
 ///
 /// # Arguments
-/// *`v` - The potential to output
+/// *`array` - The array to output
 /// * `filename` - file / directory to save to.
-fn potential_binary(v: &ArrayView3<f64>, filename: &str) -> Result<()> {
+fn write_mpk(array: &ArrayView3<f64>, filename: &str) -> Result<()> {
     let mut output = Vec::new();
-    v.serialize(&mut rmps::Serializer::new(&mut output)).chain_err(|| ErrorKind::Serialize)?;
+    array.serialize(&mut rmps::Serializer::new(&mut output)).chain_err(|| ErrorKind::Serialize)?;
     let mut buffer = File::create(filename).chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
     buffer.write_all(&output).chain_err(|| ErrorKind::WriteToFile(filename.to_string()))?;
+    Ok(())
+}
+
+/// Outputs an array to disk in json format
+///
+/// # Arguments
+/// *`array` - The array to output
+/// * `filename` - file / directory to save to.
+fn write_json(array: &ArrayView3<f64>, filename: &str) -> Result<()> {
+    let buffer = File::create(&filename)
+        .chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
+    serde_json::to_writer_pretty(buffer, array)
+        .chain_err(|| ErrorKind::SavePotential)?;
+    Ok(())
+}
+
+/// Outputs an array to disk in yaml format
+///
+/// # Arguments
+/// *`array` - The array to output
+/// * `filename` - file / directory to save to.
+fn write_yaml(array: &ArrayView3<f64>, filename: &str) -> Result<()> {
+    let buffer = File::create(&filename)
+        .chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
+    serde_yaml::to_writer(buffer, array)
+        .chain_err(|| ErrorKind::SavePotential)?;
     Ok(())
 }
 
@@ -129,76 +157,24 @@ fn potential_binary(v: &ArrayView3<f64>, filename: &str) -> Result<()> {
 /// * `converged` - A bool advising the state of the wavefunction. If false, the filename
 /// will have `_partial` appended to it to indicate a restart is required.
 /// * `project` - The project name (for directory to save to).
-/// * `binary` - A bool to ascertain if output should be in binary or plain text format.
+/// * `file_type` - What type of file format to use in the output.
 pub fn wavefunction(phi: &ArrayView3<f64>,
                     num: u8,
                     converged: bool,
                     project: &str,
-                    binary: bool)
+                    file_type: &FileType)
                     -> Result<()> {
-    let filename = format!("{}/wavefunction_{}{}.{}",
+    let filename = format!("{}/wavefunction_{}{}{}",
                            get_project_dir(project),
                            num,
                            if converged { "" } else { "_partial" },
-                           if binary { "mpk" } else { "csv" });
-    if binary {
-        wavefunction_binary(phi, &filename)
-    } else {
-        wavefunction_plain(phi, &filename)
+                           file_type.extentsion());
+    match *file_type {
+        FileType::Messagepack => write_mpk(phi, &filename),
+        FileType::Csv => write_csv(phi, &filename),
+        FileType::Json => write_json(phi, &filename),
+        FileType::Yaml => write_yaml(phi, &filename),
     }
-}
-
-/// Outputs a wavefunction to disk in the messagepack binary format.
-///
-/// # Arguments
-///
-/// * `phi` - The wavefunction to output. This should be a view called from `grid::get_work_area()`.
-/// * `filename` - A string indicting the location of the output.
-fn wavefunction_binary(phi: &ArrayView3<f64>, filename: &str) -> Result<()> {
-    let mut output = Vec::new();
-    phi.serialize(&mut rmps::Serializer::new(&mut output)).chain_err(|| ErrorKind::Serialize)?;
-    let mut buffer = File::create(filename).chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
-    buffer.write_all(&output).chain_err(|| ErrorKind::WriteToFile(filename.to_string()))?;
-    Ok(())
-}
-
-/// Outputs a wavefunction to disk in a plain, csv format.
-///
-/// # Arguments
-///
-/// * `phi` - The wavefunction to output. This should be a view called from `grid::get_work_area()`.
-/// * `filename` - A string indicting the location of the output.
-fn wavefunction_plain(phi: &ArrayView3<f64>, filename: &str) -> Result<()> {
-    let mut buffer = csv::WriterBuilder::new()
-        .has_headers(false)
-        .from_path(filename)
-        .chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
-    for ((i, j, k), data) in phi.indexed_iter() {
-        buffer
-            .serialize(PlainRecord {
-                           i: i,
-                           j: j,
-                           k: k,
-                           data: *data,
-                       })
-            .chain_err(|| ErrorKind::Serialize)?;
-    }
-    buffer.flush().chain_err(|| ErrorKind::Flush)?;
-    Ok(())
-}
-
-/// Outputs a wavefunction to disk in json format.
-///
-/// # Arguments
-///
-/// * `phi` - The wavefunction to output. This should be a view called from `grid::get_work_area()`.
-/// * `filename` - A string indicting the location of the output.
-fn wavefunction_json(phi: &ArrayView3<f64>, filename: &str) -> Result<()> {
-    let buffer = File::create(&filename)
-        .chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
-    serde_json::to_writer_pretty(buffer, phi)
-        .chain_err(|| ErrorKind::SaveObservables)?;
-    Ok(())
 }
 
 /// Removes a temporary `_partial` file from the current output directory.
@@ -208,12 +184,12 @@ fn wavefunction_json(phi: &ArrayView3<f64>, filename: &str) -> Result<()> {
 ///
 /// * `wnum` - The current wavenumber.
 /// * `project` - Project name of the current simulation.
-/// * `binary` - Boolean telling us if we've been outputing plain or binary temp files.
-pub fn remove_partial(wnum: u8, project: &str, binary: bool) -> Result<()> {
-    let filename = format!("{}/wavefunction_{}_partial.{}",
+/// * `file_type` - What type of file format to use in the output.
+pub fn remove_partial(wnum: u8, project: &str, file_type: &FileType) -> Result<()> {
+    let filename = format!("{}/wavefunction_{}_partial{}",
                            get_project_dir(project),
                            wnum,
-                           if binary { "mpk" } else { "csv" });
+                           file_type.extentsion());
     remove_file(&filename)
         .chain_err(|| ErrorKind::DeletePartial(wnum))?;
     Ok(())
@@ -319,12 +295,12 @@ pub fn print_measurements(tau: f64, diff: f64, observables: &grid::Observables) 
 /// * `wnum` - current wave number.
 /// * `numx` - the width of the calculation box.
 /// * `project` - current project name (for file output).
-/// * `binary` - bool setting binary or plain text output.
+/// * `file_type` - What type of file format to use in the output.
 pub fn finalise_measurement(observables: &grid::Observables,
                             wnum: u8,
                             numx: f64,
                             project: &str,
-                            binary: bool)
+                            file_type: &FileType)
                             -> Result<()> {
     let r_norm = (observables.r2 / observables.norm2).sqrt();
     let output = ObservablesOutput {
@@ -337,10 +313,11 @@ pub fn finalise_measurement(observables: &grid::Observables,
 
     print_summary(&output);
 
-    if binary {
-        observables_binary(&output, project)
-    } else {
-        observables_plain(&output, project)
+    match *file_type {
+        FileType::Messagepack => observables_mpk(&output, project),
+        FileType::Csv => observables_csv(&output, project),
+        FileType::Json => observables_json(&output, project),
+        FileType::Yaml => observables_yaml(&output, project),
     }
 }
 
@@ -385,7 +362,7 @@ fn print_summary(output: &ObservablesOutput) {
 }
 
 /// Saves the observables to a messagepack binary file.
-fn observables_binary(observables: &ObservablesOutput, project: &str) -> Result<()> {
+fn observables_mpk(observables: &ObservablesOutput, project: &str) -> Result<()> {
     let filename = format!("{}/observables_{}.mpk",
                            get_project_dir(project),
                            observables.state);
@@ -401,14 +378,38 @@ fn observables_binary(observables: &ObservablesOutput, project: &str) -> Result<
     Ok(())
 }
 
-/// Saves the observables to a plain json file.
-fn observables_plain(observables: &ObservablesOutput, project: &str) -> Result<()> {
+/// Saves the observables to a plain csv file.
+fn observables_csv(observables: &ObservablesOutput, project: &str) -> Result<()> {
+    let filename = format!("{}/observables_{}.csv",
+                           get_project_dir(project),
+                           observables.state);
+    let mut buffer = csv::Writer::from_path(&filename)
+        .chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
+    buffer.serialize(observables).chain_err(|| ErrorKind::Serialize)?;
+    buffer.flush().chain_err(|| ErrorKind::Flush)?;
+    Ok(())
+}
+
+/// Saves the observables to a json file.
+fn observables_json(observables: &ObservablesOutput, project: &str) -> Result<()> {
     let filename = format!("{}/observables_{}.json",
                            get_project_dir(project),
                            observables.state);
     let buffer = File::create(&filename)
         .chain_err(|| ErrorKind::CreateFile(filename))?;
     serde_json::to_writer_pretty(buffer, observables)
+        .chain_err(|| ErrorKind::SaveObservables)?;
+    Ok(())
+}
+
+/// Saves the observables to a yaml file.
+fn observables_yaml(observables: &ObservablesOutput, project: &str) -> Result<()> {
+    let filename = format!("{}/observables_{}.yaml",
+                           get_project_dir(project),
+                           observables.state);
+    let buffer = File::create(&filename)
+        .chain_err(|| ErrorKind::CreateFile(filename))?;
+    serde_yaml::to_writer(buffer, observables)
         .chain_err(|| ErrorKind::SaveObservables)?;
     Ok(())
 }

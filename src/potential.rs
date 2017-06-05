@@ -68,7 +68,7 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials> {
             info!(log, "Loading potential from file");
             let num = &config.grid.size;
             let init_size: [usize; 3] = [num.x + bb, num.y + bb, num.z + bb];
-            let pot = input::potential(init_size, bb, config.output.binary_files, log)
+            let pot = input::potential(init_size, bb, &config.output.file_type, log)
                 .chain_err(|| ErrorKind::LoadPotential)?;
             Ok(pot)
         }
@@ -104,7 +104,7 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials> {
         let work = grid::get_work_area(&v, config.central_difference.ext());
         if let Err(err) = output::potential(&work,
                                             &config.project_name,
-                                            config.output.binary_files) {
+                                            &config.output.file_type) {
             warn!(log, "Could not write potential to disk: {}", err);
         }
     }
