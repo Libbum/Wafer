@@ -661,4 +661,25 @@ mod tests {
         assert_eq!(dims.1, 6);
         assert_eq!(dims.2, 5);
     }
+
+    #[test]
+    fn norm2() {
+        let test = Array3::<f64>::from_shape_fn((5, 8, 7), |(i, j, k)| (i*j*k) as f64);
+        let work = get_work_area(&test, 1);
+        let result = get_norm_squared(&work);
+        assert_approx_eq!(result, 70070.);
+    }
+
+    #[test]
+    fn wfn_normalise() {
+        let normalised = Array3::<f64>::from_shape_fn((3, 2, 5), |(i, j, k)| {
+            let norm = 1.1091;
+            ((i*j*k) as f64) / norm
+        });
+
+        let mut test = Array3::<f64>::from_shape_fn((3, 2, 5), |(i, j, k)| (i*j*k) as f64);
+        normalise_wavefunction(&mut test, 1.23);
+
+        assert!(test.all_close(&normalised, 0.01));
+    }
 }
