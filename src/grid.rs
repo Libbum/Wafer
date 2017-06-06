@@ -634,30 +634,6 @@ fn evolve(wnum: u8,
 mod tests {
     use super::*;
 
-    // ----------------------------------------
-    // This section is a hack required to generate true
-    // code coverage. Once tests are written on the functions
-    // below they should be removed from this section.
-    // See https://internals.rust-lang.org/t/disabling-gc-sections-when-test-is-specified/2163
-    macro_rules! assign_do_nothing {
-        ( $( $x:expr ),* ) => {
-            { $( let _curr = $x; )* }
-        };
-    }
-
-    #[test]
-    fn mock_forcing_functions_compiled() {
-        assign_do_nothing![
-            run,
-            solve,
-            eta,
-            compute_observables,
-            orthogonalise_wavefunction,
-            evolve
-        ];
-    }
-    // ----------------------------------------
-
     macro_rules! assert_approx_eq {
     ($a:expr, $b:expr) => ({
         let eps = 1.0e-6;
