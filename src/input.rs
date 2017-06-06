@@ -392,3 +392,19 @@ fn read_csv(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<f
         Err(_) => Err(ErrorKind::ArrayShape(dlen, [numx, numy, numz]).into()),
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn potential_file_doesnt_exist() {
+        assert_eq!(check_potential_file("slkj"), None);
+    }
+
+    #[test]
+    fn wavefunction_file_doesnt_exist() {
+        assert_eq!(check_wavefunction_file(80, "ssdt"), None);
+    }
+}

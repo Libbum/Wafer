@@ -36,7 +36,12 @@ before_script:
   - export PATH=$PATH:~/.cargo/bin
 script:
   - cargo build
-  - RUSTFLAGS=-Clink-dead-code cargo test #link dead code here bloats the file size, but gives us correct coverage results.
+  - |
+      if [[ "$TRAVIS_RUST_VERSION" == "stable" ]]; then
+        RUSTFLAGS=-Clink-dead-code cargo test #link dead code here bloats the file size, but gives us correct coverage results.
+      else
+        cargo test
+      fi
   - |
       if [[ "$TRAVIS_RUST_VERSION" == "nightly" && $CLIPPY ]]; then
         cargo build --features="clippy"

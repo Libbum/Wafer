@@ -653,6 +653,21 @@ mod tests {
     }
 
     #[test]
+    fn gram_schmidt() {
+        let ground = Array3::<f64>::from_shape_fn((2, 2, 2), |(i, j, k)| (i+j+k) as f64);
+        let w_store: Vec<Array3<f64>> = vec![ground];
+
+        let mut test = Array3::<f64>::from_shape_fn((2, 2, 2), |(i, j, k)| {
+            let (fi, fj, fk) = (i as f64, j as f64, k as f64);
+            -fi-fj-fk
+        });
+        orthogonalise_wavefunction(1, &mut test, &w_store);
+
+        let compare = Array3::<f64>::from_shape_vec((2, 2, 2), vec![0., 23., 23., 46., 23., 46., 46., 69.]).unwrap();
+        assert!(compare.all_close(&test, 0.01));
+    }
+
+    #[test]
     fn work_area() {
         let test = Array3::<f64>::zeros((5, 8, 7));
         let work = get_work_area(&test, 1);
