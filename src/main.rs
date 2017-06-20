@@ -26,6 +26,7 @@ extern crate ansi_term;
 extern crate chrono;
 #[macro_use]
 extern crate clap;
+extern crate complexfloat;
 extern crate csv;
 #[macro_use]
 extern crate error_chain;
@@ -36,6 +37,7 @@ extern crate lazy_static;
 extern crate ndarray;
 extern crate ndarray_parallel;
 extern crate num;
+extern crate num_complex;
 extern crate num_cpus;
 extern crate ordinal;
 extern crate rand;
@@ -54,6 +56,7 @@ extern crate slog_term;
 extern crate term_size;
 
 use clap::{App, Arg};
+use num_complex::Complex64;
 use slog::{Drain, Duplicate, Logger, Fuse, LevelFilter, Level};
 use std::fs::OpenOptions;
 use std::process;
@@ -191,7 +194,13 @@ fn main() {
     info!(log, "Loading Configuation from disk");
     config.print(term_width);
 
-    if let Err(ref err) = grid::run(&config, &log) {
+
+    let run_result = match config.potential.is_real() {
+        true => grid::run::<f64>(&config, &log),
+        false => grid::run::<Complex64>(&config, &log),
+    };
+
+    if let Err(ref err) = run_result {
         crit!(log, "{}", err);
         for e in err.iter().skip(1) {
             crit!(log, "caused by: {}", e);

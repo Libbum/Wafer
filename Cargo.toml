@@ -23,6 +23,7 @@ blas-sys = { version = "0.6", default-features = false, features = ["openblas"] 
 chrono = "0.3"
 clap = "~2.24.2"
 clippy = {git = "https://github.com/Manishearth/rust-clippy", optional = true}
+complexfloat = { git = "https://github.com/Libbum/complexfloat" }
 csv = "1.0.0-beta.3"
 error-chain = "0.10"
 indicatif = "0.5"
@@ -30,6 +31,7 @@ lazy_static = "0.2"
 ndarray = { git = "https://github.com/Libbum/rust-ndarray", branch = "serde-1.0", features = ["serde", "blas"] }
 ndarray-parallel = { git = "https://github.com/Libbum/ndarray-parallel" }
 num = "0.1"
+num-complex = "0.1"
 num_cpus = "1.4"
 ordinal = "0.1"
 rand = "0.3"

@@ -1,5 +1,8 @@
+use complexfloat::ComplexFloat;
+use num_complex::Complex64;
 use ndarray::{Array3, Zip};
 use ndarray_parallel::prelude::*;
+use num::NumCast;
 use slog::Logger;
 use std::f64::MAX;
 use std::f64::consts::PI;
@@ -12,13 +15,13 @@ use errors::*;
 
 #[derive(Debug)]
 /// Holds the potential arrays for the current simulation.
-pub struct Potentials {
+pub struct Potentials<ComplexFloat> {
     /// The potential
-    pub v: Array3<f64>,
+    pub v: Array3<ComplexFloat>,
     /// Ancillary array `a`
-    pub a: Array3<f64>,
+    pub a: Array3<ComplexFloat>,
     /// Ancillary array `b`
-    pub b: Array3<f64>,
+    pub b: Array3<ComplexFloat>,
 }
 
 /// A public wrapper around `potential`. Where `potential` does the calculation for a
@@ -32,11 +35,11 @@ pub struct Potentials {
 ///
 /// A 3D array of potential values of the requested size.
 /// Or an error if called on the wrong potential type.
-pub fn generate(config: &Config) -> Result<Array3<f64>> {
+pub fn generate<F: ComplexFloat>(config: &Config) -> Result<Array3<F>> {
     let num = &config.grid.size;
     let bb = config.central_difference.bb();
     let init_size: [usize; 3] = [num.x + bb, num.y + bb, num.z + bb];
-    let mut v = Array3::<f64>::zeros(init_size);
+    let mut v = Array3::<F>::zeros(init_size);
 
     Zip::indexed(&mut v)
         .par_apply(|(i, j, k), x| match potential(config, &Index3 { x: i, y: j, z: k }) {
@@ -60,10 +63,12 @@ pub fn generate(config: &Config) -> Result<Array3<f64>> {
 /// # Returns
 ///
 /// A `Potentials` struct with the potential `v` and ancillary arrays `a` and `b`.
-pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials> {
-    let mut minima: f64 = MAX;
+pub fn load_arrays<F: ComplexFloat>(config: &Config, log: &Logger) -> Result<Potentials<F>> {
+    let mut minima = NumCast::from(MAX).unwrap(); //TODO: This needs a MAX trait to also include the complex part
+    let _1 = F::one();
+    let _2 = _1 + _1;
     let bb = config.central_difference.bb();
-    let v: Array3<f64> = match config.potential {
+    let v: Array3<F> = match config.potential {
         PotentialType::FromFile => {
             info!(log, "Loading potential from file");
             let num = &config.grid.size;
@@ -88,8 +93,8 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials> {
         }
     }?;
 
-    let b = 1. / (1. + config.grid.dt * &v / 2.);
-    let a = (1. - config.grid.dt * &v / 2.) * &b;
+    let b = _1 / (_1 + NumCast::from(config.grid.dt).unwrap() * &v / _2);
+    let a = (_1 - NumCast::from(config.grid.dt).unwrap() * &v / _2) * &b;
 
     // We can't do this in a par.
     // AFAIK, this is the safest way to work with the float here.
@@ -112,8 +117,16 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials> {
     Ok(Potentials { v: v, a: a, b: b })
 }
 
-//TODO: For now we're dropping complex all together, but this is needed.
-/// Generates a potential for the current simulation at a particular index point.
+
+/// Huh. I think this worked!!! TODO: Documentation.
+fn potential<F: ComplexFloat>(config: &Config, idx: &Index3) -> Result<F> {
+    let real = potential_real(config, idx)?;
+    let imag = potential_complex(config, idx)?;
+    let potval = ComplexFloat::from_real_imag(NumCast::from(real).unwrap(), NumCast::from(imag).unwrap());
+    Ok(potval)
+}
+
+/// Generates the real potiion of the potential for the current simulation at a particular index point.
 ///
 /// # Arguments
 ///
@@ -124,7 +137,7 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials> {
 ///
 /// A double with the potential value at the requested index, or an error if the function
 /// is called for an invalid potential type.
-fn potential(config: &Config, idx: &Index3) -> Result<f64> {
+fn potential_real(config: &Config, idx: &Index3) -> Result<f64> {
     let num = &config.grid.size;
     match config.potential {
         PotentialType::NoPotential => Ok(0.0),
@@ -132,7 +145,7 @@ fn potential(config: &Config, idx: &Index3) -> Result<f64> {
             if (idx.x > num.x / 4 && idx.x <= 3 * num.x / 4) &&
                (idx.y > num.y / 4 && idx.y <= 3 * num.y / 4) &&
                (idx.z > num.z / 4 && idx.z <= 3 * num.z / 4) {
-                Ok(-10.0)
+                Ok(-10.)
             } else {
                 Ok(0.0)
             }
@@ -155,9 +168,7 @@ fn potential(config: &Config, idx: &Index3) -> Result<f64> {
                     (2. * PI * (idx.z as f64 - 1.) / (num.z as f64 - 1.)).sin();
             Ok(-temp + 1.)
         }
-        PotentialType::Coulomb |
-        PotentialType::ComplexCoulomb => {
-            //TODO: ComplexCoulomb returns real until we have complex types
+        PotentialType::Coulomb => {
             let r = config.grid.dn * (calculate_r2(idx, &config.grid)).sqrt();
             if r < config.grid.dn {
                 Ok(-1. / config.grid.dn)
@@ -165,6 +176,7 @@ fn potential(config: &Config, idx: &Index3) -> Result<f64> {
                 Ok(-1. / r)
             }
         }
+        PotentialType::ComplexCoulomb => Ok(0.0),
         PotentialType::ElipticalCoulomb => {
             let dx = idx.x as f64 - (num.x as f64 + 1.) / 2.;
             let dy = idx.y as f64 - (num.y as f64 + 1.) / 2.;
@@ -205,9 +217,8 @@ fn potential(config: &Config, idx: &Index3) -> Result<f64> {
                    4. * config.mass)
             }
         }
-        PotentialType::Harmonic |
-        PotentialType::ComplexHarmonic => {
-            //TODO: ComplexHarmonic is real until we have Complex types
+        PotentialType::ComplexHarmonic |
+        PotentialType::Harmonic => {
             let r = config.grid.dn * (calculate_r2(idx, &config.grid)).sqrt();
             Ok(r * r / 2.)
         }
@@ -250,6 +261,46 @@ fn potential(config: &Config, idx: &Index3) -> Result<f64> {
     }
 }
 
+/// Generates a the complex portion of the potential for the current simulation at a particular index point.
+///
+/// # Arguments
+///
+/// * `config` - configuration data struct
+/// * `idx` - an index to calculate the potential value at
+///
+/// # Returns
+///
+/// A double with the potential value at the requested index, or an error if the function
+/// is called for an invalid potential type.
+fn potential_complex(config: &Config, idx: &Index3) -> Result<f64> {
+    let num = &config.grid.size;
+    match config.potential {
+        PotentialType::ComplexHarmonic => {
+            let r = config.grid.dn * (calculate_r2(idx, &config.grid)).sqrt();
+            Ok(r * r / 2.)
+        }
+        PotentialType::ComplexCoulomb => {
+            let r = config.grid.dn * (calculate_r2(idx, &config.grid)).sqrt();
+            if r < config.grid.dn {
+                Ok(-1. / config.grid.dn)
+            } else {
+                Ok(-1. / r)
+            }
+        }
+        PotentialType::NoPotential |
+        PotentialType::Cube |
+        PotentialType::QuadWell |
+        PotentialType::Periodic |
+        PotentialType::Coulomb |
+        PotentialType::Harmonic |
+        PotentialType::Dodecahedron |
+        PotentialType::ElipticalCoulomb |
+        PotentialType::SimpleCornell |
+        PotentialType::FullCornell => Ok(0.0), //It's actually None, but we drop it higher up.
+        PotentialType::FromFile |
+        PotentialType::FromScript => Err(ErrorKind::PotentialNotAvailable.into()),
+    }
+}
 
 //TODO: For now we're dropping complex all together, but this is needed.
 //TODO: We need potential_sub file outputs for those which require it.
@@ -275,20 +326,28 @@ pub fn potential_sub_idx(config: &Config, idx: &Index3) -> Result<f64> {
     }
 }
 
-/// Calculate binding energy offset (if any). Follows the `potential` input/output arguments.
+/// Huh. I think this worked!!! TODO: Documentation.
+pub fn potential_sub<F: ComplexFloat>(config: &Config) -> Result<F> {
+    let real = potential_sub_real(config)?;
+    let imag = potential_sub_complex(config)?;
+    let subval = ComplexFloat::from_real_imag(NumCast::from(real).unwrap(), NumCast::from(imag).unwrap());
+    Ok(subval)
+}
+
+/// Calculate binding energy offset (if any) for real functions. Follows the `potential` input/output arguments.
 /// `FullCornell`, and subsequent potentials that require indexed values must call `potential_sub_idx`.
-pub fn potential_sub(config: &Config) -> Result<f64> {
+fn potential_sub_real(config: &Config) -> Result<f64> {
     match config.potential {
         PotentialType::NoPotential |
         PotentialType::Cube |
         PotentialType::QuadWell |
         PotentialType::Periodic |
         PotentialType::Coulomb |
-        PotentialType::ComplexCoulomb |
         PotentialType::Harmonic |
-        PotentialType::ComplexHarmonic |
         PotentialType::Dodecahedron |
         PotentialType::FromScript | //TODO: Script should be treated differently.
+        PotentialType::ComplexCoulomb |
+        PotentialType::ComplexHarmonic |
         PotentialType::FromFile => Ok(0.0),
         PotentialType::ElipticalCoulomb => Ok(1. / config.grid.dn),
         PotentialType::SimpleCornell => Ok(4.0 * config.mass),
@@ -296,6 +355,26 @@ pub fn potential_sub(config: &Config) -> Result<f64> {
     }
 }
 
+/// Calculate binding energy offset (if any) for complex functions. Follows the `potential` input/output arguments.
+/// `FullCornell`, and subsequent potentials that require indexed values must call `potential_sub_idx`.
+fn potential_sub_complex(config: &Config) -> Result<f64> {
+    match config.potential {
+        PotentialType::ComplexCoulomb |
+        PotentialType::ComplexHarmonic => Ok(0.0),
+        PotentialType::NoPotential |
+        PotentialType::Cube |
+        PotentialType::QuadWell |
+        PotentialType::Periodic |
+        PotentialType::Coulomb |
+        PotentialType::Harmonic |
+        PotentialType::Dodecahedron |
+        PotentialType::ElipticalCoulomb |
+        PotentialType::SimpleCornell |
+        PotentialType::FromScript | //TODO: Script should be treated differently.
+        PotentialType::FromFile => Ok(0.0),
+        PotentialType::FullCornell => Err(ErrorKind::PotentialNotAvailable.into()),
+    }
+}
 
 /// Calculates squared distance
 pub fn calculate_r2(idx: &Index3, grid: &Grid) -> f64 {

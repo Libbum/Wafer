@@ -1,3 +1,5 @@
+use complexfloat::ComplexFloat;
+use num::NumCast;
 use ndarray::{Array3, Zip};
 use ndarray_parallel::prelude::*;
 use rand::distributions::{Normal, IndependentSample};
@@ -121,6 +123,27 @@ impl fmt::Display for PotentialType {
             PotentialType::Dodecahedron => write!(f, "Dodecahedron"),
             PotentialType::FromFile => write!(f, "User generated potential from file"),
             PotentialType::FromScript => write!(f, "User generated potential from script"),
+        }
+    }
+}
+
+impl PotentialType {
+    pub fn is_real(&self) -> bool {
+        match *self {
+            PotentialType::NoPotential |
+            PotentialType::Cube |
+            PotentialType::QuadWell |
+            PotentialType::Periodic |
+            PotentialType::Coulomb |
+            PotentialType::ElipticalCoulomb |
+            PotentialType::SimpleCornell |
+            PotentialType::FullCornell |
+            PotentialType::Harmonic |
+            PotentialType::FromFile | //TODO: File and script need checks. Assumes real for now.
+            PotentialType::FromScript |
+            PotentialType::Dodecahedron => true,
+            PotentialType::ComplexCoulomb |
+            PotentialType::ComplexHarmonic => false,
         }
     }
 }
@@ -544,14 +567,14 @@ impl Config {
 ///
 /// * `config` - a reference to the configuration struct.
 /// * `log` - a reference to the logger.
-pub fn set_initial_conditions(config: &Config, log: &Logger) -> Result<Array3<f64>> {
+pub fn set_initial_conditions<F: ComplexFloat>(config: &Config, log: &Logger) -> Result<Array3<F>> {
     info!(log, "Setting initial conditions for wavefunction");
     let num = &config.grid.size;
     let bb = config.central_difference.bb();
     let init_size: [usize; 3] = [num.x as usize + bb,
                                  num.y as usize + bb,
                                  num.z as usize + bb];
-    let mut w: Array3<f64> = match config.init_condition {
+    let mut w: Array3<F> = match config.init_condition {
         InitialCondition::FromFile => {
             input::wavefunction(config.wavenum,
                                 init_size,
@@ -562,7 +585,10 @@ pub fn set_initial_conditions(config: &Config, log: &Logger) -> Result<Array3<f6
         }
         InitialCondition::Gaussian => generate_gaussian(config, init_size),
         InitialCondition::Coulomb => generate_coulomb(config, init_size),
-        InitialCondition::Constant => Array3::<f64>::from_elem(init_size, 0.1),
+        InitialCondition::Constant => {
+            let val = NumCast::from(0.1).unwrap();
+            Array3::<F>::from_elem(init_size, F::from_real_imag(val, val))
+        }
         InitialCondition::Boolean => generate_boolean(init_size),
     };
 
@@ -570,19 +596,19 @@ pub fn set_initial_conditions(config: &Config, log: &Logger) -> Result<Array3<f6
     let ext = config.central_difference.ext() as isize;
     // In Z
     w.slice_mut(s![.., .., 0..ext])
-        .par_map_inplace(|el| *el = 0.);
+        .par_map_inplace(|el| *el = F::zero());
     w.slice_mut(s![.., .., init_size[2] as isize - ext..init_size[2] as isize])
-        .par_map_inplace(|el| *el = 0.);
+        .par_map_inplace(|el| *el = F::zero());
     // In X
     w.slice_mut(s![0..ext, .., ..])
-        .par_map_inplace(|el| *el = 0.);
+        .par_map_inplace(|el| *el = F::zero());
     w.slice_mut(s![init_size[0] as isize - ext..init_size[0] as isize, .., ..])
-        .par_map_inplace(|el| *el = 0.);
+        .par_map_inplace(|el| *el = F::zero());
     // In Y
     w.slice_mut(s![.., 0..ext, ..])
-        .par_map_inplace(|el| *el = 0.);
+        .par_map_inplace(|el| *el = F::zero());
     w.slice_mut(s![.., init_size[1] as isize - ext..init_size[1] as isize, ..])
-        .par_map_inplace(|el| *el = 0.);
+        .par_map_inplace(|el| *el = F::zero());
 
     // Symmetrise the IC.
     symmetrise_wavefunction(config, &mut w);
@@ -596,11 +622,14 @@ pub fn set_initial_conditions(config: &Config, log: &Logger) -> Result<Array3<f6
 ///
 /// * `config` - a reference to the configuration struct
 /// * `init_size` - {x,y,z} dimensions of the required wavefunction
-fn generate_gaussian(config: &Config, init_size: [usize; 3]) -> Array3<f64> {
+fn generate_gaussian<F: ComplexFloat>(config: &Config, init_size: [usize; 3]) -> Array3<F> {
     let normal = Normal::new(0.0, config.sig);
-    let mut w = Array3::<f64>::zeros(init_size);
+    let mut w = Array3::<F>::zeros(init_size);
 
-    w.par_map_inplace(|el| *el = normal.ind_sample(&mut rand::thread_rng()));
+    w.par_map_inplace(|el| {
+        let rnd = NumCast::from(normal.ind_sample(&mut rand::thread_rng())).unwrap();
+        *el = F::from_real_imag(rnd, rnd);
+    });
     w
 }
 
@@ -610,22 +639,24 @@ fn generate_gaussian(config: &Config, init_size: [usize; 3]) -> Array3<f64> {
 ///
 /// * `config` - a reference to the configuration struct
 /// * `init_size` - {x,y,z} dimensions of the required wavefunction
-fn generate_coulomb(config: &Config, init_size: [usize; 3]) -> Array3<f64> {
-    let mut w = Array3::<f64>::zeros(init_size);
+fn generate_coulomb<F: ComplexFloat>(config: &Config, init_size: [usize; 3]) -> Array3<F> {
+    let mut w = Array3::<F>::zeros(init_size);
+    let _1 = F::one();
+    let _2 = _1 + _1;
 
     Zip::indexed(&mut w).par_apply(|(i, j, k), x| {
         //Coordinate system is centered in simulation volume
-        let dx = i as f64 - (init_size[0] as f64 / 2.);
-        let dy = j as f64 - (init_size[1] as f64 / 2.);
-        let dz = k as f64 - (init_size[2] as f64 / 2.);
-        let r = config.grid.dn * (dx.powi(2) + dy.powi(2) + dz.powi(2)).sqrt();
+        let dx = NumCast::from(i).unwrap() - (NumCast::from(init_size[0]).unwrap() / _2);
+        let dy = NumCast::from(j).unwrap() - (NumCast::from(init_size[1]).unwrap() / _2);
+        let dz = NumCast::from(k).unwrap() - (NumCast::from(init_size[2]).unwrap() / _2);
+        let r  = NumCast::from(config.grid.dn).unwrap() * (dx * dx + dy * dy + dz * dz).sqrt();
         let costheta = config.grid.dn * dz / r;
         let cosphi = config.grid.dn * dx / r;
-        let mr2 = (-config.mass * r / 2.).exp();
+        let mr2 = (-config.mass * r / _2).exp();
         // Terms here represent: n=1; n=2, l=0; n=2,l=1,m=0; n=2,l=1,m±1 respectively.
-        *x = (-config.mass * r).exp() + (2. - config.mass * r) * mr2 +
+        *x = (-config.mass * r).exp() + (_2 - config.mass * r) * mr2 +
              config.mass * r * mr2 * costheta +
-             config.mass * r * mr2 * (1. - costheta.powi(2)).sqrt() * cosphi;
+             config.mass * r * mr2 * (_1 - costheta.powi(2)).sqrt() * cosphi;
     });
     w
 }
@@ -635,11 +666,12 @@ fn generate_coulomb(config: &Config, init_size: [usize; 3]) -> Array3<f64> {
 /// # Arguments
 ///
 /// * `init_size` - {x,y,z} dimensions of the required wavefunction
-fn generate_boolean(init_size: [usize; 3]) -> Array3<f64> {
-    let mut w = Array3::<f64>::zeros(init_size);
+fn generate_boolean<F: ComplexFloat>(init_size: [usize; 3]) -> Array3<F> {
+    let mut w = Array3::<F>::zeros(init_size);
+    let _2 = F::one() + F::one();
 
     Zip::indexed(&mut w)
-        .par_apply(|(i, j, k), el| { *el = i as f64 % 2. * j as f64 % 2. * k as f64 % 2.; });
+        .par_apply(|(i, j, k), el| { *el = NumCast::from(i).unwrap() % _2 * NumCast::from(j).unwrap() % _2 * NumCast::from(k).unwrap() % _2; });
     w
 }
 
@@ -649,14 +681,14 @@ fn generate_boolean(init_size: [usize; 3]) -> Array3<f64> {
 ///
 /// * `config` - a reference to the configuration struct
 /// * `w` - Reference to a wavefunction to impose symmetry conditions on.
-pub fn symmetrise_wavefunction(config: &Config, w: &mut Array3<f64>) {
+pub fn symmetrise_wavefunction<F: ComplexFloat>(config: &Config, w: &mut Array3<F>) {
     let num = &config.grid.size;
     let sign = match config.init_symmetry {
-        SymmetryConstraint::NotConstrained => 0.,
+        SymmetryConstraint::NotConstrained => F::zero(),
         SymmetryConstraint::AntisymAboutY |
-        SymmetryConstraint::AntisymAboutZ => -1.,
+        SymmetryConstraint::AntisymAboutZ => NumCast::from(-1.).unwrap(),
         SymmetryConstraint::AboutY |
-        SymmetryConstraint::AboutZ => 1.,
+        SymmetryConstraint::AboutZ => F::one(),
     };
 
     match config.init_symmetry {

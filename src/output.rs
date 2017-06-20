@@ -1,6 +1,8 @@
+use complexfloat::ComplexFloat;
 use chrono::Local;
 use csv;
 use ndarray::ArrayView3;
+use num::NumCast;
 use ordinal::Ordinal;
 use rayon;
 use serde::Serialize;
@@ -26,13 +28,13 @@ lazy_static! {
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 /// Structured output of observable values
-struct ObservablesOutput {
+struct ObservablesOutput<ComplexFloat> {
     /// Excited state number.
     state: u8,
     /// Total energy.
-    energy: f64,
+    energy: ComplexFloat,
     /// Binding energy.
-    binding_energy: f64,
+    binding_energy: ComplexFloat,
     /// Coefficient of determination
     r: f64,
     /// Grid size / Coefficient of determination
@@ -41,7 +43,7 @@ struct ObservablesOutput {
 
 #[derive(Debug,Serialize)]
 /// A simple struct to parse data to a plain csv file
-struct PlainRecord {
+struct PlainRecord<ComplexFloat> {
     /// Index in *x*
     i: usize,
     /// Index in *y*
@@ -49,7 +51,7 @@ struct PlainRecord {
     /// Index in *z*
     k: usize,
     /// Data at this position
-    data: f64,
+    data: ComplexFloat,
 }
 
 /// Simply prints the Wafer banner with current commit info and thread count.
@@ -73,7 +75,7 @@ pub fn print_banner(sha: &str) {
 /// *`v` - The potential to output.
 /// * `project` - The project name (for directory to save to).
 /// * `file_type` - What type of file format to use in the output.
-pub fn potential(v: &ArrayView3<f64>, project: &str, file_type: &FileType) -> Result<()> {
+pub fn potential<F: ComplexFloat>(v: &ArrayView3<F>, project: &str, file_type: &FileType) -> Result<()> {
     let filename = format!("{}/potential{}",
                            get_project_dir(project),
                            file_type.extentsion());
@@ -90,7 +92,7 @@ pub fn potential(v: &ArrayView3<f64>, project: &str, file_type: &FileType) -> Re
 /// # Arguments
 /// *`array` - The array to output
 /// * `filename` - file / directory to save to.
-fn write_csv(array: &ArrayView3<f64>, filename: &str) -> Result<()> {
+fn write_csv<F: ComplexFloat>(array: &ArrayView3<F>, filename: &str) -> Result<()> {
     let mut buffer = csv::WriterBuilder::new()
         .has_headers(false)
         .from_path(filename)
@@ -114,7 +116,7 @@ fn write_csv(array: &ArrayView3<f64>, filename: &str) -> Result<()> {
 /// # Arguments
 /// *`array` - The array to output
 /// * `filename` - file / directory to save to.
-fn write_mpk(array: &ArrayView3<f64>, filename: &str) -> Result<()> {
+fn write_mpk<F: ComplexFloat>(array: &ArrayView3<F>, filename: &str) -> Result<()> {
     let mut output = Vec::new();
     array.serialize(&mut rmps::Serializer::new(&mut output)).chain_err(|| ErrorKind::Serialize)?;
     let mut buffer = File::create(filename).chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
@@ -127,7 +129,7 @@ fn write_mpk(array: &ArrayView3<f64>, filename: &str) -> Result<()> {
 /// # Arguments
 /// *`array` - The array to output
 /// * `filename` - file / directory to save to.
-fn write_json(array: &ArrayView3<f64>, filename: &str) -> Result<()> {
+fn write_json<F: ComplexFloat>(array: &ArrayView3<F>, filename: &str) -> Result<()> {
     let buffer = File::create(&filename)
         .chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
     serde_json::to_writer_pretty(buffer, array)
@@ -140,7 +142,7 @@ fn write_json(array: &ArrayView3<f64>, filename: &str) -> Result<()> {
 /// # Arguments
 /// *`array` - The array to output
 /// * `filename` - file / directory to save to.
-fn write_yaml(array: &ArrayView3<f64>, filename: &str) -> Result<()> {
+fn write_yaml<F: ComplexFloat>(array: &ArrayView3<F>, filename: &str) -> Result<()> {
     let buffer = File::create(&filename)
         .chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
     serde_yaml::to_writer(buffer, array)
@@ -158,7 +160,7 @@ fn write_yaml(array: &ArrayView3<f64>, filename: &str) -> Result<()> {
 /// will have `_partial` appended to it to indicate a restart is required.
 /// * `project` - The project name (for directory to save to).
 /// * `file_type` - What type of file format to use in the output.
-pub fn wavefunction(phi: &ArrayView3<f64>,
+pub fn wavefunction<F: ComplexFloat>(phi: &ArrayView3<F>,
                     num: u8,
                     converged: bool,
                     project: &str,
@@ -263,7 +265,7 @@ pub fn print_observable_header(wnum: u8) {
 }
 
 /// Pretty prints measurements at current step to screen
-pub fn print_measurements(tau: f64, diff: f64, observables: &grid::Observables) -> String {
+pub fn print_measurements<F: ComplexFloat>(tau: f64, diff: f64, observables: &grid::Observables<F>) -> String {
     let width = *TERMWIDTH;
     let spacer = (width - 69) / 2;
     if tau > 0.0 {
@@ -271,7 +273,7 @@ pub fn print_measurements(tau: f64, diff: f64, observables: &grid::Observables) 
                 "",
                 tau,
                 observables.energy / observables.norm2,
-                (observables.r2 / observables.norm2).sqrt(),
+                (NumCast::from(observables.r2).unwrap() / observables.norm2).sqrt(),
                 diff,
                 space = spacer)
     } else {
@@ -279,7 +281,7 @@ pub fn print_measurements(tau: f64, diff: f64, observables: &grid::Observables) 
                 "",
                 tau,
                 observables.energy / observables.norm2,
-                (observables.r2 / observables.norm2).sqrt(),
+                (NumCast::from(observables.r2).unwrap() / observables.norm2).sqrt(),
                 "--   ",
                 space = spacer)
 
@@ -296,13 +298,13 @@ pub fn print_measurements(tau: f64, diff: f64, observables: &grid::Observables) 
 /// * `numx` - the width of the calculation box.
 /// * `project` - current project name (for file output).
 /// * `file_type` - What type of file format to use in the output.
-pub fn finalise_measurement(observables: &grid::Observables,
+pub fn finalise_measurement<F: ComplexFloat>(observables: &grid::Observables<F>,
                             wnum: u8,
                             numx: f64,
                             project: &str,
                             file_type: &FileType)
                             -> Result<()> {
-    let r_norm = (observables.r2 / observables.norm2).sqrt();
+    let r_norm = (NumCast::from(observables.r2).unwrap() / observables.norm2).sqrt();
     let output = ObservablesOutput {
         state: wnum,
         energy: observables.energy / observables.norm2,
@@ -322,7 +324,7 @@ pub fn finalise_measurement(observables: &grid::Observables,
 }
 
 /// Pretty print final summary
-fn print_summary(output: &ObservablesOutput) {
+fn print_summary<F: ComplexFloat>(output: &ObservablesOutput<F>) {
     let width = *TERMWIDTH;
     let spacer = (width - 69) / 2;
 
@@ -362,7 +364,7 @@ fn print_summary(output: &ObservablesOutput) {
 }
 
 /// Saves the observables to a messagepack binary file.
-fn observables_mpk(observables: &ObservablesOutput, project: &str) -> Result<()> {
+fn observables_mpk<F: ComplexFloat>(observables: &ObservablesOutput<F>, project: &str) -> Result<()> {
     let filename = format!("{}/observables_{}.mpk",
                            get_project_dir(project),
                            observables.state);
@@ -379,7 +381,7 @@ fn observables_mpk(observables: &ObservablesOutput, project: &str) -> Result<()>
 }
 
 /// Saves the observables to a plain csv file.
-fn observables_csv(observables: &ObservablesOutput, project: &str) -> Result<()> {
+fn observables_csv<F: ComplexFloat>(observables: &ObservablesOutput<F>, project: &str) -> Result<()> {
     let filename = format!("{}/observables_{}.csv",
                            get_project_dir(project),
                            observables.state);
@@ -391,7 +393,7 @@ fn observables_csv(observables: &ObservablesOutput, project: &str) -> Result<()>
 }
 
 /// Saves the observables to a json file.
-fn observables_json(observables: &ObservablesOutput, project: &str) -> Result<()> {
+fn observables_json<F: ComplexFloat>(observables: &ObservablesOutput<F>, project: &str) -> Result<()> {
     let filename = format!("{}/observables_{}.json",
                            get_project_dir(project),
                            observables.state);
@@ -403,7 +405,7 @@ fn observables_json(observables: &ObservablesOutput, project: &str) -> Result<()
 }
 
 /// Saves the observables to a yaml file.
-fn observables_yaml(observables: &ObservablesOutput, project: &str) -> Result<()> {
+fn observables_yaml<F: ComplexFloat>(observables: &ObservablesOutput<F>, project: &str) -> Result<()> {
     let filename = format!("{}/observables_{}.yaml",
                            get_project_dir(project),
                            observables.state);

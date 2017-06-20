@@ -1,9 +1,11 @@
 use indicatif::{ProgressBar, ProgressStyle};
 use ndarray::{Array3, ArrayView3, ArrayViewMut3, Zip};
 use ndarray_parallel::prelude::*;
+use num::NumCast;
 use slog::Logger;
 use std::f64::MAX;
 use config;
+use complexfloat::ComplexFloat;
 use config::{Config, CentralDifference, Index3, InitialCondition, PotentialType};
 use potential;
 use potential::Potentials;
@@ -13,25 +15,25 @@ use errors::*;
 
 #[derive(Debug)]
 /// Holds all computed observables for the current wavefunction.
-pub struct Observables {
+pub struct Observables<ComplexFloat> {
     /// Normalised total energy.
-    pub energy: f64,
+    pub energy: ComplexFloat,
     /// A squared normalisation. Square root occurs later when needed to apply a complete
     /// normalisation condition. This needs to be separate as we include other adjustments
     /// from time to time.
-    pub norm2: f64,
+    pub norm2: ComplexFloat,
     /// The value of the potential at infinity. This is used to calculate the binding energy.
-    pub v_infinity: f64,
+    pub v_infinity: ComplexFloat,
     /// Coefficient of determination
     pub r2: f64,
 }
 
 /// Runs the calculation and holds long term (system time) wavefunction storage
-pub fn run(config: &Config, log: &Logger) -> Result<()> {
+pub fn run<F: ComplexFloat>(config: &Config, log: &Logger) -> Result<()> {
 
     let potentials = potential::load_arrays(config, log)?;
 
-    let mut w_store: Vec<Array3<f64>> = Vec::new();
+    let mut w_store: Vec<Array3<F>> = Vec::new();
     if config.wavenum > 0 {
         //We require wavefunctions from disk, even if initial condition is not `FromFile`
         //The wavenum = 0 case is handled later
@@ -48,16 +50,16 @@ pub fn run(config: &Config, log: &Logger) -> Result<()> {
 
 
 /// Runs the actual computation once system is setup and ready.
-fn solve(config: &Config,
+fn solve<F: ComplexFloat>(config: &Config,
          log: &Logger,
-         potentials: &Potentials,
+         potentials: &Potentials<F>,
          wnum: u8,
-         w_store: &mut Vec<Array3<f64>>)
+         w_store: &mut Vec<Array3<F>>)
          -> Result<()> {
 
     // Initial conditions from config file if ground state,
     // but start from previously converged wfn if we're an excited state.
-    let mut phi: Array3<f64> = if wnum > 0 {
+    let mut phi: Array3<F> = if wnum > 0 {
         let num = &config.grid.size;
         let bb = config.central_difference.bb();
         let init_size: [usize; 3] = [num.x as usize + bb,
@@ -104,7 +106,7 @@ fn solve(config: &Config,
 
     let mut step = 0;
     let mut converged = false;
-    let mut last_energy = MAX; //std::f64::MAX
+    let mut last_energy = NumCast::from(MAX).unwrap(); //std::f64::MAX //TODO: impl max for ComplexFloat
     let mut diff_old = MAX;
     loop {
 
@@ -266,10 +268,10 @@ fn eta(step: u64, diff_old: f64, diff_new: f64, config: &Config) -> Option<f64> 
 ///
 /// Previously each of the variables were calculated in their own function.
 /// The current implementation seems to be much faster though...
-fn compute_observables(config: &Config, potentials: &Potentials, phi: &Array3<f64>) -> Observables {
+fn compute_observables<F: ComplexFloat>(config: &Config, potentials: &Potentials<F>, phi: &Array3<F>) -> Observables<F> {
     let ext = config.central_difference.ext();
     let phi_work = get_work_area(phi, ext);
-    let mut work = Array3::<f64>::zeros(phi_work.dim());
+    let mut work = Array3::<F>::zeros(phi_work.dim());
 
     let energy = {
         let v = get_work_area(&potentials.v, ext);
@@ -278,6 +280,7 @@ fn compute_observables(config: &Config, potentials: &Potentials, phi: &Array3<f6
         match config.central_difference {
             CentralDifference::ThreePoint => {
                 let denominator = 2. * config.grid.dn * config.grid.dn * config.mass;
+                let _6 = NumCast::from(6.).unwrap();
                 Zip::indexed(&mut work)
                     .and(v)
                     .and(phi_work)
@@ -294,11 +297,14 @@ fn compute_observables(config: &Config, potentials: &Potentials, phi: &Array3<f6
                                 w *
                                 (l[[o + 1, o, o]] + l[[o - 1, o, o]] + l[[o, o + 1, o]] +
                                  l[[o, o - 1, o]] + l[[o, o, o + 1]] +
-                                 l[[o, o, o - 1]] - 6. * w) / denominator;
+                                 l[[o, o, o - 1]] - _6 * w) / denominator;
                     });
             }
             CentralDifference::FivePoint => {
                 let denominator = 24. * config.grid.dn * config.grid.dn * config.mass;
+                let neg_one = NumCast::from(-1.).unwrap();
+                let _16 = NumCast::from(16.).unwrap();
+                let _90 = NumCast::from(90.).unwrap();
                 Zip::indexed(&mut work)
                     .and(v)
                     .and(phi_work)
@@ -313,18 +319,22 @@ fn compute_observables(config: &Config, potentials: &Potentials, phi: &Array3<f6
                         // l can now be indexed with local offset `o` and modifiers
                         *work = v * w * w -
                                 w *
-                                (-l[[o + 2, o, o]] + 16. * l[[o + 1, o, o]] + 16. * l[[o - 1, o, o]] -
+                                (neg_one*l[[o + 2, o, o]] + _16 * l[[o + 1, o, o]] + _16 * l[[o - 1, o, o]] -
                                  l[[o - 2, o, o]] - l[[o, o + 2, o]] +
-                                 16. * l[[o, o + 1, o]] +
-                                 16. * l[[o, o - 1, o]] -
+                                 _16 * l[[o, o + 1, o]] +
+                                 _16 * l[[o, o - 1, o]] -
                                  l[[o, o - 2, o]] - l[[o, o, o + 2]] +
-                                 16. * l[[o, o, o + 1]] +
-                                 16. * l[[o, o, o - 1]] -
-                                 l[[o, o, o - 2]] - 90. * w) / denominator;
+                                 _16 * l[[o, o, o + 1]] +
+                                 _16 * l[[o, o, o - 1]] -
+                                 l[[o, o, o - 2]] - _90 * w) / denominator;
                     });
             }
             CentralDifference::SevenPoint => {
                 let denominator = 360. * config.grid.dn * config.grid.dn * config.mass;
+                let _2 = NumCast::from(2.).unwrap();
+                let _27 = NumCast::from(27.).unwrap();
+                let _270 = NumCast::from(270.).unwrap();
+                let _1470 = NumCast::from(1470.).unwrap();
                 Zip::indexed(&mut work)
                     .and(v)
                     .and(phi_work)
@@ -340,15 +350,15 @@ fn compute_observables(config: &Config, potentials: &Potentials, phi: &Array3<f6
                         *work =
                             v * w * w -
                             w *
-                            (2. * l[[o + 3, o, o]] - 27. * l[[o + 2, o, o]] + 270. * l[[o + 1, o, o]] +
-                             270. * l[[o - 1, o, o]] - 27. * l[[o - 2, o, o]] +
-                             2. * l[[o - 3, o, o]] + 2. * l[[o, o + 3, o]] -
-                             27. * l[[o, o + 2, o]] + 270. * l[[o, o + 1, o]] +
-                             270. * l[[o, o - 1, o]] - 27. * l[[o, o - 2, o]] +
-                             2. * l[[o, o - 3, o]] + 2. * l[[o, o, o + 3]] -
-                             27. * l[[o, o, o + 2]] + 270. * l[[o, o, o + 1]] +
-                             270. * l[[o, o, o - 1]] - 27. * l[[o, o, o - 2]] +
-                             2. * l[[o, o, o - 3]] - 1470. * w) / denominator;
+                            (_2 * l[[o + 3, o, o]] - _27 * l[[o + 2, o, o]] + _270 * l[[o + 1, o, o]] +
+                             _270 * l[[o - 1, o, o]] - _27 * l[[o - 2, o, o]] +
+                             _2 * l[[o - 3, o, o]] + _2 * l[[o, o + 3, o]] -
+                             _27 * l[[o, o + 2, o]] + _270 * l[[o, o + 1, o]] +
+                             _270 * l[[o, o - 1, o]] - _27 * l[[o, o - 2, o]] +
+                             _2 * l[[o, o - 3, o]] + _2 * l[[o, o, o + 3]] -
+                             _27 * l[[o, o, o + 2]] + _270 * l[[o, o, o + 1]] +
+                             _270 * l[[o, o, o - 1]] - _27 * l[[o, o, o - 2]] +
+                             _2 * l[[o, o, o - 3]] - _1470 * w) / denominator;
                     });
             }
         }
@@ -366,7 +376,7 @@ fn compute_observables(config: &Config, potentials: &Potentials, phi: &Array3<f6
                                    Ok(p) => p,
                                    Err(err) => panic!("Calling invalid potential_sub routine: {}", err),
                                };
-                               *work = w * w * potsub;
+                               *work = w * w * NumCast::from(potsub).unwrap();
                            });
         } else {
             let potsub = match potential::potential_sub(config) {
@@ -384,7 +394,7 @@ fn compute_observables(config: &Config, potentials: &Potentials, phi: &Array3<f6
             .and(phi_work)
             .par_apply(|(i, j, k), work, &w| {
                            let idx = Index3 { x: i, y: j, z: k };
-                           let r2 = potential::calculate_r2(&idx, &config.grid);
+                           let r2 = NumCast::from(potential::calculate_r2(&idx, &config.grid)).unwrap();
                            *work = w * w * r2;
                        });
         work.into_par_iter().sum()
@@ -405,7 +415,7 @@ fn compute_observables(config: &Config, potentials: &Potentials, phi: &Array3<f6
 /// # Arguments
 ///
 /// * `w` - Current wavefunction array.
-fn get_norm_squared(w: &ArrayView3<f64>) -> f64 {
+fn get_norm_squared<F: ComplexFloat>(w: &ArrayView3<F>) -> F {
     //NOTE: No complex conjugation due to all real input for now
     w.into_par_iter().map(|&el| el * el).sum()
 }
@@ -416,9 +426,9 @@ fn get_norm_squared(w: &ArrayView3<f64>) -> f64 {
 ///
 /// * `w` - Wavefunction to normalise.
 /// * `norm2` - The squared normalisation observable.
-fn normalise_wavefunction(w: &mut Array3<f64>, norm2: f64) {
+fn normalise_wavefunction<F: ComplexFloat>(w: &mut Array3<F>, norm2: F) {
     let norm = norm2.sqrt();
-    w.par_map_inplace(|el| *el /= norm);
+    w.par_map_inplace(|el| *el = *el / norm);
 }
 
 /// Uses Gram Schmidt orthogonalisation to identify the next excited state's wavefunction, even if it's degenerate
@@ -428,20 +438,20 @@ fn normalise_wavefunction(w: &mut Array3<f64>, norm2: f64) {
 /// * `wnum` - Current exited state value.
 /// * `w` - Current, active wavefunction array.
 /// * `w_store` - Vector of currently converged wavefunctions.
-fn orthogonalise_wavefunction(wnum: u8, w: &mut Array3<f64>, w_store: &[Array3<f64>]) {
+fn orthogonalise_wavefunction<F: ComplexFloat>(wnum: u8, w: &mut Array3<F>, w_store: &[Array3<F>]) {
     for lower in w_store.iter().take(wnum as usize) {
         // This MUST be created inside the loop or else we throw nans.
         // I've tried a number of ways to treat this method as it's
         // pretty expensive. Here is the best one I've identified.
-        let mut overlap = Array3::<f64>::zeros(w.dim());
+        let mut overlap = Array3::<F>::zeros(w.dim());
         Zip::from(&mut overlap)
             .and(lower)
             .and(w.view())
             .par_apply(|overlap, &lower, &w| *overlap = lower * w);
-        let overlap_sum: f64 = overlap.into_par_iter().sum();
+        let overlap_sum: F = overlap.into_par_iter().sum();
         Zip::from(w.view_mut())
             .and(lower)
-            .par_apply(|w, &lower| *w -= lower * overlap_sum);
+            .par_apply(|w, &lower| *w = *w - lower * overlap_sum);
     }
 }
 
@@ -456,7 +466,7 @@ fn orthogonalise_wavefunction(wnum: u8, w: &mut Array3<f64>, w_store: &[Array3<f
 /// # Returns
 ///
 /// An array view containing only the workable area of the array.
-pub fn get_work_area(arr: &Array3<f64>, ext: usize) -> ArrayView3<f64> {
+pub fn get_work_area<F: ComplexFloat>(arr: &Array3<F>, ext: usize) -> ArrayView3<F> {
     let dims = arr.dim();
     let exti = ext as isize;
     arr.slice(s![exti..dims.0 as isize - exti,
@@ -475,7 +485,7 @@ pub fn get_work_area(arr: &Array3<f64>, ext: usize) -> ArrayView3<f64> {
 /// # Returns
 ///
 /// A mutable arrav view containing only the workable area of the array.
-pub fn get_mut_work_area(arr: &mut Array3<f64>, ext: usize) -> ArrayViewMut3<f64> {
+pub fn get_mut_work_area<F: ComplexFloat>(arr: &mut Array3<F>, ext: usize) -> ArrayViewMut3<F> {
     let dims = arr.dim();
     let exti = ext as isize;
     arr.slice_mut(s![exti..dims.0 as isize - exti,
@@ -491,11 +501,11 @@ pub fn get_mut_work_area(arr: &mut Array3<f64>, ext: usize) -> ArrayViewMut3<f64
 /// * `config` - Reference to the configuration struct.
 /// * `phi` - Current, active wavefunction array.
 /// * `w_store` - Vector of currently converged wavefunctions.
-fn evolve(wnum: u8,
+fn evolve<F: ComplexFloat>(wnum: u8,
           config: &Config,
-          potentials: &Potentials,
-          phi: &mut Array3<f64>,
-          w_store: &[Array3<f64>]) {
+          potentials: &Potentials<F>,
+          phi: &mut Array3<F>,
+          w_store: &[Array3<F>]) {
     //without mpi, this is just update interior (which is really updaterule if we dont need W)
     let bb = config.central_difference.bb();
     let ext = config.central_difference.ext();
@@ -505,18 +515,19 @@ fn evolve(wnum: u8,
     work_dims.2 -= bb;
     let pa = get_work_area(&potentials.a, ext);
     let pb = get_work_area(&potentials.b, ext);
-    let mut work = Array3::<f64>::zeros(work_dims);
+    let mut work = Array3::<F>::zeros(work_dims);
     let mut steps = 0;
     loop {
 
         {
             let w = get_work_area(phi, ext);
-
+            let dt = NumCast::from(config.grid.dt).unwrap();
 
             //TODO: We don't have any complex conjugation here.
             match config.central_difference {
                 CentralDifference::ThreePoint => {
                     let denominator = 2. * config.grid.dn * config.grid.dn * config.mass;
+                    let _6 = NumCast::from(6.).unwrap();
                     Zip::indexed(&mut work)
                         .and(pa)
                         .and(pb)
@@ -531,16 +542,19 @@ fn evolve(wnum: u8,
                             let l = phi.slice(s![lx - 1..lx + 2, ly - 1..ly + 2, lz - 1..lz + 2]);
                             // l can now be indexed with local offset `o` and modifiers
                             *work = w * pa +
-                                    pb * config.grid.dt *
+                                    pb * dt *
                                     (l[[o + 1, o, o]] + l[[o - 1, o, o]] + l[[o, o + 1, o]] +
                                      l[[o, o - 1, o]] +
                                      l[[o, o, o + 1]] +
                                      l[[o, o, o - 1]] -
-                                     6. * w) / denominator;
+                                     _6 * w) / denominator;
                         });
                 }
                 CentralDifference::FivePoint => {
                     let denominator = 24. * config.grid.dn * config.grid.dn * config.mass;
+                    let neg_one = NumCast::from(-1.).unwrap();
+                    let _16 = NumCast::from(16.).unwrap();
+                    let _90 = NumCast::from(90.).unwrap();
                     Zip::indexed(&mut work)
                         .and(pa)
                         .and(pb)
@@ -555,23 +569,27 @@ fn evolve(wnum: u8,
                             let l = phi.slice(s![lx - 2..lx + 3, ly - 2..ly + 3, lz - 2..lz + 3]);
                             // l can now be indexed with local offset `o` and modifiers
                             *work = w * pa +
-                                    pb * config.grid.dt *
-                                    (-l[[o + 2, o, o]] + 16. * l[[o + 1, o, o]] +
-                                     16. * l[[o - 1, o, o]] -
+                                    pb * dt *
+                                    (neg_one*l[[o + 2, o, o]] + _16 * l[[o + 1, o, o]] +
+                                     _16 * l[[o - 1, o, o]] -
                                      l[[o - 2, o, o]] -
                                      l[[o, o + 2, o]] +
-                                     16. * l[[o, o + 1, o]] +
-                                     16. * l[[o, o - 1, o]] -
+                                     _16 * l[[o, o + 1, o]] +
+                                     _16 * l[[o, o - 1, o]] -
                                      l[[o, o - 2, o]] -
                                      l[[o, o, o + 2]] +
-                                     16. * l[[o, o, o + 1]] +
-                                     16. * l[[o, o, o - 1]] -
+                                     _16 * l[[o, o, o + 1]] +
+                                     _16 * l[[o, o, o - 1]] -
                                      l[[o, o, o - 2]] -
-                                     90. * w) / denominator;
+                                     _90 * w) / denominator;
                         });
                 }
                 CentralDifference::SevenPoint => {
                     let denominator = 360. * config.grid.dn * config.grid.dn * config.mass;
+                    let _2 = NumCast::from(2.).unwrap();
+                    let _27 = NumCast::from(27.).unwrap();
+                    let _270 = NumCast::from(270.).unwrap();
+                    let _1470 = NumCast::from(1470.).unwrap();
                     Zip::indexed(&mut work)
                         .and(pa)
                         .and(pb)
@@ -586,25 +604,25 @@ fn evolve(wnum: u8,
                             let l = phi.slice(s![lx - 3..lx + 4, ly - 3..ly + 4, lz - 3..lz + 4]);
                             // l can now be indexed with local offset `o` and modifiers
                             *work = w * pa +
-                                    pb * config.grid.dt *
-                                    (2. * l[[o + 3, o, o]] - 27. * l[[o + 2, o, o]] +
-                                     270. * l[[o + 1, o, o]] +
-                                     270. * l[[o - 1, o, o]] -
-                                     27. * l[[o - 2, o, o]] +
-                                     2. * l[[o - 3, o, o]] +
-                                     2. * l[[o, o + 3, o]] -
-                                     27. * l[[o, o + 2, o]] +
-                                     270. * l[[o, o + 1, o]] +
-                                     270. * l[[o, o - 1, o]] -
-                                     27. * l[[o, o - 2, o]] +
-                                     2. * l[[o, o - 3, o]] +
-                                     2. * l[[o, o, o + 3]] -
-                                     27. * l[[o, o, o + 2]] +
-                                     270. * l[[o, o, o + 1]] +
-                                     270. * l[[o, o, o - 1]] -
-                                     27. * l[[o, o, o - 2]] +
-                                     2. * l[[o, o, o - 3]] -
-                                     1470. * w) / denominator;
+                                    pb * dt *
+                                    (_2 * l[[o + 3, o, o]] - _27 * l[[o + 2, o, o]] +
+                                     _270 * l[[o + 1, o, o]] +
+                                     _270 * l[[o - 1, o, o]] -
+                                     _27 * l[[o - 2, o, o]] +
+                                     _2 * l[[o - 3, o, o]] +
+                                     _2 * l[[o, o + 3, o]] -
+                                     _27 * l[[o, o + 2, o]] +
+                                     _270 * l[[o, o + 1, o]] +
+                                     _270 * l[[o, o - 1, o]] -
+                                     _27 * l[[o, o - 2, o]] +
+                                     _2 * l[[o, o - 3, o]] +
+                                     _2 * l[[o, o, o + 3]] -
+                                     _27 * l[[o, o, o + 2]] +
+                                     _270 * l[[o, o, o + 1]] +
+                                     _270 * l[[o, o, o - 1]] -
+                                     _27 * l[[o, o, o - 2]] +
+                                     _2 * l[[o, o, o - 3]] -
+                                     _1470 * w) / denominator;
                         });
                 }
             }
