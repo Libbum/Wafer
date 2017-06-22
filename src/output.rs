@@ -39,7 +39,7 @@ struct ObservablesOutput {
     l_r: f64,
 }
 
-#[derive(Debug,Serialize)]
+#[derive(Debug, Serialize)]
 /// A simple struct to parse data to a plain csv file
 struct PlainRecord {
     /// Index in *x*
@@ -57,12 +57,16 @@ pub fn print_banner(sha: &str) {
     println!("                    {}", Blue.paint("___"));
     println!("   __      ____ _  {}__ _ __", Blue.paint("/ __\\"));
     println!("   \\ \\ /\\ / / _` |{} / _ \\ '__|", Blue.paint("/ /"));
-    println!("    \\ V  V / (_| {}|  __/ |    Current build SHA1: {}",
-             Blue.paint("/ _\\"),
-             sha);
-    println!("     \\_/\\_/ \\__,{}   \\___|_|    Parallel tasks running on {} threads.",
-             Blue.paint("/ /"),
-             rayon::current_num_threads());
+    println!(
+        "    \\ V  V / (_| {}|  __/ |    Current build SHA1: {}",
+        Blue.paint("/ _\\"),
+        sha
+    );
+    println!(
+        "     \\_/\\_/ \\__,{}   \\___|_|    Parallel tasks running on {} threads.",
+        Blue.paint("/ /"),
+        rayon::current_num_threads()
+    );
     println!("              {}", Blue.paint("\\__/"));
     println!("");
 }
@@ -74,9 +78,11 @@ pub fn print_banner(sha: &str) {
 /// * `project` - The project name (for directory to save to).
 /// * `file_type` - What type of file format to use in the output.
 pub fn potential(v: &ArrayView3<f64>, project: &str, file_type: &FileType) -> Result<()> {
-    let filename = format!("{}/potential{}",
-                           get_project_dir(project),
-                           file_type.extentsion());
+    let filename = format!(
+        "{}/potential{}",
+        get_project_dir(project),
+        file_type.extentsion()
+    );
     match *file_type {
         FileType::Messagepack => write_mpk(v, &filename),
         FileType::Csv => write_csv(v, &filename),
@@ -98,11 +104,11 @@ fn write_csv(array: &ArrayView3<f64>, filename: &str) -> Result<()> {
     for ((i, j, k), data) in array.indexed_iter() {
         buffer
             .serialize(PlainRecord {
-                           i: i,
-                           j: j,
-                           k: k,
-                           data: *data,
-                       })
+                i: i,
+                j: j,
+                k: k,
+                data: *data,
+            })
             .chain_err(|| ErrorKind::Serialize)?;
     }
     buffer.flush().chain_err(|| ErrorKind::Flush)?;
@@ -116,9 +122,14 @@ fn write_csv(array: &ArrayView3<f64>, filename: &str) -> Result<()> {
 /// * `filename` - file / directory to save to.
 fn write_mpk(array: &ArrayView3<f64>, filename: &str) -> Result<()> {
     let mut output = Vec::new();
-    array.serialize(&mut rmps::Serializer::new(&mut output)).chain_err(|| ErrorKind::Serialize)?;
-    let mut buffer = File::create(filename).chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
-    buffer.write_all(&output).chain_err(|| ErrorKind::WriteToFile(filename.to_string()))?;
+    array
+        .serialize(&mut rmps::Serializer::new(&mut output))
+        .chain_err(|| ErrorKind::Serialize)?;
+    let mut buffer = File::create(filename)
+        .chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
+    buffer
+        .write_all(&output)
+        .chain_err(|| ErrorKind::WriteToFile(filename.to_string()))?;
     Ok(())
 }
 
@@ -158,17 +169,20 @@ fn write_yaml(array: &ArrayView3<f64>, filename: &str) -> Result<()> {
 /// will have `_partial` appended to it to indicate a restart is required.
 /// * `project` - The project name (for directory to save to).
 /// * `file_type` - What type of file format to use in the output.
-pub fn wavefunction(phi: &ArrayView3<f64>,
-                    num: u8,
-                    converged: bool,
-                    project: &str,
-                    file_type: &FileType)
-                    -> Result<()> {
-    let filename = format!("{}/wavefunction_{}{}{}",
-                           get_project_dir(project),
-                           num,
-                           if converged { "" } else { "_partial" },
-                           file_type.extentsion());
+pub fn wavefunction(
+    phi: &ArrayView3<f64>,
+    num: u8,
+    converged: bool,
+    project: &str,
+    file_type: &FileType,
+) -> Result<()> {
+    let filename = format!(
+        "{}/wavefunction_{}{}{}",
+        get_project_dir(project),
+        num,
+        if converged { "" } else { "_partial" },
+        file_type.extentsion()
+    );
     match *file_type {
         FileType::Messagepack => write_mpk(phi, &filename),
         FileType::Csv => write_csv(phi, &filename),
@@ -186,10 +200,12 @@ pub fn wavefunction(phi: &ArrayView3<f64>,
 /// * `project` - Project name of the current simulation.
 /// * `file_type` - What type of file format to use in the output.
 pub fn remove_partial(wnum: u8, project: &str, file_type: &FileType) -> Result<()> {
-    let filename = format!("{}/wavefunction_{}_partial{}",
-                           get_project_dir(project),
-                           wnum,
-                           file_type.extentsion());
+    let filename = format!(
+        "{}/wavefunction_{}_partial{}",
+        get_project_dir(project),
+        wnum,
+        file_type.extentsion()
+    );
     remove_file(&filename)
         .chain_err(|| ErrorKind::DeletePartial(wnum))?;
     Ok(())
@@ -202,64 +218,72 @@ pub fn print_observable_header(wnum: u8) {
     let col2 = 37; //Energy+rrms+1
     println!("");
     if let 0 = wnum {
-        println!("{:═^lspace$}╤{:═^twidth$}╤{:═^w$}╤{:═^width$}╤{:═^rspace$}",
-                 "",
-                 "",
-                 " Ground state caclulation ",
-                 "",
-                 "",
-                 twidth = 12,
-                 width = 16,
-                 w = col2,
-                 lspace = spacer,
-                 rspace = if 2 * spacer + 69 < width {
-                     spacer + 1
-                 } else {
-                     spacer
-                 });
+        println!(
+            "{:═^lspace$}╤{:═^twidth$}╤{:═^w$}╤{:═^width$}╤{:═^rspace$}",
+            "",
+            "",
+            " Ground state caclulation ",
+            "",
+            "",
+            twidth = 12,
+            width = 16,
+            w = col2,
+            lspace = spacer,
+            rspace = if 2 * spacer + 69 < width {
+                spacer + 1
+            } else {
+                spacer
+            }
+        );
     } else {
-        println!("{:═^lspace$}╤{:═^twidth$}╤{:═^w$}╤{:═^width$}╤{:═^rspace$}",
-                 "",
-                 "",
-                 format!(" {} excited state caclulation ", Ordinal::from(wnum)),
-                 "",
-                 "",
-                 twidth = 12,
-                 width = 16,
-                 w = col2,
-                 lspace = spacer,
-                 rspace = if 2 * spacer + 69 < width {
-                     spacer + 1
-                 } else {
-                     spacer
-                 });
+        println!(
+            "{:═^lspace$}╤{:═^twidth$}╤{:═^w$}╤{:═^width$}╤{:═^rspace$}",
+            "",
+            "",
+            format!(" {} excited state caclulation ", Ordinal::from(wnum)),
+            "",
+            "",
+            twidth = 12,
+            width = 16,
+            w = col2,
+            lspace = spacer,
+            rspace = if 2 * spacer + 69 < width {
+                spacer + 1
+            } else {
+                spacer
+            }
+        );
     }
-    println!("{:^space$}│{:^twidth$}│{:^ewidth$}│{:^width$}│{:^width$}│",
-             "",
-             "Time (τ)",
-             "Energy",
-             "rᵣₘₛ",
-             "Difference",
-             twidth = 12,
-             ewidth = 20,
-             width = 16,
-             space = spacer);
-    println!("{:─^lspace$}┼{:─^twidth$}┼{:─^ewidth$}┼{:─^width$}┼{:─^width$}┼{:─^rspace$}",
-             "",
-             "",
-             "",
-             "",
-             "",
-             "",
-             twidth = 12,
-             ewidth = 20,
-             width = 16,
-             lspace = spacer,
-             rspace = if 2 * spacer + 69 < width {
-                 spacer + 1
-             } else {
-                 spacer
-             });
+    println!(
+        "{:^space$}│{:^twidth$}│{:^ewidth$}│{:^width$}│{:^width$}│",
+        "",
+        "Time (τ)",
+        "Energy",
+        "rᵣₘₛ",
+        "Difference",
+        twidth = 12,
+        ewidth = 20,
+        width = 16,
+        space = spacer
+    );
+    println!(
+        "{:─^lspace$}┼{:─^twidth$}┼{:─^ewidth$}┼{:─^width$}┼{:─^width$}┼{:─^rspace$}",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        twidth = 12,
+        ewidth = 20,
+        width = 16,
+        lspace = spacer,
+        rspace = if 2 * spacer + 69 < width {
+            spacer + 1
+        } else {
+            spacer
+        }
+    );
 }
 
 /// Pretty prints measurements at current step to screen
@@ -267,21 +291,25 @@ pub fn print_measurements(tau: f64, diff: f64, observables: &grid::Observables) 
     let width = *TERMWIDTH;
     let spacer = (width - 69) / 2;
     if tau > 0.0 {
-        format!("{:^space$}│{:>11.3} │{:>19.10e} │{:15.5} │{:15.5e} │",
-                "",
-                tau,
-                observables.energy / observables.norm2,
-                (observables.r2 / observables.norm2).sqrt(),
-                diff,
-                space = spacer)
+        format!(
+            "{:^space$}│{:>11.3} │{:>19.10e} │{:15.5} │{:15.5e} │",
+            "",
+            tau,
+            observables.energy / observables.norm2,
+            (observables.r2 / observables.norm2).sqrt(),
+            diff,
+            space = spacer
+        )
     } else {
-        format!("{:^space$}│{:>11.3} │{:>19.10e} │{:15.5} │{:>15} │",
-                "",
-                tau,
-                observables.energy / observables.norm2,
-                (observables.r2 / observables.norm2).sqrt(),
-                "--   ",
-                space = spacer)
+        format!(
+            "{:^space$}│{:>11.3} │{:>19.10e} │{:15.5} │{:>15} │",
+            "",
+            tau,
+            observables.energy / observables.norm2,
+            (observables.r2 / observables.norm2).sqrt(),
+            "--   ",
+            space = spacer
+        )
 
     }
 }
@@ -296,12 +324,13 @@ pub fn print_measurements(tau: f64, diff: f64, observables: &grid::Observables) 
 /// * `numx` - the width of the calculation box.
 /// * `project` - current project name (for file output).
 /// * `file_type` - What type of file format to use in the output.
-pub fn finalise_measurement(observables: &grid::Observables,
-                            wnum: u8,
-                            numx: f64,
-                            project: &str,
-                            file_type: &FileType)
-                            -> Result<()> {
+pub fn finalise_measurement(
+    observables: &grid::Observables,
+    wnum: u8,
+    numx: f64,
+    project: &str,
+    file_type: &FileType,
+) -> Result<()> {
     let r_norm = (observables.r2 / observables.norm2).sqrt();
     let output = ObservablesOutput {
         state: wnum,
@@ -326,34 +355,42 @@ fn print_summary(output: &ObservablesOutput) {
     let width = *TERMWIDTH;
     let spacer = (width - 69) / 2;
 
-    println!("{:═^lspace$}╧{:═^twidth$}╧{:═^ewidth$}╧{:═^width$}╧{:═^width$}╧{:═^rspace$}",
-             "",
-             "",
-             "",
-             "",
-             "",
-             "",
-             twidth = 12,
-             ewidth = 20,
-             width = 16,
-             lspace = spacer,
-             rspace = if 2 * spacer + 69 < width {
-                 spacer + 1
-             } else {
-                 spacer
-             });
+    println!(
+        "{:═^lspace$}╧{:═^twidth$}╧{:═^ewidth$}╧{:═^width$}╧{:═^width$}╧{:═^rspace$}",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        twidth = 12,
+        ewidth = 20,
+        width = 16,
+        lspace = spacer,
+        rspace = if 2 * spacer + 69 < width {
+            spacer + 1
+        } else {
+            spacer
+        }
+    );
     if let 0 = output.state {
         println!("══▶ Ground state energy = {}", output.energy);
-        println!("══▶ Ground state binding energy = {}",
-                 output.binding_energy);
+        println!(
+            "══▶ Ground state binding energy = {}",
+            output.binding_energy
+        );
     } else {
         let state = Ordinal::from(output.state);
-        println!("══▶ {} excited state energy = {}",
-                 state,
-                 output.energy);
-        println!("══▶ {} excited state binding energy = {}",
-                 state,
-                 output.binding_energy);
+        println!(
+            "══▶ {} excited state energy = {}",
+            state,
+            output.energy
+        );
+        println!(
+            "══▶ {} excited state binding energy = {}",
+            state,
+            output.binding_energy
+        );
     }
     println!("══▶ rᵣₘₛ = {}", output.r);
     println!("══▶ L/rᵣₘₛ = {}", output.l_r);
@@ -363,9 +400,11 @@ fn print_summary(output: &ObservablesOutput) {
 
 /// Saves the observables to a messagepack binary file.
 fn observables_mpk(observables: &ObservablesOutput, project: &str) -> Result<()> {
-    let filename = format!("{}/observables_{}.mpk",
-                           get_project_dir(project),
-                           observables.state);
+    let filename = format!(
+        "{}/observables_{}.mpk",
+        get_project_dir(project),
+        observables.state
+    );
     let mut output = Vec::new();
     observables
         .serialize(&mut rmps::Serializer::new(&mut output))
@@ -380,21 +419,27 @@ fn observables_mpk(observables: &ObservablesOutput, project: &str) -> Result<()>
 
 /// Saves the observables to a plain csv file.
 fn observables_csv(observables: &ObservablesOutput, project: &str) -> Result<()> {
-    let filename = format!("{}/observables_{}.csv",
-                           get_project_dir(project),
-                           observables.state);
+    let filename = format!(
+        "{}/observables_{}.csv",
+        get_project_dir(project),
+        observables.state
+    );
     let mut buffer = csv::Writer::from_path(&filename)
         .chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
-    buffer.serialize(observables).chain_err(|| ErrorKind::Serialize)?;
+    buffer
+        .serialize(observables)
+        .chain_err(|| ErrorKind::Serialize)?;
     buffer.flush().chain_err(|| ErrorKind::Flush)?;
     Ok(())
 }
 
 /// Saves the observables to a json file.
 fn observables_json(observables: &ObservablesOutput, project: &str) -> Result<()> {
-    let filename = format!("{}/observables_{}.json",
-                           get_project_dir(project),
-                           observables.state);
+    let filename = format!(
+        "{}/observables_{}.json",
+        get_project_dir(project),
+        observables.state
+    );
     let buffer = File::create(&filename)
         .chain_err(|| ErrorKind::CreateFile(filename))?;
     serde_json::to_writer_pretty(buffer, observables)
@@ -404,9 +449,11 @@ fn observables_json(observables: &ObservablesOutput, project: &str) -> Result<()
 
 /// Saves the observables to a yaml file.
 fn observables_yaml(observables: &ObservablesOutput, project: &str) -> Result<()> {
-    let filename = format!("{}/observables_{}.yaml",
-                           get_project_dir(project),
-                           observables.state);
+    let filename = format!(
+        "{}/observables_{}.yaml",
+        get_project_dir(project),
+        observables.state
+    );
     let buffer = File::create(&filename)
         .chain_err(|| ErrorKind::CreateFile(filename))?;
     serde_yaml::to_writer(buffer, observables)

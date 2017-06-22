@@ -376,162 +376,226 @@ impl Config {
     /// * `w` - width of display. This is limited from 70 to 100 characters before being accessed
     /// here, but no such restriction is required inside this function.
     pub fn print(&self, w: usize) {
-        println!("{:═^width$}",
-                 format!(" {} - Configuration ", self.project_name),
-                 width = w);
+        println!(
+            "{:═^width$}",
+            format!(" {} - Configuration ", self.project_name),
+            width = w
+        );
         let mid = w - 10;
         if w > 95 {
             let colwidth = mid / 4;
             let dcolwidth = mid / 2;
-            println!("{:5}{:<dwidth$}{:<width$}{:<width$}",
-                     "",
-                     format!("Grid {{ x: {}, y: {}, z: {} }}",
-                             self.grid.size.x,
-                             self.grid.size.y,
-                             self.grid.size.z),
-                     format!("Δ{{x,y,z}}: {:.3e}", self.grid.dn),
-                     format!("Δt: {:.3e}", self.grid.dt),
-                     dwidth = dcolwidth,
-                     width = colwidth);
-            println!("{:5}{:<width$}{:<width$}{:<width$}{:<width$}",
-                     "",
-                     format!("Screen update: {}", self.output.screen_update),
-                     if self.output.snap_update.is_some() {
-                         format!("Snapshot update: {}", self.output.snap_update.unwrap())
-                     } else {
-                         "Snapshot update: Off".to_string()
-                     },
-                     format!("Save wavefns: {}", self.output.save_wavefns),
-                     format!("Save potential: {}", self.output.save_potential),
-                     width = colwidth);
-            println!("{:5}{:<width$}{:<width$}",
-                     "",
-                     format!("CD precision: {}", self.central_difference),
-                     format!("Output file format: {}", self.output.file_type),
-                     width = dcolwidth);
-            println!("{:5}{:<twidth$}{:<width$}",
-                     "",
-                     format!("Potential: {}", self.potential),
-                     format!("Mass: {} amu", self.mass),
-                     twidth = colwidth * 3,
-                     width = colwidth);
-            println!("{:5}{:<width$}{:<width$}",
-                     "",
-                     format!("Energy covergence tolerance: {:.3e}", self.tolerance),
-                     if self.max_steps.is_some() {
-                         format!("Maximum number of steps: {:.3e}", self.max_steps.unwrap() as f64)
-                     } else {
-                         "Maximum number of steps: ∞".to_string()
-                     },
-                     width = dcolwidth);
-            println!("{:5}{:<width$}{:<width$}",
-                     "",
-                     format!("Starting wavefunction: {}", self.wavenum),
-                     format!("Maximum wavefunction: {}", self.wavemax),
-                     width = dcolwidth);
+            println!(
+                "{:5}{:<dwidth$}{:<width$}{:<width$}",
+                "",
+                format!(
+                    "Grid {{ x: {}, y: {}, z: {} }}",
+                    self.grid.size.x,
+                    self.grid.size.y,
+                    self.grid.size.z
+                ),
+                format!("Δ{{x,y,z}}: {:.3e}", self.grid.dn),
+                format!("Δt: {:.3e}", self.grid.dt),
+                dwidth = dcolwidth,
+                width = colwidth
+            );
+            println!(
+                "{:5}{:<width$}{:<width$}{:<width$}{:<width$}",
+                "",
+                format!("Screen update: {}", self.output.screen_update),
+                if self.output.snap_update.is_some() {
+                    format!("Snapshot update: {}", self.output.snap_update.unwrap())
+                } else {
+                    "Snapshot update: Off".to_string()
+                },
+                format!("Save wavefns: {}", self.output.save_wavefns),
+                format!("Save potential: {}", self.output.save_potential),
+                width = colwidth
+            );
+            println!(
+                "{:5}{:<width$}{:<width$}",
+                "",
+                format!("CD precision: {}", self.central_difference),
+                format!("Output file format: {}", self.output.file_type),
+                width = dcolwidth
+            );
+            println!(
+                "{:5}{:<twidth$}{:<width$}",
+                "",
+                format!("Potential: {}", self.potential),
+                format!("Mass: {} amu", self.mass),
+                twidth = colwidth * 3,
+                width = colwidth
+            );
+            println!(
+                "{:5}{:<width$}{:<width$}",
+                "",
+                format!("Energy covergence tolerance: {:.3e}", self.tolerance),
+                if self.max_steps.is_some() {
+                    format!(
+                        "Maximum number of steps: {:.3e}",
+                        self.max_steps.unwrap() as f64
+                    )
+                } else {
+                    "Maximum number of steps: ∞".to_string()
+                },
+                width = dcolwidth
+            );
+            println!(
+                "{:5}{:<width$}{:<width$}",
+                "",
+                format!("Starting wavefunction: {}", self.wavenum),
+                format!("Maximum wavefunction: {}", self.wavemax),
+                width = dcolwidth
+            );
             if self.clustrun {
-                println!("{:5}{:<width$}{:<width$}",
-                         "",
-                         "Cluster run.",
-                         format!("Cluster bounds {{ x: {}, y: {}, z: {} }}",
-                                 self.al_clust.x,
-                                 self.al_clust.y,
-                                 self.al_clust.z),
-                         width = dcolwidth);
+                println!(
+                    "{:5}{:<width$}{:<width$}",
+                    "",
+                    "Cluster run.",
+                    format!(
+                        "Cluster bounds {{ x: {}, y: {}, z: {} }}",
+                        self.al_clust.x,
+                        self.al_clust.y,
+                        self.al_clust.z
+                    ),
+                    width = dcolwidth
+                );
             }
             if self.init_condition == InitialCondition::Gaussian {
-                println!("{:5}{:<width$}{:<width$}",
-                         "",
-                         format!("Initial conditions: {} ({} σ)",
-                                 self.init_condition,
-                                 self.sig),
-                         format!("Symmetry Constraints: {}", self.init_symmetry),
-                         width = dcolwidth);
+                println!(
+                    "{:5}{:<width$}{:<width$}",
+                    "",
+                    format!(
+                        "Initial conditions: {} ({} σ)",
+                        self.init_condition,
+                        self.sig
+                    ),
+                    format!("Symmetry Constraints: {}", self.init_symmetry),
+                    width = dcolwidth
+                );
             } else {
-                println!("{:5}{:<width$}{:<width$}",
-                         "",
-                         format!("Initial conditions: {}", self.init_condition),
-                         format!("Symmetry Constraints: {}", self.init_symmetry),
-                         width = dcolwidth);
+                println!(
+                    "{:5}{:<width$}{:<width$}",
+                    "",
+                    format!("Initial conditions: {}", self.init_condition),
+                    format!("Symmetry Constraints: {}", self.init_symmetry),
+                    width = dcolwidth
+                );
             }
         } else {
             let colwidth = mid / 2;
-            println!("{:5}{}",
-                     "",
-                     format!("Grid {{ x: {}, y: {}, z: {} }}",
-                             self.grid.size.x,
-                             self.grid.size.y,
-                             self.grid.size.z));
-            println!("{:5}{:<width$}{:<width$}",
-                     "",
-                     format!("Δ{{x,y,z}}: {:.3e}", self.grid.dn),
-                     format!("Δt: {:.3e}", self.grid.dt),
-                     width = colwidth);
-            println!("{:5}{:<width$}{:<width$}",
-                     "",
-                     format!("Screen update: {}", self.output.screen_update),
-                     if self.output.snap_update.is_some() {
-                         format!("Snapshot update: {}", self.output.snap_update.unwrap())
-                     } else {
-                         "Snapshot update: Off".to_string()
-                     },
-                     width = colwidth);
-            println!("{:5}{:<width$}{:<width$}",
-                     "",
-                     format!("Save wavefns: {}", self.output.save_wavefns),
-                     format!("Save potential: {}", self.output.save_potential),
-                     width = colwidth);
-            println!("{:5}{:<width$}{:<width$}",
-                     "",
-                     format!("CD precision: {}", self.central_difference),
-                     format!("Output file format: {}", self.output.file_type),
-                     width = colwidth);
-            println!("{:5}{:<twidth$}{:<width$}",
-                     "",
-                     format!("Potential: {}", self.potential),
-                     format!("Mass: {} amu", self.mass),
-                     twidth = (mid / 4) * 3,
-                     width = mid / 4);
-            println!("{:5}{:<width$}{:<width$}",
-                     "",
-                     format!("Energy covergence tolerance: {:.3e}", self.tolerance),
-                     if self.max_steps.is_some() {
-                         format!("Maximum number of steps: {:.3e}", self.max_steps.unwrap() as f64)
-                     } else {
-                         "Maximum number of steps: ∞".to_string()
-                     },
-                     width = colwidth);
-            println!("{:5}{:<width$}{:<width$}",
-                     "",
-                     format!("Starting wavefunction: {}", self.wavenum),
-                     format!("Maximum wavefunction: {}", self.wavemax),
-                     width = colwidth);
+            println!(
+                "{:5}{}",
+                "",
+                format!(
+                    "Grid {{ x: {}, y: {}, z: {} }}",
+                    self.grid.size.x,
+                    self.grid.size.y,
+                    self.grid.size.z
+                )
+            );
+            println!(
+                "{:5}{:<width$}{:<width$}",
+                "",
+                format!("Δ{{x,y,z}}: {:.3e}", self.grid.dn),
+                format!("Δt: {:.3e}", self.grid.dt),
+                width = colwidth
+            );
+            println!(
+                "{:5}{:<width$}{:<width$}",
+                "",
+                format!("Screen update: {}", self.output.screen_update),
+                if self.output.snap_update.is_some() {
+                    format!("Snapshot update: {}", self.output.snap_update.unwrap())
+                } else {
+                    "Snapshot update: Off".to_string()
+                },
+                width = colwidth
+            );
+            println!(
+                "{:5}{:<width$}{:<width$}",
+                "",
+                format!("Save wavefns: {}", self.output.save_wavefns),
+                format!("Save potential: {}", self.output.save_potential),
+                width = colwidth
+            );
+            println!(
+                "{:5}{:<width$}{:<width$}",
+                "",
+                format!("CD precision: {}", self.central_difference),
+                format!("Output file format: {}", self.output.file_type),
+                width = colwidth
+            );
+            println!(
+                "{:5}{:<twidth$}{:<width$}",
+                "",
+                format!("Potential: {}", self.potential),
+                format!("Mass: {} amu", self.mass),
+                twidth = (mid / 4) * 3,
+                width = mid / 4
+            );
+            println!(
+                "{:5}{:<width$}{:<width$}",
+                "",
+                format!("Energy covergence tolerance: {:.3e}", self.tolerance),
+                if self.max_steps.is_some() {
+                    format!(
+                        "Maximum number of steps: {:.3e}",
+                        self.max_steps.unwrap() as f64
+                    )
+                } else {
+                    "Maximum number of steps: ∞".to_string()
+                },
+                width = colwidth
+            );
+            println!(
+                "{:5}{:<width$}{:<width$}",
+                "",
+                format!("Starting wavefunction: {}", self.wavenum),
+                format!("Maximum wavefunction: {}", self.wavemax),
+                width = colwidth
+            );
             if self.clustrun {
-                println!("{:5}{:<width$}{:<width$}",
-                         "",
-                         "Cluster run.",
-                         format!("Cluster bounds {{ x: {}, y: {}, z: {} }}",
-                                 self.al_clust.x,
-                                 self.al_clust.y,
-                                 self.al_clust.z),
-                         width = colwidth);
+                println!(
+                    "{:5}{:<width$}{:<width$}",
+                    "",
+                    "Cluster run.",
+                    format!(
+                        "Cluster bounds {{ x: {}, y: {}, z: {} }}",
+                        self.al_clust.x,
+                        self.al_clust.y,
+                        self.al_clust.z
+                    ),
+                    width = colwidth
+                );
             }
             if self.init_condition == InitialCondition::Gaussian {
-                println!("{:5}{}",
-                         "",
-                         format!("Initial conditions: {} ({} σ)",
-                                 self.init_condition,
-                                 self.sig));
-                println!("{:5}{}",
-                         "",
-                         format!("Symmetry Constraints: {}", self.init_symmetry));
+                println!(
+                    "{:5}{}",
+                    "",
+                    format!(
+                        "Initial conditions: {} ({} σ)",
+                        self.init_condition,
+                        self.sig
+                    )
+                );
+                println!(
+                    "{:5}{}",
+                    "",
+                    format!("Symmetry Constraints: {}", self.init_symmetry)
+                );
             } else {
-                println!("{:5}{}",
-                         "",
-                         format!("Initial conditions: {}", self.init_condition));
-                println!("{:5}{}",
-                         "",
-                         format!("Symmetry Constraints: {}", self.init_symmetry));
+                println!(
+                    "{:5}{}",
+                    "",
+                    format!("Initial conditions: {}", self.init_condition)
+                );
+                println!(
+                    "{:5}{}",
+                    "",
+                    format!("Symmetry Constraints: {}", self.init_symmetry)
+                );
             }
         }
         println!("{:═^width$}", "", width = w);
@@ -548,17 +612,15 @@ pub fn set_initial_conditions(config: &Config, log: &Logger) -> Result<Array3<f6
     info!(log, "Setting initial conditions for wavefunction");
     let num = &config.grid.size;
     let bb = config.central_difference.bb();
-    let init_size: [usize; 3] = [num.x as usize + bb,
-                                 num.y as usize + bb,
-                                 num.z as usize + bb];
+    let init_size: [usize; 3] = [
+        num.x as usize + bb,
+        num.y as usize + bb,
+        num.z as usize + bb,
+    ];
     let mut w: Array3<f64> = match config.init_condition {
         InitialCondition::FromFile => {
-            input::wavefunction(config.wavenum,
-                                init_size,
-                                bb,
-                                &config.output.file_type,
-                                log)
-                    .chain_err(|| ErrorKind::LoadWavefunction(config.wavenum))?
+            input::wavefunction(config.wavenum, init_size, bb, &config.output.file_type, log)
+                .chain_err(|| ErrorKind::LoadWavefunction(config.wavenum))?
         }
         InitialCondition::Gaussian => generate_gaussian(config, init_size),
         InitialCondition::Coulomb => generate_coulomb(config, init_size),
@@ -624,8 +686,8 @@ fn generate_coulomb(config: &Config, init_size: [usize; 3]) -> Array3<f64> {
         let mr2 = (-config.mass * r / 2.).exp();
         // Terms here represent: n=1; n=2, l=0; n=2,l=1,m=0; n=2,l=1,m±1 respectively.
         *x = (-config.mass * r).exp() + (2. - config.mass * r) * mr2 +
-             config.mass * r * mr2 * costheta +
-             config.mass * r * mr2 * (1. - costheta.powi(2)).sqrt() * cosphi;
+            config.mass * r * mr2 * costheta +
+            config.mass * r * mr2 * (1. - costheta.powi(2)).sqrt() * cosphi;
     });
     w
 }
@@ -638,8 +700,9 @@ fn generate_coulomb(config: &Config, init_size: [usize; 3]) -> Array3<f64> {
 fn generate_boolean(init_size: [usize; 3]) -> Array3<f64> {
     let mut w = Array3::<f64>::zeros(init_size);
 
-    Zip::indexed(&mut w)
-        .par_apply(|(i, j, k), el| { *el = i as f64 % 2. * j as f64 % 2. * k as f64 % 2.; });
+    Zip::indexed(&mut w).par_apply(|(i, j, k), el| {
+        *el = i as f64 % 2. * j as f64 % 2. * k as f64 % 2.;
+    });
     w
 }
 

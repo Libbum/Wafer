@@ -134,11 +134,11 @@ fn main() {
     //Setup logging.
     let log_location = output::get_project_dir(&config.project_name) + "/simulation.log";
     let log_file = match OpenOptions::new()
-              .create(true)
-              .write(true)
-              .truncate(true)
-              .open(&log_location)
-              .chain_err(|| ErrorKind::CreateLog(log_location.to_string())) {
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(&log_location)
+        .chain_err(|| ErrorKind::CreateLog(log_location.to_string())) {
         Ok(f) => f,
         Err(ref err) => {
             println!("Error initialising log file: {}", err);
@@ -160,9 +160,13 @@ fn main() {
         1 => Level::Info,
         2 | _ => Level::Debug,
     };
-    let log = Logger::root(Fuse::new(Duplicate::new(LevelFilter::new(screen_drain, screen_level),
-                                                    sys_drain)),
-                           o!());
+    let log = Logger::root(
+        Fuse::new(Duplicate::new(
+            LevelFilter::new(screen_drain, screen_level),
+            sys_drain,
+        )),
+        o!(),
+    );
 
     info!(log, "Starting Wafer solver"; "version" => crate_version!(), "build-id" => short_sha());
 
@@ -176,8 +180,9 @@ fn main() {
     };
 
     //Override rayon's defaults of threads (including HT cores) to physical cores
-    if let Err(err) = rayon::initialize(rayon::Configuration::new()
-                                            .num_threads(num_cpus::get_physical())) {
+    if let Err(err) = rayon::initialize(
+        rayon::Configuration::new().num_threads(num_cpus::get_physical()),
+    ) {
         crit!(log, "Failed to initialise thread pool: {}", err);
         exit_with_pause();
     };
@@ -202,22 +207,28 @@ fn main() {
     let elapsed = start_time.elapsed();
     let time_taken = (elapsed.as_secs() as f64) + (elapsed.subsec_nanos() as f64 / 1000_000_000.0);
     if time_taken < 60.0 {
-        println!("Simulation complete. Elapsed time: {:.3} seconds.",
-                     time_taken)
+        println!(
+            "Simulation complete. Elapsed time: {:.3} seconds.",
+            time_taken
+        )
     } else if time_taken >= 60.0 && time_taken < 3600.0 {
         let minutes = (time_taken / 60.).floor();
         let seconds = time_taken - 60. * minutes;
-        println!("Simulation complete. Elapsed time: {} minutes, {:.3} seconds.",
-                 minutes,
-                 seconds);
+        println!(
+            "Simulation complete. Elapsed time: {} minutes, {:.3} seconds.",
+            minutes,
+            seconds
+        );
     } else {
         let hours = (time_taken / 3600.).floor();
         let minutes = ((time_taken - 3600. * hours) / 60.).floor();
         let seconds = time_taken - 3600. * hours - 60. * minutes;
-        println!("Simulation complete. Elapsed time: {} hours, {} minutes, {:.3} seconds.",
-                 hours,
-                 minutes,
-                 seconds);
+        println!(
+            "Simulation complete. Elapsed time: {} hours, {} minutes, {:.3} seconds.",
+            hours,
+            minutes,
+            seconds
+        );
     }
     info!(log, "Simulation completed");
 }

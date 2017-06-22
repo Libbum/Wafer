@@ -13,7 +13,7 @@ use grid;
 use config::{Config, Grid, FileType};
 use errors::*;
 
-#[derive(Debug,Deserialize)]
+#[derive(Debug, Deserialize)]
 /// A simple struct to parse data from a plain csv file
 struct PlainRecord {
     /// Index in *x*
@@ -49,11 +49,12 @@ fn check_potential_file(extension: &str) -> Option<String> {
 /// * `file_type` - What type of file format to use in the output. Will be used as an arbitrator
 /// when multiple files are detected.
 /// * `log` - Reference to the system logger.
-pub fn potential(target_size: [usize; 3],
-                 bb: usize,
-                 file_type: &FileType,
-                 log: &Logger)
-                 -> Result<Array3<f64>> {
+pub fn potential(
+    target_size: [usize; 3],
+    bb: usize,
+    file_type: &FileType,
+    log: &Logger,
+) -> Result<Array3<f64>> {
     let mpk_file = check_potential_file("mpk");
     let csv_file = check_potential_file("csv");
     let json_file = check_potential_file("json");
@@ -63,10 +64,12 @@ pub fn potential(target_size: [usize; 3],
         let files = [&mpk_file, &csv_file, &json_file, &yaml_file];
         files.iter().filter(|x| x.is_some()).count()
     };
-    if  file_count > 1 {
-        warn!(log,
-              "Multiple potential files found in input directory. Chosing '{}' based on configuration settings.",
-              file_type);
+    if file_count > 1 {
+        warn!(
+            log,
+            "Multiple potential files found in input directory. Chosing '{}' based on configuration settings.",
+            file_type
+        );
         match *file_type {
             FileType::Messagepack => read_mpk(mpk_file.unwrap(), target_size, bb),
             FileType::Csv => read_csv(csv_file.unwrap(), target_size, bb),
@@ -82,51 +85,65 @@ pub fn potential(target_size: [usize; 3],
     } else if yaml_file.is_some() {
         read_yaml(yaml_file.unwrap(), target_size, bb)
     } else {
-        Err(ErrorKind::FileNotFound("input/potential.*".to_string()).into())
+        Err(
+            ErrorKind::FileNotFound("input/potential.*".to_string()).into(),
+        )
     }
 }
 
 /// Loads an array from a mpk file on disk.
 fn read_mpk(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<f64>> {
-    let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file))?;
-    let data: Array3<f64> = rmps::decode::from_read(reader).chain_err(|| ErrorKind::Deserialize)?;
+    let reader = File::open(&file)
+        .chain_err(|| ErrorKind::FileNotFound(file))?;
+    let data: Array3<f64> = rmps::decode::from_read(reader)
+        .chain_err(|| ErrorKind::Deserialize)?;
 
     let mut complete = Array3::<f64>::zeros(target_size);
     {
         //TODO: Error checking and resampling
         let mut work = grid::get_mut_work_area(&mut complete, bb / 2); //NOTE: This is a bit of a hack. But it works.
         // Assume Input is the same size, copy down.
-        Zip::from(&mut work).and(data.view()).par_apply(|work, &data| *work = data);
+        Zip::from(&mut work)
+            .and(data.view())
+            .par_apply(|work, &data| *work = data);
     }
     Ok(complete)
 }
 
 /// Loads an array from a json file on disk.
 fn read_json(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<f64>> {
-    let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file))?;
-    let data: Array3<f64> = serde_json::from_reader(reader).chain_err(|| ErrorKind::Deserialize)?;
+    let reader = File::open(&file)
+        .chain_err(|| ErrorKind::FileNotFound(file))?;
+    let data: Array3<f64> = serde_json::from_reader(reader)
+        .chain_err(|| ErrorKind::Deserialize)?;
 
     let mut complete = Array3::<f64>::zeros(target_size);
     {
         //TODO: Error checking and resampling
         let mut work = grid::get_mut_work_area(&mut complete, bb / 2); //NOTE: This is a bit of a hack. But it works.
         // Assume Input is the same size, copy down.
-        Zip::from(&mut work).and(data.view()).par_apply(|work, &data| *work = data);
+        Zip::from(&mut work)
+            .and(data.view())
+            .par_apply(|work, &data| *work = data);
     }
     Ok(complete)
 }
 
 /// Loads an array from a yaml file on disk.
 fn read_yaml(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<f64>> {
-    let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file))?;
-    let data: Array3<f64> = serde_yaml::from_reader(reader).chain_err(|| ErrorKind::Deserialize)?;
+    let reader = File::open(&file)
+        .chain_err(|| ErrorKind::FileNotFound(file))?;
+    let data: Array3<f64> = serde_yaml::from_reader(reader)
+        .chain_err(|| ErrorKind::Deserialize)?;
 
     let mut complete = Array3::<f64>::zeros(target_size);
     {
         //TODO: Error checking and resampling
         let mut work = grid::get_mut_work_area(&mut complete, bb / 2); //NOTE: This is a bit of a hack. But it works.
         // Assume Input is the same size, copy down.
-        Zip::from(&mut work).and(data.view()).par_apply(|work, &data| *work = data);
+        Zip::from(&mut work)
+            .and(data.view())
+            .par_apply(|work, &data| *work = data);
     }
     Ok(complete)
 }
@@ -188,9 +205,10 @@ pub fn script_potential(file: &str, grid: &Grid, bb: usize, log: &Logger) -> Res
         values.push(value);
     }
     let vlen = values.len();
-    let generated =
-        Array3::<f64>::from_shape_vec((grid.size.x, grid.size.y, grid.size.z), values)
-            .chain_err(|| ErrorKind::ArrayShape(vlen, [grid.size.x, grid.size.y, grid.size.z]))?;
+    let generated = Array3::<f64>::from_shape_vec((grid.size.x, grid.size.y, grid.size.z), values)
+        .chain_err(|| {
+            ErrorKind::ArrayShape(vlen, [grid.size.x, grid.size.y, grid.size.z])
+        })?;
 
     // generated is now the work area. We need to return a full framed array.
     let mut complete = Array3::<f64>::zeros(target_size);
@@ -211,10 +229,11 @@ pub fn script_potential(file: &str, grid: &Grid, bb: usize, log: &Logger) -> Res
 /// * `config` - Reference to the `config` struct.
 /// * `log` - Reference to the system logger.
 /// * `wstore` - Vector of stored (calculated) wavefunctions.
-pub fn load_wavefunctions(config: &Config,
-                          log: &Logger,
-                          w_store: &mut Vec<Array3<f64>>)
-                          -> Result<()> {
+pub fn load_wavefunctions(
+    config: &Config,
+    log: &Logger,
+    w_store: &mut Vec<Array3<f64>>,
+) -> Result<()> {
     let num = &config.grid.size;
     let bb = config.central_difference.bb();
     let init_size: [usize; 3] = [num.x + bb, num.y + bb, num.z + bb];
@@ -258,12 +277,13 @@ fn check_wavefunction_file(wnum: u8, extension: &str) -> Option<String> {
 /// * `file_type` - Configuration flag concerning output file types. Will be used as an arbitrator
 /// when multiple files are detected.
 /// * `log` - Reference to the system logger.
-pub fn wavefunction(wnum: u8,
-                    target_size: [usize; 3],
-                    bb: usize,
-                    file_type: &FileType,
-                    log: &Logger)
-                    -> Result<Array3<f64>> {
+pub fn wavefunction(
+    wnum: u8,
+    target_size: [usize; 3],
+    bb: usize,
+    file_type: &FileType,
+    log: &Logger,
+) -> Result<Array3<f64>> {
 
     let mpk_file = check_wavefunction_file(wnum, "mpk");
     let csv_file = check_wavefunction_file(wnum, "csv");
@@ -338,9 +358,8 @@ fn read_csv(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<f
     let mut max_k = 0;
     let mut data: Vec<f64> = Vec::new();
     for result in rdr.deserialize() {
-        let record: PlainRecord =
-            result
-                .chain_err(|| ErrorKind::ParsePlainRecord(parse_file.to_string()))?;
+        let record: PlainRecord = result
+            .chain_err(|| ErrorKind::ParsePlainRecord(parse_file.to_string()))?;
         if record.i > max_i {
             max_i = record.i
         };
