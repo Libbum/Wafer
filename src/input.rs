@@ -1,4 +1,6 @@
 use csv;
+use num_complex::Complex64;
+use num_traits::Zero;
 use slog::Logger;
 use std::fs::{create_dir, File};
 use std::path::Path;
@@ -23,7 +25,7 @@ struct PlainRecord {
     /// Index in *z*
     k: usize,
     /// Data at this position
-    data: f64,
+    data: Complex64,
 }
 
 /// Checks if a potential file exists in the input directory
@@ -54,7 +56,7 @@ pub fn potential(
     bb: usize,
     file_type: &FileType,
     log: &Logger,
-) -> Result<Array3<f64>> {
+) -> Result<Array3<Complex64>> {
     let mpk_file = check_potential_file("mpk");
     let csv_file = check_potential_file("csv");
     let json_file = check_potential_file("json");
@@ -92,13 +94,13 @@ pub fn potential(
 }
 
 /// Loads an array from a mpk file on disk.
-fn read_mpk(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<f64>> {
+fn read_mpk(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<Complex64>> {
     let reader = File::open(&file)
         .chain_err(|| ErrorKind::FileNotFound(file))?;
-    let data: Array3<f64> = rmps::decode::from_read(reader)
+    let data: Array3<Complex64> = rmps::decode::from_read(reader)
         .chain_err(|| ErrorKind::Deserialize)?;
 
-    let mut complete = Array3::<f64>::zeros(target_size);
+    let mut complete = Array3::<Complex64>::from_elem(target_size, Complex64::zero());
     {
         //TODO: Error checking and resampling
         let mut work = grid::get_mut_work_area(&mut complete, bb / 2); //NOTE: This is a bit of a hack. But it works.
@@ -111,13 +113,13 @@ fn read_mpk(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<f
 }
 
 /// Loads an array from a json file on disk.
-fn read_json(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<f64>> {
+fn read_json(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<Complex64>> {
     let reader = File::open(&file)
         .chain_err(|| ErrorKind::FileNotFound(file))?;
-    let data: Array3<f64> = serde_json::from_reader(reader)
+    let data: Array3<Complex64> = serde_json::from_reader(reader)
         .chain_err(|| ErrorKind::Deserialize)?;
 
-    let mut complete = Array3::<f64>::zeros(target_size);
+    let mut complete = Array3::<Complex64>::from_elem(target_size, Complex64::zero());
     {
         //TODO: Error checking and resampling
         let mut work = grid::get_mut_work_area(&mut complete, bb / 2); //NOTE: This is a bit of a hack. But it works.
@@ -130,13 +132,13 @@ fn read_json(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<
 }
 
 /// Loads an array from a yaml file on disk.
-fn read_yaml(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<f64>> {
+fn read_yaml(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<Complex64>> {
     let reader = File::open(&file)
         .chain_err(|| ErrorKind::FileNotFound(file))?;
-    let data: Array3<f64> = serde_yaml::from_reader(reader)
+    let data: Array3<Complex64> = serde_yaml::from_reader(reader)
         .chain_err(|| ErrorKind::Deserialize)?;
 
-    let mut complete = Array3::<f64>::zeros(target_size);
+    let mut complete = Array3::<Complex64>::from_elem(target_size, Complex64::zero());
     {
         //TODO: Error checking and resampling
         let mut work = grid::get_mut_work_area(&mut complete, bb / 2); //NOTE: This is a bit of a hack. But it works.
@@ -156,7 +158,7 @@ fn read_yaml(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<
 /// * `grid` - The `grid` portion of the `config` struct.
 /// * `bb` - Bounding box value for assigning central difference boundaries
 /// * `log` - Reference to the system logger.
-pub fn script_potential(file: &str, grid: &Grid, bb: usize, log: &Logger) -> Result<Array3<f64>> {
+pub fn script_potential(file: &str, grid: &Grid, bb: usize, log: &Logger) -> Result<Array3<Complex64>> {
     let target_size: [usize; 3] = [grid.size.x + bb, grid.size.y + bb, grid.size.z + bb];
     info!(log, "Generating potential from script file: {}", file);
     // Spawn python script
@@ -199,19 +201,19 @@ pub fn script_potential(file: &str, grid: &Grid, bb: usize, log: &Logger) -> Res
     // Finally, parse the captured string.
     // NOTE: I investigated passing this using messagepack. Ends up being more bytes.
     // Well, that may not be totally true, but printing the byte array to screen is problematic...
-    let mut values: Vec<f64> = Vec::new();
+    let mut values: Vec<Complex64> = Vec::new();
     for line in python_stdout.lines() {
-        let value = line.parse::<f64>().chain_err(|| ErrorKind::ParseFloat)?;
+        let value = line.parse::<Complex64>().chain_err(|| ErrorKind::ParseFloat)?;
         values.push(value);
     }
     let vlen = values.len();
-    let generated = Array3::<f64>::from_shape_vec((grid.size.x, grid.size.y, grid.size.z), values)
+    let generated = Array3::<Complex64>::from_shape_vec((grid.size.x, grid.size.y, grid.size.z), values)
         .chain_err(|| {
             ErrorKind::ArrayShape(vlen, [grid.size.x, grid.size.y, grid.size.z])
         })?;
 
     // generated is now the work area. We need to return a full framed array.
-    let mut complete = Array3::<f64>::zeros(target_size);
+    let mut complete = Array3::<Complex64>::from_elem(target_size, Complex64::zero());
     {
         let mut work = grid::get_mut_work_area(&mut complete, bb / 2); //NOTE: This is a bit of a hack. But it works.
         // generated is the right size by definition: copy down.
@@ -232,7 +234,7 @@ pub fn script_potential(file: &str, grid: &Grid, bb: usize, log: &Logger) -> Res
 pub fn load_wavefunctions(
     config: &Config,
     log: &Logger,
-    w_store: &mut Vec<Array3<f64>>,
+    w_store: &mut Vec<Array3<Complex64>>,
 ) -> Result<()> {
     let num = &config.grid.size;
     let bb = config.central_difference.bb();
@@ -283,7 +285,7 @@ pub fn wavefunction(
     bb: usize,
     file_type: &FileType,
     log: &Logger,
-) -> Result<Array3<f64>> {
+) -> Result<Array3<Complex64>> {
 
     let mpk_file = check_wavefunction_file(wnum, "mpk");
     let csv_file = check_wavefunction_file(wnum, "csv");
@@ -347,7 +349,7 @@ pub fn check_input_dir() -> Result<()> {
 ///
 /// * A 3D array loaded with data from the file and resampled/interpolated if required.
 /// If something goes wrong in the parsing or file handling, a `csv::Error` is passed.
-fn read_csv(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<f64>> {
+fn read_csv(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<Complex64>> {
     let parse_file = &file.to_owned();
     let mut rdr = csv::ReaderBuilder::new()
         .has_headers(false)
@@ -356,7 +358,7 @@ fn read_csv(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<f
     let mut max_i = 0;
     let mut max_j = 0;
     let mut max_k = 0;
-    let mut data: Vec<f64> = Vec::new();
+    let mut data: Vec<Complex64> = Vec::new();
     for result in rdr.deserialize() {
         let record: PlainRecord = result
             .chain_err(|| ErrorKind::ParsePlainRecord(parse_file.to_string()))?;
@@ -375,13 +377,13 @@ fn read_csv(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<f
     let numy = max_j + 1;
     let numz = max_k + 1;
     let dlen = data.len();
-    match Array3::<f64>::from_shape_vec((numx, numy, numz), data) {
+    match Array3::<Complex64>::from_shape_vec((numx, numy, numz), data) {
         Ok(result) => {
             //result is now a parsed Array3 with the work area inside.
             //We must fill this into an array with CD boundaries, provided
             //it is the correct size. If not, we must scale it.
             let init_size: [usize; 3] = [numx + bb, numy + bb, numz + bb];
-            let mut complete = Array3::<f64>::zeros(target_size);
+            let mut complete = Array3::<Complex64>::from_elem(target_size, Complex64::zero());
             {
                 let mut work = grid::get_mut_work_area(&mut complete, bb / 2); //NOTE: This is a bit of a hack. But it works.
                 let same: bool = init_size

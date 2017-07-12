@@ -1,3 +1,5 @@
+use num_complex::Complex64;
+use num_traits::Zero;
 use ndarray::{Array3, Zip};
 use ndarray_parallel::prelude::*;
 use rand::distributions::{Normal, IndependentSample};
@@ -608,7 +610,7 @@ impl Config {
 ///
 /// * `config` - a reference to the configuration struct.
 /// * `log` - a reference to the logger.
-pub fn set_initial_conditions(config: &Config, log: &Logger) -> Result<Array3<f64>> {
+pub fn set_initial_conditions(config: &Config, log: &Logger) -> Result<Array3<Complex64>> {
     info!(log, "Setting initial conditions for wavefunction");
     let num = &config.grid.size;
     let bb = config.central_difference.bb();
@@ -617,14 +619,14 @@ pub fn set_initial_conditions(config: &Config, log: &Logger) -> Result<Array3<f6
         num.y as usize + bb,
         num.z as usize + bb,
     ];
-    let mut w: Array3<f64> = match config.init_condition {
+    let mut w: Array3<Complex64> = match config.init_condition {
         InitialCondition::FromFile => {
             input::wavefunction(config.wavenum, init_size, bb, &config.output.file_type, log)
                 .chain_err(|| ErrorKind::LoadWavefunction(config.wavenum))?
         }
         InitialCondition::Gaussian => generate_gaussian(config, init_size),
         InitialCondition::Coulomb => generate_coulomb(config, init_size),
-        InitialCondition::Constant => Array3::<f64>::from_elem(init_size, 0.1),
+        InitialCondition::Constant => Array3::<Complex64>::from_elem(init_size, Complex64::new(0.1,0.0)),
         InitialCondition::Boolean => generate_boolean(init_size),
     };
 
@@ -632,19 +634,19 @@ pub fn set_initial_conditions(config: &Config, log: &Logger) -> Result<Array3<f6
     let ext = config.central_difference.ext() as isize;
     // In Z
     w.slice_mut(s![.., .., 0..ext])
-        .par_map_inplace(|el| *el = 0.);
+        .par_map_inplace(|el| *el = Complex64::zero());
     w.slice_mut(s![.., .., init_size[2] as isize - ext..init_size[2] as isize])
-        .par_map_inplace(|el| *el = 0.);
+        .par_map_inplace(|el| *el = Complex64::zero());
     // In X
     w.slice_mut(s![0..ext, .., ..])
-        .par_map_inplace(|el| *el = 0.);
+        .par_map_inplace(|el| *el = Complex64::zero());
     w.slice_mut(s![init_size[0] as isize - ext..init_size[0] as isize, .., ..])
-        .par_map_inplace(|el| *el = 0.);
+        .par_map_inplace(|el| *el = Complex64::zero());
     // In Y
     w.slice_mut(s![.., 0..ext, ..])
-        .par_map_inplace(|el| *el = 0.);
+        .par_map_inplace(|el| *el = Complex64::zero());
     w.slice_mut(s![.., init_size[1] as isize - ext..init_size[1] as isize, ..])
-        .par_map_inplace(|el| *el = 0.);
+        .par_map_inplace(|el| *el = Complex64::zero());
 
     // Symmetrise the IC.
     symmetrise_wavefunction(config, &mut w);
@@ -658,11 +660,11 @@ pub fn set_initial_conditions(config: &Config, log: &Logger) -> Result<Array3<f6
 ///
 /// * `config` - a reference to the configuration struct
 /// * `init_size` - {x,y,z} dimensions of the required wavefunction
-fn generate_gaussian(config: &Config, init_size: [usize; 3]) -> Array3<f64> {
+fn generate_gaussian(config: &Config, init_size: [usize; 3]) -> Array3<Complex64> {
     let normal = Normal::new(0.0, config.sig);
-    let mut w = Array3::<f64>::zeros(init_size);
+    let mut w = Array3::<Complex64>::from_elem(init_size, Complex64::zero());
 
-    w.par_map_inplace(|el| *el = normal.ind_sample(&mut rand::thread_rng()));
+    w.par_map_inplace(|el| *el = Complex64::new(normal.ind_sample(&mut rand::thread_rng()), normal.ind_sample(&mut rand::thread_rng())));
     w
 }
 
@@ -672,8 +674,8 @@ fn generate_gaussian(config: &Config, init_size: [usize; 3]) -> Array3<f64> {
 ///
 /// * `config` - a reference to the configuration struct
 /// * `init_size` - {x,y,z} dimensions of the required wavefunction
-fn generate_coulomb(config: &Config, init_size: [usize; 3]) -> Array3<f64> {
-    let mut w = Array3::<f64>::zeros(init_size);
+fn generate_coulomb(config: &Config, init_size: [usize; 3]) -> Array3<Complex64> {
+    let mut w = Array3::<Complex64>::from_elem(init_size, Complex64::zero());
 
     Zip::indexed(&mut w).par_apply(|(i, j, k), x| {
         //Coordinate system is centered in simulation volume
@@ -685,9 +687,9 @@ fn generate_coulomb(config: &Config, init_size: [usize; 3]) -> Array3<f64> {
         let cosphi = config.grid.dn * dx / r;
         let mr2 = (-config.mass * r / 2.).exp();
         // Terms here represent: n=1; n=2, l=0; n=2,l=1,m=0; n=2,l=1,m±1 respectively.
-        *x = (-config.mass * r).exp() + (2. - config.mass * r) * mr2 +
+        *x = Complex64::new((-config.mass * r).exp() + (2. - config.mass * r) * mr2 +
             config.mass * r * mr2 * costheta +
-            config.mass * r * mr2 * (1. - costheta.powi(2)).sqrt() * cosphi;
+            config.mass * r * mr2 * (1. - costheta.powi(2)).sqrt() * cosphi, 0.0);
     });
     w
 }
@@ -697,11 +699,11 @@ fn generate_coulomb(config: &Config, init_size: [usize; 3]) -> Array3<f64> {
 /// # Arguments
 ///
 /// * `init_size` - {x,y,z} dimensions of the required wavefunction
-fn generate_boolean(init_size: [usize; 3]) -> Array3<f64> {
-    let mut w = Array3::<f64>::zeros(init_size);
+fn generate_boolean(init_size: [usize; 3]) -> Array3<Complex64> {
+    let mut w = Array3::<Complex64>::from_elem(init_size, Complex64::zero());
 
     Zip::indexed(&mut w).par_apply(|(i, j, k), el| {
-        *el = i as f64 % 2. * j as f64 % 2. * k as f64 % 2.;
+        *el = Complex64::new(i as f64 % 2. * j as f64 % 2. * k as f64 % 2., 0.0);
     });
     w
 }
@@ -712,7 +714,7 @@ fn generate_boolean(init_size: [usize; 3]) -> Array3<f64> {
 ///
 /// * `config` - a reference to the configuration struct
 /// * `w` - Reference to a wavefunction to impose symmetry conditions on.
-pub fn symmetrise_wavefunction(config: &Config, w: &mut Array3<f64>) {
+pub fn symmetrise_wavefunction(config: &Config, w: &mut Array3<Complex64>) {
     let num = &config.grid.size;
     let sign = match config.init_symmetry {
         SymmetryConstraint::NotConstrained => 0.,

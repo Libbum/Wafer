@@ -1,3 +1,5 @@
+use num_complex::Complex64;
+use num_traits::Zero;
 use indicatif::{ProgressBar, ProgressStyle};
 use ndarray::{Array3, ArrayView3, ArrayViewMut3, Zip};
 use ndarray_parallel::prelude::*;
@@ -15,13 +17,13 @@ use errors::*;
 /// Holds all computed observables for the current wavefunction.
 pub struct Observables {
     /// Normalised total energy.
-    pub energy: f64,
+    pub energy: Complex64,
     /// A squared normalisation. Square root occurs later when needed to apply a complete
     /// normalisation condition. This needs to be separate as we include other adjustments
     /// from time to time.
     pub norm2: f64,
     /// The value of the potential at infinity. This is used to calculate the binding energy.
-    pub v_infinity: f64,
+    pub v_infinity: Complex64,
     /// Coefficient of determination
     pub r2: f64,
 }
@@ -31,7 +33,7 @@ pub fn run(config: &Config, log: &Logger) -> Result<()> {
 
     let potentials = potential::load_arrays(config, log)?;
 
-    let mut w_store: Vec<Array3<f64>> = Vec::new();
+    let mut w_store: Vec<Array3<Complex64>> = Vec::new();
     if config.wavenum > 0 {
         //We require wavefunctions from disk, even if initial condition is not `FromFile`
         //The wavenum = 0 case is handled later
@@ -53,12 +55,12 @@ fn solve(
     log: &Logger,
     potentials: &Potentials,
     wnum: u8,
-    w_store: &mut Vec<Array3<f64>>,
+    w_store: &mut Vec<Array3<Complex64>>,
 ) -> Result<()> {
 
     // Initial conditions from config file if ground state,
     // but start from previously converged wfn if we're an excited state.
-    let mut phi: Array3<f64> = if wnum > 0 {
+    let mut phi: Array3<Complex64> = if wnum > 0 {
         let num = &config.grid.size;
         let bb = config.central_difference.bb();
         let init_size: [usize; 3] = [
@@ -111,7 +113,7 @@ fn solve(
 
     let mut step = 0;
     let mut converged = false;
-    let mut last_energy = MAX; //std::f64::MAX
+    let mut last_energy = Complex64::new(MAX, MAX); //std::f64::MAX
     let mut diff_old = MAX;
     loop {
 
@@ -151,7 +153,7 @@ fn solve(
         }
 
         // Check convergence state and break loop if succesful
-        let diff = (norm_energy - last_energy).abs();
+        let diff = (norm_energy - last_energy).norm();
         if diff < config.tolerance {
             prog_bar.finish_and_clear();
             println!("{}", output::print_measurements(tau, diff, &observables));
@@ -291,10 +293,10 @@ fn eta(step: u64, diff_old: f64, diff_new: f64, config: &Config) -> Option<f64> 
 ///
 /// Previously each of the variables were calculated in their own function.
 /// The current implementation seems to be much faster though...
-fn compute_observables(config: &Config, potentials: &Potentials, phi: &Array3<f64>) -> Observables {
+fn compute_observables(config: &Config, potentials: &Potentials, phi: &Array3<Complex64>) -> Observables {
     let ext = config.central_difference.ext();
     let phi_work = get_work_area(phi, ext);
-    let mut work = Array3::<f64>::zeros(phi_work.dim());
+    let mut work = Array3::<Complex64>::from_elem(phi_work.dim(), Complex64::zero());
 
     let energy = {
         let v = get_work_area(&potentials.v, ext);
@@ -441,7 +443,7 @@ fn compute_observables(config: &Config, potentials: &Potentials, phi: &Array3<f6
 /// # Arguments
 ///
 /// * `w` - Current wavefunction array.
-fn get_norm_squared(w: &ArrayView3<f64>) -> f64 {
+fn get_norm_squared(w: &ArrayView3<Complex64>) -> f64 {
     //NOTE: No complex conjugation due to all real input for now
     w.into_par_iter().map(|&el| el * el).sum()
 }
@@ -452,9 +454,9 @@ fn get_norm_squared(w: &ArrayView3<f64>) -> f64 {
 ///
 /// * `w` - Wavefunction to normalise.
 /// * `norm2` - The squared normalisation observable.
-fn normalise_wavefunction(w: &mut Array3<f64>, norm2: f64) {
+fn normalise_wavefunction(w: &mut Array3<Complex64>, norm2: f64) {
     let norm = norm2.sqrt();
-    w.par_map_inplace(|el| *el /= norm);
+    w.par_map_inplace(|el| *el = *el / norm);
 }
 
 /// Uses Gram Schmidt orthogonalisation to identify the next excited state's wavefunction, even if it's degenerate
@@ -464,20 +466,20 @@ fn normalise_wavefunction(w: &mut Array3<f64>, norm2: f64) {
 /// * `wnum` - Current exited state value.
 /// * `w` - Current, active wavefunction array.
 /// * `w_store` - Vector of currently converged wavefunctions.
-fn orthogonalise_wavefunction(wnum: u8, w: &mut Array3<f64>, w_store: &[Array3<f64>]) {
+fn orthogonalise_wavefunction(wnum: u8, w: &mut Array3<Complex64>, w_store: &[Array3<Complex64>]) {
     for lower in w_store.iter().take(wnum as usize) {
         // This MUST be created inside the loop or else we throw nans.
         // I've tried a number of ways to treat this method as it's
         // pretty expensive. Here is the best one I've identified.
-        let mut overlap = Array3::<f64>::zeros(w.dim());
+        let mut overlap = Array3::<Complex64>::from_elem(w.dim(), Complex64::zero());
         Zip::from(&mut overlap)
             .and(lower)
             .and(w.view())
             .par_apply(|overlap, &lower, &w| *overlap = lower * w);
-        let overlap_sum: f64 = overlap.into_par_iter().sum();
+        let overlap_sum: Complex64 = overlap.into_par_iter().sum();
         Zip::from(w.view_mut())
             .and(lower)
-            .par_apply(|w, &lower| *w -= lower * overlap_sum);
+            .par_apply(|w, &lower| *w = *w - lower * overlap_sum);
     }
 }
 
@@ -492,7 +494,7 @@ fn orthogonalise_wavefunction(wnum: u8, w: &mut Array3<f64>, w_store: &[Array3<f
 /// # Returns
 ///
 /// An array view containing only the workable area of the array.
-pub fn get_work_area(arr: &Array3<f64>, ext: usize) -> ArrayView3<f64> {
+pub fn get_work_area(arr: &Array3<Complex64>, ext: usize) -> ArrayView3<Complex64> {
     let dims = arr.dim();
     let exti = ext as isize;
     arr.slice(s![
@@ -513,7 +515,7 @@ pub fn get_work_area(arr: &Array3<f64>, ext: usize) -> ArrayView3<f64> {
 /// # Returns
 ///
 /// A mutable arrav view containing only the workable area of the array.
-pub fn get_mut_work_area(arr: &mut Array3<f64>, ext: usize) -> ArrayViewMut3<f64> {
+pub fn get_mut_work_area(arr: &mut Array3<Complex64>, ext: usize) -> ArrayViewMut3<Complex64> {
     let dims = arr.dim();
     let exti = ext as isize;
     arr.slice_mut(s![
@@ -535,8 +537,8 @@ fn evolve(
     wnum: u8,
     config: &Config,
     potentials: &Potentials,
-    phi: &mut Array3<f64>,
-    w_store: &[Array3<f64>],
+    phi: &mut Array3<Complex64>,
+    w_store: &[Array3<Complex64>],
 ) {
     //without mpi, this is just update interior (which is really updaterule if we dont need W)
     let bb = config.central_difference.bb();
@@ -547,7 +549,7 @@ fn evolve(
     work_dims.2 -= bb;
     let pa = get_work_area(&potentials.a, ext);
     let pb = get_work_area(&potentials.b, ext);
-    let mut work = Array3::<f64>::zeros(work_dims);
+    let mut work = Array3::<Complex64>::from_elem(work_dims, Complex64::zero());
     let mut steps = 0;
     loop {
 

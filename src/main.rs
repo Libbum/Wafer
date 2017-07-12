@@ -36,6 +36,8 @@ extern crate lazy_static;
 extern crate ndarray;
 extern crate ndarray_parallel;
 extern crate num;
+extern crate num_complex;
+extern crate num_traits;
 extern crate num_cpus;
 extern crate ordinal;
 extern crate rand;
