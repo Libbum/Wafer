@@ -27,8 +27,8 @@ csv = "1.0.0-beta.3"
 error-chain = "0.10"
 indicatif = "0.5"
 lazy_static = "0.2"
-ndarray = { git = "https://github.com/Libbum/rust-ndarray", branch = "serde-1.0", features = ["serde", "blas"] }
-ndarray-parallel = { git = "https://github.com/Libbum/ndarray-parallel" }
+ndarray = { version = "0.10", features = ["serde-1", "blas"] }
+ndarray-parallel = "0.5"
 num = "0.1"
 num_cpus = "1.4"
 ordinal = "0.1"
