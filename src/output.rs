@@ -85,11 +85,11 @@ pub fn potential(v: &ArrayView3<f64>, project: &str, file_type: &FileType) -> Re
         file_type.extentsion()
     );
     match *file_type {
-        FileType::Messagepack => write_mpk(v, &filename),
+        FileType::Messagepack => write_mpk(v, &filename, ErrorKind::SavePotential),
         FileType::Csv => write_csv(v, &filename),
-        FileType::Json => write_json(v, &filename),
-        FileType::Yaml => write_yaml(v, &filename),
-        FileType::Ron => write_ron(v, &filename),
+        FileType::Json => write_json(v, &filename, ErrorKind::SavePotential),
+        FileType::Yaml => write_yaml(v, &filename, ErrorKind::SavePotential),
+        FileType::Ron => write_ron(v, &filename, ErrorKind::SavePotential),
     }
 }
 
@@ -122,7 +122,7 @@ fn write_csv(array: &ArrayView3<f64>, filename: &str) -> Result<()> {
 /// # Arguments
 /// *`array` - The array to output
 /// * `filename` - file / directory to save to.
-fn write_mpk(array: &ArrayView3<f64>, filename: &str) -> Result<()> {
+fn write_mpk(array: &ArrayView3<f64>, filename: &str, err_kind: ErrorKind) -> Result<()> {
     let mut output = Vec::new();
     array
         .serialize(&mut rmps::Serializer::new(&mut output))
@@ -131,7 +131,7 @@ fn write_mpk(array: &ArrayView3<f64>, filename: &str) -> Result<()> {
         .chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
     buffer
         .write_all(&output)
-        .chain_err(|| ErrorKind::WriteToFile(filename.to_string()))?;
+        .chain_err(|| err_kind)?;
     Ok(())
 }
 
@@ -140,11 +140,11 @@ fn write_mpk(array: &ArrayView3<f64>, filename: &str) -> Result<()> {
 /// # Arguments
 /// *`array` - The array to output
 /// * `filename` - file / directory to save to.
-fn write_json(array: &ArrayView3<f64>, filename: &str) -> Result<()> {
+fn write_json(array: &ArrayView3<f64>, filename: &str, err_kind: ErrorKind) -> Result<()> {
     let buffer = File::create(&filename)
         .chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
     serde_json::to_writer_pretty(buffer, array)
-        .chain_err(|| ErrorKind::SavePotential)?;
+        .chain_err(|| err_kind)?;
     Ok(())
 }
 
@@ -153,11 +153,11 @@ fn write_json(array: &ArrayView3<f64>, filename: &str) -> Result<()> {
 /// # Arguments
 /// *`array` - The array to output
 /// * `filename` - file / directory to save to.
-fn write_yaml(array: &ArrayView3<f64>, filename: &str) -> Result<()> {
+fn write_yaml(array: &ArrayView3<f64>, filename: &str, err_kind: ErrorKind) -> Result<()> {
     let buffer = File::create(&filename)
         .chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
     serde_yaml::to_writer(buffer, array)
-        .chain_err(|| ErrorKind::SavePotential)?;
+        .chain_err(|| err_kind)?;
     Ok(())
 }
 
@@ -166,13 +166,13 @@ fn write_yaml(array: &ArrayView3<f64>, filename: &str) -> Result<()> {
 /// # Arguments
 /// *`array` - The array to output
 /// * `filename` - file / directory to save to.
-fn write_ron(array: &ArrayView3<f64>, filename: &str) -> Result<()> {
+fn write_ron(array: &ArrayView3<f64>, filename: &str, err_kind: ErrorKind) -> Result<()> {
     let mut buffer = File::create(&filename)
         .chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
     let data = ron_string(array)
         .chain_err(|| ErrorKind::Serialize)?;
     buffer.write(data.as_bytes())
-        .chain_err(|| ErrorKind::SavePotential)?;
+        .chain_err(|| err_kind)?;
     Ok(())
 }
 
@@ -201,11 +201,11 @@ pub fn wavefunction(
         file_type.extentsion()
     );
     match *file_type {
-        FileType::Messagepack => write_mpk(phi, &filename),
+        FileType::Messagepack => write_mpk(phi, &filename, ErrorKind::SaveWavefunction),
         FileType::Csv => write_csv(phi, &filename),
-        FileType::Json => write_json(phi, &filename),
-        FileType::Yaml => write_yaml(phi, &filename),
-        FileType::Ron => write_ron(phi, &filename),
+        FileType::Json => write_json(phi, &filename, ErrorKind::SaveWavefunction),
+        FileType::Yaml => write_yaml(phi, &filename, ErrorKind::SaveWavefunction),
+        FileType::Ron => write_ron(phi, &filename, ErrorKind::SaveWavefunction),
     }
 }
 

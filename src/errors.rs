@@ -44,10 +44,6 @@ error_chain!{
                 description("Cannot create file")
                 display("Unable to create {}", file)
         }
-        WriteToFile(file: String) {
-                description("Cannot write to file")
-                display("Unable to write buffered data to {}", file)
-        }
         ParseFloat {
                 description("Cannot parse float")
                 display("Unable to parse string to f64")

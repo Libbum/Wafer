@@ -1,5 +1,4 @@
 use csv;
-use ron;
 use ron::de::from_reader as ron_reader;
 use slog::Logger;
 use std::fs::{create_dir, File};
