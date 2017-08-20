@@ -103,8 +103,15 @@ fn solve(
 
     output::print_observable_header(wnum);
     let prog_bar = ProgressBar::new(100);
+
+    let term_width = *output::TERMWIDTH;
+    let bar_width = (term_width - 24).to_string();
+    let mut bar_template = String::new();
+    bar_template.push_str("{msg}\n\n[{elapsed_precise}] |{bar:");
+    bar_template.push_str(&bar_width);
+    bar_template.push_str(".cyan/blue}| {spinner:.green} ETA: {eta:>3}");
     prog_bar.set_style(ProgressStyle::default_bar()
-                      .template("{msg}\n\n[{elapsed_precise}] |{wide_bar:.cyan/blue}| {spinner:.green} ETA: {eta:>3}")
+                      .template(&bar_template)
                       .progress_chars("█▓░")
                       .tick_chars("⣾⣽⣻⢿⡿⣟⣯⣷ "));
     prog_bar.set_position(0);
