@@ -11,7 +11,7 @@ use rmps;
 use std::fs::{copy, create_dir_all, File, remove_file};
 use std::io::prelude::*;
 use term_size;
-use ansi_term::Colour::Blue;
+use yansi::Color::Blue;
 
 use grid;
 use config::FileType;

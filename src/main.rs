@@ -22,7 +22,6 @@
 // `error_chain!` can recurse deeply
 #![recursion_limit = "1024"]
 
-extern crate ansi_term;
 extern crate chrono;
 #[macro_use]
 extern crate clap;
@@ -53,6 +52,7 @@ extern crate slog;
 extern crate slog_async;
 extern crate slog_term;
 extern crate term_size;
+extern crate yansi;
 
 use clap::{App, Arg};
 use slog::{Drain, Duplicate, Logger, Fuse, LevelFilter, Level};

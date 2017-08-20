@@ -38,7 +38,7 @@ central_difference: ThreePoint
 wavenum: 0
 
 # Maximum excited state to calculate
-wavemax: 2
+wavemax: 1
 
 # Set true to read in data from a cluster file.
 clustrun: false
@@ -106,7 +106,7 @@ init_symmetry: NotConstrained
 output:
     screen_update: 1000 # Steps before recording measurables.
     # snap_update: 10000 # OPTIONAL: Steps befode dumping all variables to file, i.e. A 'snapshot'.
-    file_type: Csv # File format for outputs. See options above
+    file_type: Json # File format for outputs. See options above
     save_wavefns: true # Dump full 3D wavefunctions to disk once calculated.
     save_potential: true # Save potential at beginning of run.
 

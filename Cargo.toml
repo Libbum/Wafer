@@ -18,7 +18,7 @@ path = "src/main.rs"
 name = "wafer"
 
 [dependencies]
-ansi_term = "0.9"
+yansi = "0.3"
 blas-sys = { version = "0.6", default-features = false, features = ["openblas"] }
 chrono = "0.3"
 clap = "~2.24.2"
