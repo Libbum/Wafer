@@ -23,6 +23,7 @@ blas-sys = { version = "0.6", default-features = false, features = ["openblas"] 
 chrono = "0.3"
 clap = "~2.24.2"
 clippy = {git = "https://github.com/Manishearth/rust-clippy", optional = true}
+ron = "0.1"
 csv = "1.0.0-beta.3"
 error-chain = "0.10"
 indicatif = "0.5"

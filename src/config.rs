@@ -236,6 +236,8 @@ pub enum FileType {
     Json,
     /// YAML: another structured text format that is a little more feature rich than JSON.
     Yaml,
+    /// RON: Rusty Object Notation is a structured text format designed to encapsulate Rust syntax.
+    Ron,
 }
 
 impl fmt::Display for FileType {
@@ -245,6 +247,7 @@ impl fmt::Display for FileType {
             FileType::Csv => write!(f, "CSV"),
             FileType::Json => write!(f, "JSON"),
             FileType::Yaml => write!(f, "YAML"),
+            FileType::Ron => write!(f, "RON"),
         }
     }
 }
@@ -257,9 +260,11 @@ impl FileType {
             FileType::Csv => ".csv".to_string(),
             FileType::Json => ".json".to_string(),
             FileType::Yaml => ".yaml".to_string(),
+            FileType::Ron => ".ron".to_string(),
         }
     }
 }
+
 //TODO: This isn't implimented at all yet. May not be needed.
 #[derive(Serialize, Deserialize, Debug)]
 /// Sets the type of run Wafer will execute.

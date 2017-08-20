@@ -1,4 +1,6 @@
 use csv;
+use ron;
+use ron::de::from_reader as ron_reader;
 use slog::Logger;
 use std::fs::{create_dir, File};
 use std::path::Path;
@@ -59,9 +61,10 @@ pub fn potential(
     let csv_file = check_potential_file("csv");
     let json_file = check_potential_file("json");
     let yaml_file = check_potential_file("yaml");
+    let ron_file = check_potential_file("ron");
 
     let file_count = {
-        let files = [&mpk_file, &csv_file, &json_file, &yaml_file];
+        let files = [&mpk_file, &csv_file, &json_file, &yaml_file, &ron_file];
         files.iter().filter(|x| x.is_some()).count()
     };
     if file_count > 1 {
@@ -75,6 +78,7 @@ pub fn potential(
             FileType::Csv => read_csv(csv_file.unwrap(), target_size, bb),
             FileType::Json => read_json(json_file.unwrap(), target_size, bb),
             FileType::Yaml => read_yaml(yaml_file.unwrap(), target_size, bb),
+            FileType::Ron => read_ron(ron_file.unwrap(), target_size, bb),
         }
     } else if mpk_file.is_some() {
         read_mpk(mpk_file.unwrap(), target_size, bb)
@@ -84,6 +88,8 @@ pub fn potential(
         read_json(json_file.unwrap(), target_size, bb)
     } else if yaml_file.is_some() {
         read_yaml(yaml_file.unwrap(), target_size, bb)
+    } else if ron_file.is_some() {
+        read_ron(ron_file.unwrap(), target_size, bb)
     } else {
         Err(
             ErrorKind::FileNotFound("input/potential.*".to_string()).into(),
@@ -134,6 +140,25 @@ fn read_yaml(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<
     let reader = File::open(&file)
         .chain_err(|| ErrorKind::FileNotFound(file))?;
     let data: Array3<f64> = serde_yaml::from_reader(reader)
+        .chain_err(|| ErrorKind::Deserialize)?;
+
+    let mut complete = Array3::<f64>::zeros(target_size);
+    {
+        //TODO: Error checking and resampling
+        let mut work = grid::get_mut_work_area(&mut complete, bb / 2); //NOTE: This is a bit of a hack. But it works.
+        // Assume Input is the same size, copy down.
+        Zip::from(&mut work)
+            .and(data.view())
+            .par_apply(|work, &data| *work = data);
+    }
+    Ok(complete)
+}
+
+/// Loads an array from a ron file on disk.
+fn read_ron(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<f64>> {
+    let reader = File::open(&file)
+        .chain_err(|| ErrorKind::FileNotFound(file))?;
+    let data: Array3<f64> = ron_reader(reader)
         .chain_err(|| ErrorKind::Deserialize)?;
 
     let mut complete = Array3::<f64>::zeros(target_size);
@@ -289,9 +314,10 @@ pub fn wavefunction(
     let csv_file = check_wavefunction_file(wnum, "csv");
     let json_file = check_wavefunction_file(wnum, "json");
     let yaml_file = check_wavefunction_file(wnum, "yaml");
+    let ron_file = check_wavefunction_file(wnum, "ron");
 
     let file_count = {
-        let files = [&mpk_file, &csv_file, &json_file, &yaml_file];
+        let files = [&mpk_file, &csv_file, &json_file, &yaml_file, &ron_file];
         files.iter().filter(|x| x.is_some()).count()
     };
     if file_count > 1 {
@@ -304,6 +330,7 @@ pub fn wavefunction(
             FileType::Csv => read_csv(csv_file.unwrap(), target_size, bb),
             FileType::Json => read_json(json_file.unwrap(), target_size, bb),
             FileType::Yaml => read_yaml(yaml_file.unwrap(), target_size, bb),
+            FileType::Ron => read_ron(ron_file.unwrap(), target_size, bb),
         }
     } else if mpk_file.is_some() {
         read_mpk(mpk_file.unwrap(), target_size, bb)
@@ -313,6 +340,8 @@ pub fn wavefunction(
         read_json(json_file.unwrap(), target_size, bb)
     } else if yaml_file.is_some() {
         read_yaml(yaml_file.unwrap(), target_size, bb)
+    } else if ron_file.is_some() {
+        read_ron(ron_file.unwrap(), target_size, bb)
     } else {
         let missing = format!("input/wavefunction_{}*.*", wnum);
         Err(ErrorKind::FileNotFound(missing.to_string()).into())

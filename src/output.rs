@@ -3,6 +3,7 @@ use csv;
 use ndarray::ArrayView3;
 use ordinal::Ordinal;
 use rayon;
+use ron::ser::pretty::to_string as ron_string;
 use serde::Serialize;
 use serde_json;
 use serde_yaml;
@@ -88,6 +89,7 @@ pub fn potential(v: &ArrayView3<f64>, project: &str, file_type: &FileType) -> Re
         FileType::Csv => write_csv(v, &filename),
         FileType::Json => write_json(v, &filename),
         FileType::Yaml => write_yaml(v, &filename),
+        FileType::Ron => write_ron(v, &filename),
     }
 }
 
@@ -159,6 +161,21 @@ fn write_yaml(array: &ArrayView3<f64>, filename: &str) -> Result<()> {
     Ok(())
 }
 
+/// Outputs an array to disk in ron format
+///
+/// # Arguments
+/// *`array` - The array to output
+/// * `filename` - file / directory to save to.
+fn write_ron(array: &ArrayView3<f64>, filename: &str) -> Result<()> {
+    let mut buffer = File::create(&filename)
+        .chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
+    let data = ron_string(array)
+        .chain_err(|| ErrorKind::Serialize)?;
+    buffer.write(data.as_bytes())
+        .chain_err(|| ErrorKind::SavePotential)?;
+    Ok(())
+}
+
 /// Saves a wavefunction to disk, and controls what format (plain text or binary)
 /// the data should be handled as.
 ///
@@ -188,6 +205,7 @@ pub fn wavefunction(
         FileType::Csv => write_csv(phi, &filename),
         FileType::Json => write_json(phi, &filename),
         FileType::Yaml => write_yaml(phi, &filename),
+        FileType::Ron => write_ron(phi, &filename),
     }
 }
 
@@ -347,6 +365,7 @@ pub fn finalise_measurement(
         FileType::Csv => observables_csv(&output, project),
         FileType::Json => observables_json(&output, project),
         FileType::Yaml => observables_yaml(&output, project),
+        FileType::Ron => observables_ron(&output, project),
     }
 }
 
@@ -457,6 +476,22 @@ fn observables_yaml(observables: &ObservablesOutput, project: &str) -> Result<()
     let buffer = File::create(&filename)
         .chain_err(|| ErrorKind::CreateFile(filename))?;
     serde_yaml::to_writer(buffer, observables)
+        .chain_err(|| ErrorKind::SaveObservables)?;
+    Ok(())
+}
+
+/// Saves the observables to a ron file.
+fn observables_ron(observables: &ObservablesOutput, project: &str) -> Result<()> {
+    let filename = format!(
+        "{}/observables_{}.ron",
+        get_project_dir(project),
+        observables.state
+    );
+    let mut buffer = File::create(&filename)
+        .chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
+    let data = ron_string(observables)
+        .chain_err(|| ErrorKind::Serialize)?;
+    buffer.write(data.as_bytes())
         .chain_err(|| ErrorKind::SaveObservables)?;
     Ok(())
 }

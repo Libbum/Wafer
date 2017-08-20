@@ -102,6 +102,7 @@ init_symmetry: NotConstrained
 #   Csv: a plain text file with comma separated values.
 #   Json: a popular structured text format found on the web, but also good for Wafer output.
 #   Yaml: another structured text format that is a little more feature rich than JSON.
+#   Ron: a structured text format designed to encapsulate the Rust syntax.
 output:
     screen_update: 1000 # Steps before recording measurables.
     # snap_update: 10000 # OPTIONAL: Steps befode dumping all variables to file, i.e. A 'snapshot'.

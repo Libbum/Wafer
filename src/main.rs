@@ -40,6 +40,7 @@ extern crate num_cpus;
 extern crate ordinal;
 extern crate rand;
 extern crate rayon;
+extern crate ron;
 extern crate rmp_serde as rmps;
 extern crate serde;
 #[macro_use]
