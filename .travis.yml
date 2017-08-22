@@ -38,7 +38,7 @@ script:
   - cargo build
   - |
       if [[ "$TRAVIS_RUST_VERSION" == "stable" ]]; then
-        RUSTFLAGS=-Clink-dead-code cargo test #link dead code here bloats the file size, but gives us correct coverage results.
+        RUSTFLAGS=-Clink-dead-code cargo test # link dead code here bloats the file size, but gives us correct coverage results.
       else
         cargo test
       fi
