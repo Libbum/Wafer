@@ -27,7 +27,7 @@ pub struct Observables {
 }
 
 /// Runs the calculation and holds long term (system time) wavefunction storage
-pub fn run(config: &Config, log: &Logger) -> Result<()> {
+pub fn run(config: &Config, log: &Logger, debug_level: usize) -> Result<()> {
 
     let potentials = potential::load_arrays(config, log)?;
 
@@ -41,7 +41,7 @@ pub fn run(config: &Config, log: &Logger) -> Result<()> {
     info!(log, "Starting calculation");
 
     for wnum in config.wavenum..config.wavemax + 1 {
-        solve(config, log, &potentials, wnum, &mut w_store)?;
+        solve(config, log, debug_level, &potentials, wnum, &mut w_store)?;
     }
     Ok(())
 }
@@ -51,6 +51,7 @@ pub fn run(config: &Config, log: &Logger) -> Result<()> {
 fn solve(
     config: &Config,
     log: &Logger,
+    debug_level: usize,
     potentials: &Potentials,
     wnum: u8,
     w_store: &mut Vec<Array3<f64>>,
@@ -102,19 +103,21 @@ fn solve(
     };
 
     output::print_observable_header(wnum);
-    let prog_bar = ProgressBar::new(100);
 
-    let term_width = *output::TERMWIDTH;
-    let bar_width = (term_width - 24).to_string();
-    let mut bar_template = String::new();
-    bar_template.push_str("{msg}\n\n[{elapsed_precise}] |{bar:");
-    bar_template.push_str(&bar_width);
-    bar_template.push_str(".cyan/blue}| {spinner:.green} ETA: {eta:>3}");
-    prog_bar.set_style(ProgressStyle::default_bar()
-                      .template(&bar_template)
-                      .progress_chars("█▓░")
-                      .tick_chars("⣾⣽⣻⢿⡿⣟⣯⣷ "));
-    prog_bar.set_position(0);
+    let prog_bar = ProgressBar::new(100);
+    if debug_level == 3 { //If debug_level is 4 or 5 we have info on the screen. Remove the progress bar
+        let term_width = *output::TERMWIDTH;
+        let bar_width = (term_width - 24).to_string();
+        let mut bar_template = String::new();
+        bar_template.push_str("{msg}\n\n[{elapsed_precise}] |{bar:");
+        bar_template.push_str(&bar_width);
+        bar_template.push_str(".cyan/blue}| {spinner:.green} ETA: {eta:>3}");
+        prog_bar.set_style(ProgressStyle::default_bar()
+                        .template(&bar_template)
+                        .progress_chars("█▓░")
+                        .tick_chars("⣾⣽⣻⢿⡿⣟⣯⣷ "));
+        prog_bar.set_position(0);
+    }
 
     let mut step = 0;
     let mut converged = false;
@@ -160,7 +163,9 @@ fn solve(
         // Check convergence state and break loop if succesful
         let diff = (norm_energy - last_energy).abs();
         if diff < config.tolerance {
-            prog_bar.finish_and_clear();
+            if debug_level == 3 {
+                prog_bar.finish_and_clear();
+            }
             println!("{}", output::print_measurements(tau, diff, &observables));
             output::finalise_measurement(
                 &observables,
@@ -196,18 +201,19 @@ fn solve(
         }
 
         // Output status to screen
-        if let Some(estimate) = eta(step, diff_old, diff, config) {
-            let percent = (100. -
-                               (estimate /
-                                    ((step as f64 / config.output.screen_update as f64) +
-                                         estimate) * 100.))
-                .floor();
-            if percent.is_finite() {
-                prog_bar.set_position(percent as u64);
+        if debug_level == 3 {
+            if let Some(estimate) = eta(step, diff_old, diff, config) {
+                let percent = (100. -
+                                (estimate /
+                                        ((step as f64 / config.output.screen_update as f64) +
+                                            estimate) * 100.))
+                    .floor();
+                if percent.is_finite() {
+                    prog_bar.set_position(percent as u64);
+                }
             }
+            prog_bar.set_message(&output::print_measurements(tau, diff, &observables));
         }
-        prog_bar.set_message(&output::print_measurements(tau, diff, &observables));
-
         // Make sure we don't evolve too far if we are not allowed
         if config.max_steps.is_some() && step > config.max_steps.unwrap() {
             break;

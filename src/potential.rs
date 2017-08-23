@@ -280,8 +280,8 @@ pub fn potential_sub_idx(config: &Config, idx: &Index3) -> Result<f64> {
     }
 }
 
-/// Calculate binding energy offset (if any). Follows the `potential` 
-/// input/output arguments. `FullCornell`, and subsequent potentials that require 
+/// Calculate binding energy offset (if any). Follows the `potential`
+/// input/output arguments. `FullCornell`, and subsequent potentials that require
 /// indexed values must call `potential_sub_idx`.
 pub fn potential_sub(config: &Config) -> Result<f64> {
     match config.potential {

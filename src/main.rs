@@ -115,7 +115,7 @@ fn main() {
                         .arg(Arg::with_name("debug")
                                     .short("d")
                                     .multiple(true)
-                                    .help("Raises screen debug level"))
+                                    .help("Raises screen debug level. -d for INFO alerts, -dd for DEBUG alerts"))
                         .get_matches();
 
     //Load configuation parameters.
@@ -170,7 +170,9 @@ fn main() {
     );
 
     info!(log, "Starting Wafer solver"; "version" => crate_version!(), "build-id" => short_sha());
-
+    if screen_level.as_usize() > 3 {
+        warn!(log,"Debugging information displayed on screen. Progress bar hidden.");
+    }
     info!(log, "Checking/creating directories");
     if let Err(ref err) = input::check_input_dir() {
         crit!(log, "{}", err);
@@ -197,7 +199,7 @@ fn main() {
     info!(log, "Loading Configuation from disk");
     config.print(term_width);
 
-    if let Err(ref err) = grid::run(&config, &log) {
+    if let Err(ref err) = grid::run(&config, &log, screen_level.as_usize()) {
         crit!(log, "{}", err);
         for e in err.iter().skip(1) {
             crit!(log, "caused by: {}", e);
