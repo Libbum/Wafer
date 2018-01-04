@@ -18,23 +18,24 @@ path = "src/main.rs"
 name = "wafer"
 
 [dependencies]
-yansi = "0.3"
-blas-sys = { version = "0.6", default-features = false, features = ["openblas"] }
-chrono = "0.4"
-clap = "2.26"
 clippy = {version = "*", optional = true}
+yansi = "0.3"
+chrono = "0.4"
+clap = "2.29"
 ron = "0.1"
-csv = "1.0.0-beta.4"
-error-chain = "0.11.0-rc.2"
-indicatif = "0.6"
-lazy_static = "0.2"
-ndarray = { version = "0.10", features = ["serde-1", "blas"] }
-ndarray-parallel = "0.5"
+csv = "1.0.0-beta.5"
+error-chain = "0.11"
+indicatif = "0.8"
+lazy_static = "1.0"
+ndarray = { version = "0.11", features = ["serde-1", "blas"] }
+blas-src = { version = "0.1.2", default-features = false, features = ["openblas"] }
+openblas-src = { version = "0.5.6", default-features = false, features = ["cblas", "system"] }
+ndarray-parallel = "0.7"
 num = "0.1"
 num_cpus = "1.6"
 ordinal = "0.1"
-rand = "0.3"
-rayon = "0.8"
+rand = "0.4"
+rayon = "0.9"
 rmp-serde = "0.13"
 serde = "1"
 serde_derive = "1"
@@ -43,7 +44,7 @@ serde_yaml = "0.7"
 slog = "2"
 slog-async = "2"
 slog-term = "2"
-term_size = "0.3"
+term_size = "1.0.0-beta1"
 
 [build-dependencies]
 vergen = "~0.1.0"

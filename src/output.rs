@@ -3,7 +3,8 @@ use csv;
 use ndarray::ArrayView3;
 use ordinal::Ordinal;
 use rayon;
-use ron::ser::pretty::to_string as ron_string;
+use ron::ser::to_string_pretty as ron_string;
+use ron::ser::PrettyConfig;
 use serde::Serialize;
 use serde_json;
 use serde_yaml;
@@ -169,7 +170,7 @@ fn write_yaml(array: &ArrayView3<f64>, filename: &str, err_kind: ErrorKind) -> R
 fn write_ron(array: &ArrayView3<f64>, filename: &str, err_kind: ErrorKind) -> Result<()> {
     let mut buffer = File::create(&filename)
         .chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
-    let data = ron_string(array)
+    let data = ron_string(array, PrettyConfig::default())
         .chain_err(|| ErrorKind::Serialize)?;
     buffer.write(data.as_bytes())
         .chain_err(|| err_kind)?;
@@ -489,7 +490,7 @@ fn observables_ron(observables: &ObservablesOutput, project: &str) -> Result<()>
     );
     let mut buffer = File::create(&filename)
         .chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
-    let data = ron_string(observables)
+    let data = ron_string(observables, PrettyConfig::default())
         .chain_err(|| ErrorKind::Serialize)?;
     buffer.write(data.as_bytes())
         .chain_err(|| ErrorKind::SaveObservables)?;
