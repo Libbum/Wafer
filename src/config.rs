@@ -1,6 +1,6 @@
 use ndarray::{Array3, Zip};
 use ndarray_parallel::prelude::*;
-use rand::distributions::{Normal, IndependentSample};
+use rand::distributions::{IndependentSample, Normal};
 use rand;
 use slog::Logger;
 use std::fmt;
@@ -265,28 +265,6 @@ impl FileType {
     }
 }
 
-//TODO: This isn't implimented at all yet. May not be needed.
-#[derive(Serialize, Deserialize, Debug)]
-/// Sets the type of run Wafer will execute.
-enum RunType {
-    /// A grid based run.
-    Grid,
-    /// A cluster input.
-    Cluster,
-    /// Uses magic.
-    Auto,
-}
-
-impl fmt::Display for RunType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            RunType::Grid => write!(f, "Boundary at grid bounds"),
-            RunType::Cluster => write!(f, "Boundary at cluster"),
-            RunType::Auto => write!(f, "Boundary at the extent of input atoms"),
-        }
-    }
-}
-
 /// The main struct which all input data from `wafer.cfg` is pushed into.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Config {
@@ -309,10 +287,6 @@ pub struct Config {
     /// 2, the solver will calculate the ground state (E_0), first excited (E_1) and second
     /// excited (E_2) states.
     pub wavemax: u8,
-    /// Set to true if you require atomic positions to generate a potential. Default is *false*.
-    clustrun: bool,
-    /// Bounding box of cluster data if used.
-    al_clust: Point3,
     /// Information about the requested output data.
     pub output: Output,
     /// The type of potential required for the simulation. This can be from the internal list,
@@ -338,13 +312,11 @@ pub struct Config {
 impl Config {
     /// Reads and parses data from the `wafer.cfg` file and command line arguments.
     pub fn load(file: &str, script: &str) -> Result<Config> {
-        let reader = File::open(file)
-            .chain_err(|| ErrorKind::ConfigLoad(file.to_string()))?;
+        let reader = File::open(file).chain_err(|| ErrorKind::ConfigLoad(file.to_string()))?;
         // Decode configuration file.
-        let mut decoded_config: Config = serde_yaml::from_reader(reader)
-            .chain_err(|| ErrorKind::Deserialize)?;
-        Config::parse(&decoded_config)
-            .chain_err(|| ErrorKind::ConfigParse)?;
+        let mut decoded_config: Config =
+            serde_yaml::from_reader(reader).chain_err(|| ErrorKind::Deserialize)?;
+        Config::parse(&decoded_config).chain_err(|| ErrorKind::ConfigParse)?;
 
         if let PotentialType::FromScript = decoded_config.potential {
             let mut locale = "./".to_string();
@@ -395,9 +367,7 @@ impl Config {
                 "",
                 format!(
                     "Grid {{ x: {}, y: {}, z: {} }}",
-                    self.grid.size.x,
-                    self.grid.size.y,
-                    self.grid.size.z
+                    self.grid.size.x, self.grid.size.y, self.grid.size.z
                 ),
                 format!("Δ{{x,y,z}}: {:.3e}", self.grid.dn),
                 format!("Δt: {:.3e}", self.grid.dt),
@@ -453,28 +423,13 @@ impl Config {
                 format!("Maximum wavefunction: {}", self.wavemax),
                 width = dcolwidth
             );
-            if self.clustrun {
-                println!(
-                    "{:5}{:<width$}{:<width$}",
-                    "",
-                    "Cluster run.",
-                    format!(
-                        "Cluster bounds {{ x: {}, y: {}, z: {} }}",
-                        self.al_clust.x,
-                        self.al_clust.y,
-                        self.al_clust.z
-                    ),
-                    width = dcolwidth
-                );
-            }
             if self.init_condition == InitialCondition::Gaussian {
                 println!(
                     "{:5}{:<width$}{:<width$}",
                     "",
                     format!(
                         "Initial conditions: {} ({} σ)",
-                        self.init_condition,
-                        self.sig
+                        self.init_condition, self.sig
                     ),
                     format!("Symmetry Constraints: {}", self.init_symmetry),
                     width = dcolwidth
@@ -495,9 +450,7 @@ impl Config {
                 "",
                 format!(
                     "Grid {{ x: {}, y: {}, z: {} }}",
-                    self.grid.size.x,
-                    self.grid.size.y,
-                    self.grid.size.z
+                    self.grid.size.x, self.grid.size.y, self.grid.size.z
                 )
             );
             println!(
@@ -561,28 +514,13 @@ impl Config {
                 format!("Maximum wavefunction: {}", self.wavemax),
                 width = colwidth
             );
-            if self.clustrun {
-                println!(
-                    "{:5}{:<width$}{:<width$}",
-                    "",
-                    "Cluster run.",
-                    format!(
-                        "Cluster bounds {{ x: {}, y: {}, z: {} }}",
-                        self.al_clust.x,
-                        self.al_clust.y,
-                        self.al_clust.z
-                    ),
-                    width = colwidth
-                );
-            }
             if self.init_condition == InitialCondition::Gaussian {
                 println!(
                     "{:5}{}",
                     "",
                     format!(
                         "Initial conditions: {} ({} σ)",
-                        self.init_condition,
-                        self.sig
+                        self.init_condition, self.sig
                     )
                 );
                 println!(
@@ -638,18 +576,27 @@ pub fn set_initial_conditions(config: &Config, log: &Logger) -> Result<Array3<f6
     // In Z
     w.slice_mut(s![.., .., 0..ext])
         .par_map_inplace(|el| *el = 0.);
-    w.slice_mut(s![.., .., init_size[2] as isize - ext..init_size[2] as isize])
-        .par_map_inplace(|el| *el = 0.);
+    w.slice_mut(s![
+        ..,
+        ..,
+        init_size[2] as isize - ext..init_size[2] as isize
+    ]).par_map_inplace(|el| *el = 0.);
     // In X
     w.slice_mut(s![0..ext, .., ..])
         .par_map_inplace(|el| *el = 0.);
-    w.slice_mut(s![init_size[0] as isize - ext..init_size[0] as isize, .., ..])
-        .par_map_inplace(|el| *el = 0.);
+    w.slice_mut(s![
+        init_size[0] as isize - ext..init_size[0] as isize,
+        ..,
+        ..
+    ]).par_map_inplace(|el| *el = 0.);
     // In Y
     w.slice_mut(s![.., 0..ext, ..])
         .par_map_inplace(|el| *el = 0.);
-    w.slice_mut(s![.., init_size[1] as isize - ext..init_size[1] as isize, ..])
-        .par_map_inplace(|el| *el = 0.);
+    w.slice_mut(s![
+        ..,
+        init_size[1] as isize - ext..init_size[1] as isize,
+        ..
+    ]).par_map_inplace(|el| *el = 0.);
 
     // Symmetrise the IC.
     symmetrise_wavefunction(config, &mut w);
@@ -690,9 +637,9 @@ fn generate_coulomb(config: &Config, init_size: [usize; 3]) -> Array3<f64> {
         let cosphi = config.grid.dn * dx / r;
         let mr2 = (-config.mass * r / 2.).exp();
         // Terms here represent: n=1; n=2, l=0; n=2,l=1,m=0; n=2,l=1,m±1 respectively.
-        *x = (-config.mass * r).exp() + (2. - config.mass * r) * mr2 +
-            config.mass * r * mr2 * costheta +
-            config.mass * r * mr2 * (1. - costheta.powi(2)).sqrt() * cosphi;
+        *x = (-config.mass * r).exp() + (2. - config.mass * r) * mr2
+            + config.mass * r * mr2 * costheta
+            + config.mass * r * mr2 * (1. - costheta.powi(2)).sqrt() * cosphi;
     });
     w
 }
@@ -721,16 +668,13 @@ pub fn symmetrise_wavefunction(config: &Config, w: &mut Array3<f64>) {
     let num = &config.grid.size;
     let sign = match config.init_symmetry {
         SymmetryConstraint::NotConstrained => 0.,
-        SymmetryConstraint::AntisymAboutY |
-        SymmetryConstraint::AntisymAboutZ => -1.,
-        SymmetryConstraint::AboutY |
-        SymmetryConstraint::AboutZ => 1.,
+        SymmetryConstraint::AntisymAboutY | SymmetryConstraint::AntisymAboutZ => -1.,
+        SymmetryConstraint::AboutY | SymmetryConstraint::AboutZ => 1.,
     };
 
     match config.init_symmetry {
         SymmetryConstraint::NotConstrained => {}
-        SymmetryConstraint::AboutZ |
-        SymmetryConstraint::AntisymAboutZ => {
+        SymmetryConstraint::AboutZ | SymmetryConstraint::AntisymAboutZ => {
             for sx in 0..(num.x + 6) {
                 for sy in 3..(3 + num.y + 1) {
                     for sz in 3..(3 + num.z + 1) {
@@ -743,8 +687,7 @@ pub fn symmetrise_wavefunction(config: &Config, w: &mut Array3<f64>) {
                 }
             }
         }
-        SymmetryConstraint::AboutY |
-        SymmetryConstraint::AntisymAboutY => {
+        SymmetryConstraint::AboutY | SymmetryConstraint::AntisymAboutY => {
             for sx in 0..(num.x + 6) {
                 for sy in 3..(3 + num.y + 1) {
                     let mut y = sy;

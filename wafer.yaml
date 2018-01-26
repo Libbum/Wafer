@@ -15,9 +15,9 @@ project_name: develop
 # Number of spatial grid points, step sizes in space and time.
 grid:
     size: # Number of grid points in Cartesian coordinates.
-        x: 30
-        y: 30
-        z: 30
+        x: 50
+        y: 50
+        z: 50
     dn: 0.01 # Spatial step
     dt: 3e-5 # Temporal step. For stability this must be < dn*dn/3.
 
@@ -40,15 +40,6 @@ wavenum: 0
 # Maximum excited state to calculate
 wavemax: 1
 
-# Set true to read in data from a cluster file.
-clustrun: false
-
-# Aluminium cluster data (in Angstroms).
-al_clust:
-    x: 1.4
-    y: 500
-    z: 500
-
 # Potential type to simulate. Choices:
 #   NoPotential: V = 0, no potential at all.
 #   Cube: A 3D square (i.e. cubic) well.
@@ -67,7 +58,7 @@ al_clust:
 #   FromScript: Calls a python script the user can implement.
 potential: Harmonic
 
-# Mass of the particle currently being investigated.
+# Mass of the particle currently being investigated (amu).
 mass: 15.9994
 
 # Wavefunction initial conditions. Since we usually dont know the form this is
@@ -83,7 +74,7 @@ mass: 15.9994
 #   Couloumb: Coulomb-like.
 #   Constant: A constant value of 0.1.
 #   Boolean: A Boolean test grid, good for benchmarks.
-init_condition: FromFile
+init_condition: Gaussian
 
 # Standard Deviation of initial wavefunction noise.
 sig: 1.0
