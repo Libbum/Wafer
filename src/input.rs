@@ -8,10 +8,10 @@ use std::io::prelude::*;
 use serde_json;
 use serde_yaml;
 use rmps;
-use ndarray::{Axis, Array1, Array3, ArrayViewMut3, Zip};
+use ndarray::{Array1, Array3, ArrayViewMut3, Axis, Zip};
 use ndarray_parallel::prelude::*;
 use grid;
-use config::{Config, Grid, FileType};
+use config::{Config, FileType, Grid};
 use errors::*;
 
 #[derive(Debug, Deserialize)]
@@ -73,103 +73,99 @@ pub fn potential(
             file_type
         );
         match *file_type {
-            FileType::Messagepack => read_mpk(mpk_file.unwrap(), target_size, bb),
+            FileType::Messagepack => read_mpk(mpk_file.unwrap(), target_size, bb, log),
             FileType::Csv => read_csv(csv_file.unwrap(), target_size, bb, log),
-            FileType::Json => read_json(json_file.unwrap(), target_size, bb),
-            FileType::Yaml => read_yaml(yaml_file.unwrap(), target_size, bb),
-            FileType::Ron => read_ron(ron_file.unwrap(), target_size, bb),
+            FileType::Json => read_json(json_file.unwrap(), target_size, bb, log),
+            FileType::Yaml => read_yaml(yaml_file.unwrap(), target_size, bb, log),
+            FileType::Ron => read_ron(ron_file.unwrap(), target_size, bb, log),
         }
     } else if mpk_file.is_some() {
-        read_mpk(mpk_file.unwrap(), target_size, bb)
+        read_mpk(mpk_file.unwrap(), target_size, bb, log)
     } else if csv_file.is_some() {
         read_csv(csv_file.unwrap(), target_size, bb, log)
     } else if json_file.is_some() {
-        read_json(json_file.unwrap(), target_size, bb)
+        read_json(json_file.unwrap(), target_size, bb, log)
     } else if yaml_file.is_some() {
-        read_yaml(yaml_file.unwrap(), target_size, bb)
+        read_yaml(yaml_file.unwrap(), target_size, bb, log)
     } else if ron_file.is_some() {
-        read_ron(ron_file.unwrap(), target_size, bb)
+        read_ron(ron_file.unwrap(), target_size, bb, log)
     } else {
-        Err(
-            ErrorKind::FileNotFound("input/potential.*".to_string()).into(),
-        )
+        Err(ErrorKind::FileNotFound("input/potential.*".to_string()).into())
     }
 }
 
 /// Loads an array from a mpk file on disk.
-fn read_mpk(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<f64>> {
-    let reader = File::open(&file)
-        .chain_err(|| ErrorKind::FileNotFound(file))?;
-    let data: Array3<f64> = rmps::decode::from_read(reader)
-        .chain_err(|| ErrorKind::Deserialize)?;
+fn read_mpk(file: String, target_size: [usize; 3], bb: usize, log: &Logger) -> Result<Array3<f64>> {
+    let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.clone()))?;
+    let data: Array3<f64> = rmps::decode::from_read(reader).chain_err(|| ErrorKind::Deserialize)?;
 
-    let mut complete = Array3::<f64>::zeros(target_size);
-    {
-        //TODO: Error checking and resampling
-        let mut work = grid::get_mut_work_area(&mut complete, bb / 2); //NOTE: This is a bit of a hack. But it works.
-        // Assume Input is the same size, copy down.
-        Zip::from(&mut work)
-            .and(data.view())
-            .par_apply(|work, &data| *work = data);
-    }
-    Ok(complete)
+    Ok(fill_data(&file, &data, target_size, bb, log))
 }
 
 /// Loads an array from a json file on disk.
-fn read_json(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<f64>> {
-    let reader = File::open(&file)
-        .chain_err(|| ErrorKind::FileNotFound(file))?;
-    let data: Array3<f64> = serde_json::from_reader(reader)
-        .chain_err(|| ErrorKind::Deserialize)?;
+fn read_json(
+    file: String,
+    target_size: [usize; 3],
+    bb: usize,
+    log: &Logger,
+) -> Result<Array3<f64>> {
+    let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.clone()))?;
+    let data: Array3<f64> = serde_json::from_reader(reader).chain_err(|| ErrorKind::Deserialize)?;
 
-    let mut complete = Array3::<f64>::zeros(target_size);
-    {
-        //TODO: Error checking and resampling
-        let mut work = grid::get_mut_work_area(&mut complete, bb / 2); //NOTE: This is a bit of a hack. But it works.
-        // Assume Input is the same size, copy down.
-        Zip::from(&mut work)
-            .and(data.view())
-            .par_apply(|work, &data| *work = data);
-    }
-    Ok(complete)
+    Ok(fill_data(&file, &data, target_size, bb, log))
 }
 
 /// Loads an array from a yaml file on disk.
-fn read_yaml(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<f64>> {
-    let reader = File::open(&file)
-        .chain_err(|| ErrorKind::FileNotFound(file))?;
-    let data: Array3<f64> = serde_yaml::from_reader(reader)
-        .chain_err(|| ErrorKind::Deserialize)?;
+fn read_yaml(
+    file: String,
+    target_size: [usize; 3],
+    bb: usize,
+    log: &Logger,
+) -> Result<Array3<f64>> {
+    let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.clone()))?;
+    let data: Array3<f64> = serde_yaml::from_reader(reader).chain_err(|| ErrorKind::Deserialize)?;
 
-    let mut complete = Array3::<f64>::zeros(target_size);
-    {
-        //TODO: Error checking and resampling
-        let mut work = grid::get_mut_work_area(&mut complete, bb / 2); //NOTE: This is a bit of a hack. But it works.
-        // Assume Input is the same size, copy down.
-        Zip::from(&mut work)
-            .and(data.view())
-            .par_apply(|work, &data| *work = data);
-    }
-    Ok(complete)
+    Ok(fill_data(&file, &data, target_size, bb, log))
 }
 
 /// Loads an array from a ron file on disk.
-fn read_ron(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<f64>> {
-    let reader = File::open(&file)
-        .chain_err(|| ErrorKind::FileNotFound(file))?;
-    let data: Array3<f64> = ron_reader(reader)
-        .chain_err(|| ErrorKind::Deserialize)?;
+fn read_ron(file: String, target_size: [usize; 3], bb: usize, log: &Logger) -> Result<Array3<f64>> {
+    let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.clone()))?;
+    let data: Array3<f64> = ron_reader(reader).chain_err(|| ErrorKind::Deserialize)?;
 
+    Ok(fill_data(&file, &data, target_size, bb, log))
+}
+
+/// Once data has been pulled from disk into a convertable format,
+/// we contstruct an array ready to calculate on.
+/// This requires the addition of a central difference buffer zone and may require
+/// the data to be resampled if input sizes differ from the size of the data on disk.
+fn fill_data(
+    file: &str,
+    data: &Array3<f64>,
+    target_size: [usize; 3],
+    bb: usize,
+    log: &Logger,
+) -> Array3<f64> {
+    let dims = data.dim();
+    let init_size: [usize; 3] = [dims.0, dims.1, dims.2];
     let mut complete = Array3::<f64>::zeros(target_size);
     {
-        //TODO: Error checking and resampling
-        let mut work = grid::get_mut_work_area(&mut complete, bb / 2); //NOTE: This is a bit of a hack. But it works.
-        // Assume Input is the same size, copy down.
-        Zip::from(&mut work)
-            .and(data.view())
-            .par_apply(|work, &data| *work = data);
+        let mut work = grid::get_mut_work_area(&mut complete, bb / 2);
+        let same: bool = init_size
+            .iter()
+            .zip(target_size.iter())
+            .all(|(a, b)| a == b);
+        if same {
+            Zip::from(&mut work)
+                .and(data.view())
+                .par_apply(|work, &data| *work = data);
+        } else {
+            info!(log, "Interpolating {} from {:?} to requested size of {:?} (size includes central difference padding).", file, init_size, target_size);
+            trilerp_resize(&data, &mut work, target_size);
+        }
     }
-    Ok(complete)
+    complete
 }
 
 /// Loads potential file from a script.
@@ -230,14 +226,12 @@ pub fn script_potential(file: &str, grid: &Grid, bb: usize, log: &Logger) -> Res
     }
     let vlen = values.len();
     let generated = Array3::<f64>::from_shape_vec((grid.size.x, grid.size.y, grid.size.z), values)
-        .chain_err(|| {
-            ErrorKind::ArrayShape(vlen, [grid.size.x, grid.size.y, grid.size.z])
-        })?;
+        .chain_err(|| ErrorKind::ArrayShape(vlen, [grid.size.x, grid.size.y, grid.size.z]))?;
 
     // generated is now the work area. We need to return a full framed array.
     let mut complete = Array3::<f64>::zeros(target_size);
     {
-        let mut work = grid::get_mut_work_area(&mut complete, bb / 2); //NOTE: This is a bit of a hack. But it works.
+        let mut work = grid::get_mut_work_area(&mut complete, bb / 2);
         // generated is the right size by definition: copy down.
         Zip::from(&mut work)
             .and(generated.view())
@@ -308,7 +302,6 @@ pub fn wavefunction(
     file_type: &FileType,
     log: &Logger,
 ) -> Result<Array3<f64>> {
-
     let mpk_file = check_wavefunction_file(wnum, "mpk");
     let csv_file = check_wavefunction_file(wnum, "csv");
     let json_file = check_wavefunction_file(wnum, "json");
@@ -325,22 +318,22 @@ pub fn wavefunction(
               wnum,
               file_type);
         match *file_type {
-            FileType::Messagepack => read_mpk(mpk_file.unwrap(), target_size, bb),
+            FileType::Messagepack => read_mpk(mpk_file.unwrap(), target_size, bb, log),
             FileType::Csv => read_csv(csv_file.unwrap(), target_size, bb, log),
-            FileType::Json => read_json(json_file.unwrap(), target_size, bb),
-            FileType::Yaml => read_yaml(yaml_file.unwrap(), target_size, bb),
-            FileType::Ron => read_ron(ron_file.unwrap(), target_size, bb),
+            FileType::Json => read_json(json_file.unwrap(), target_size, bb, log),
+            FileType::Yaml => read_yaml(yaml_file.unwrap(), target_size, bb, log),
+            FileType::Ron => read_ron(ron_file.unwrap(), target_size, bb, log),
         }
     } else if mpk_file.is_some() {
-        read_mpk(mpk_file.unwrap(), target_size, bb)
+        read_mpk(mpk_file.unwrap(), target_size, bb, log)
     } else if csv_file.is_some() {
         read_csv(csv_file.unwrap(), target_size, bb, log)
     } else if json_file.is_some() {
-        read_json(json_file.unwrap(), target_size, bb)
+        read_json(json_file.unwrap(), target_size, bb, log)
     } else if yaml_file.is_some() {
-        read_yaml(yaml_file.unwrap(), target_size, bb)
+        read_yaml(yaml_file.unwrap(), target_size, bb, log)
     } else if ron_file.is_some() {
-        read_ron(ron_file.unwrap(), target_size, bb)
+        read_ron(ron_file.unwrap(), target_size, bb, log)
     } else {
         let missing = format!("input/wavefunction_{}*.*", wnum);
         Err(ErrorKind::FileNotFound(missing.to_string()).into())
@@ -352,8 +345,7 @@ pub fn wavefunction(
 /// but we may want to put restart values in there later on.
 pub fn check_input_dir() -> Result<()> {
     if !Path::new("./input").exists() {
-        create_dir("./input")
-            .chain_err(|| ErrorKind::CreateInputDir)?;
+        create_dir("./input").chain_err(|| ErrorKind::CreateInputDir)?;
     }
     Ok(())
 }
@@ -380,14 +372,14 @@ fn read_csv(file: String, target_size: [usize; 3], bb: usize, log: &Logger) -> R
     let mut rdr = csv::ReaderBuilder::new()
         .has_headers(false)
         .from_path(&file)
-        .chain_err(|| ErrorKind::CreateFile(file))?;
+        .chain_err(|| ErrorKind::CreateFile(file.clone()))?;
     let mut max_i = 0;
     let mut max_j = 0;
     let mut max_k = 0;
     let mut data: Vec<f64> = Vec::new();
     for result in rdr.deserialize() {
-        let record: PlainRecord = result
-            .chain_err(|| ErrorKind::ParsePlainRecord(parse_file.to_string()))?;
+        let record: PlainRecord =
+            result.chain_err(|| ErrorKind::ParsePlainRecord(parse_file.to_string()))?;
         if record.i > max_i {
             max_i = record.i
         };
@@ -411,7 +403,7 @@ fn read_csv(file: String, target_size: [usize; 3], bb: usize, log: &Logger) -> R
             let init_size: [usize; 3] = [numx + bb, numy + bb, numz + bb];
             let mut complete = Array3::<f64>::zeros(target_size);
             {
-                let mut work = grid::get_mut_work_area(&mut complete, bb / 2); //NOTE: This is a bit of a hack. But it works.
+                let mut work = grid::get_mut_work_area(&mut complete, bb / 2);
                 let same: bool = init_size
                     .iter()
                     .zip(target_size.iter())
@@ -422,7 +414,7 @@ fn read_csv(file: String, target_size: [usize; 3], bb: usize, log: &Logger) -> R
                         .and(result.view())
                         .par_apply(|work, &result| *work = result);
                 } else {
-                    info!(log, "Interpolating input data from {:?} to requested size of {:?} (size includes central difference padding).", init_size, target_size);
+                    info!(log, "Interpolating {} from {:?} to requested size of {:?} (size includes central difference padding).", file, init_size, target_size);
                     trilerp_resize(&result, &mut work, target_size);
                 }
             }
@@ -498,5 +490,88 @@ mod tests {
     #[test]
     fn wavefunction_file_doesnt_exist() {
         assert_eq!(check_wavefunction_file(80, "ssdt"), None);
+    }
+
+    #[test]
+    fn interpolation() {
+        let array =
+            Array3::<f64>::from_shape_vec((2, 2, 2), vec![1., 2., 3., 4., 5., 6., 7., 8.]).unwrap();
+
+        let mut complete = Array3::<f64>::zeros((6, 6, 6));
+        let mut work = grid::get_mut_work_area(&mut complete, 1);
+        println!("{:?}", work.dim());
+        trilerp_resize(&array, &mut work, [4, 4, 4]);
+        assert_eq!(
+            work,
+            Array3::<f64>::from_shape_vec(
+                (4, 4, 4),
+                vec![
+                    1.0,
+                    1.3333333333333335,
+                    1.6666666666666665,
+                    2.0,
+                    1.6666666666666667,
+                    2.0000000000000004,
+                    2.3333333333333335,
+                    2.666666666666667,
+                    2.3333333333333335,
+                    2.666666666666667,
+                    3.0,
+                    3.333333333333333,
+                    3.0,
+                    3.333333333333333,
+                    3.6666666666666665,
+                    4.0,
+                    2.333333333333333,
+                    2.666666666666667,
+                    3.0,
+                    3.3333333333333335,
+                    3.0,
+                    3.3333333333333335,
+                    3.666666666666667,
+                    4.000000000000001,
+                    3.666666666666666,
+                    4.0,
+                    4.333333333333333,
+                    4.666666666666667,
+                    4.333333333333333,
+                    4.666666666666667,
+                    5.0,
+                    5.333333333333334,
+                    3.6666666666666665,
+                    4.0,
+                    4.333333333333334,
+                    4.666666666666667,
+                    4.333333333333333,
+                    4.666666666666667,
+                    5.0,
+                    5.333333333333334,
+                    5.0,
+                    5.333333333333334,
+                    5.666666666666667,
+                    6.0,
+                    5.666666666666666,
+                    6.0,
+                    6.333333333333332,
+                    6.666666666666666,
+                    5.0,
+                    5.333333333333334,
+                    5.666666666666667,
+                    6.0,
+                    5.666666666666667,
+                    6.0,
+                    6.333333333333333,
+                    6.666666666666666,
+                    6.333333333333333,
+                    6.666666666666666,
+                    7.0,
+                    7.333333333333333,
+                    7.0,
+                    7.333333333333334,
+                    7.666666666666666,
+                    8.0,
+                ]
+            ).unwrap()
+        );
     }
 }

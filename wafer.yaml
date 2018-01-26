@@ -15,9 +15,9 @@ project_name: develop
 # Number of spatial grid points, step sizes in space and time.
 grid:
     size: # Number of grid points in Cartesian coordinates.
-        x: 70
-        y: 70
-        z: 70
+        x: 30
+        y: 30
+        z: 30
     dn: 0.01 # Spatial step
     dt: 3e-5 # Temporal step. For stability this must be < dn*dn/3.
 
@@ -106,7 +106,7 @@ init_symmetry: NotConstrained
 output:
     screen_update: 1000 # Steps before recording measurables.
     # snap_update: 10000 # OPTIONAL: Steps befode dumping all variables to file, i.e. A 'snapshot'.
-    file_type: Csv # File format for outputs. See options above
+    file_type: Ron # File format for outputs. See options above
     save_wavefns: true # Dump full 3D wavefunctions to disk once calculated.
     save_potential: true # Save potential at beginning of run.
 
