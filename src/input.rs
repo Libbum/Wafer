@@ -8,7 +8,7 @@ use std::io::prelude::*;
 use serde_json;
 use serde_yaml;
 use rmps;
-use ndarray::{Array3, Zip};
+use ndarray::{Axis, Array1, Array3, ArrayViewMut3, Zip};
 use ndarray_parallel::prelude::*;
 use grid;
 use config::{Config, Grid, FileType};
@@ -74,7 +74,7 @@ pub fn potential(
         );
         match *file_type {
             FileType::Messagepack => read_mpk(mpk_file.unwrap(), target_size, bb),
-            FileType::Csv => read_csv(csv_file.unwrap(), target_size, bb),
+            FileType::Csv => read_csv(csv_file.unwrap(), target_size, bb, log),
             FileType::Json => read_json(json_file.unwrap(), target_size, bb),
             FileType::Yaml => read_yaml(yaml_file.unwrap(), target_size, bb),
             FileType::Ron => read_ron(ron_file.unwrap(), target_size, bb),
@@ -82,7 +82,7 @@ pub fn potential(
     } else if mpk_file.is_some() {
         read_mpk(mpk_file.unwrap(), target_size, bb)
     } else if csv_file.is_some() {
-        read_csv(csv_file.unwrap(), target_size, bb)
+        read_csv(csv_file.unwrap(), target_size, bb, log)
     } else if json_file.is_some() {
         read_json(json_file.unwrap(), target_size, bb)
     } else if yaml_file.is_some() {
@@ -326,7 +326,7 @@ pub fn wavefunction(
               file_type);
         match *file_type {
             FileType::Messagepack => read_mpk(mpk_file.unwrap(), target_size, bb),
-            FileType::Csv => read_csv(csv_file.unwrap(), target_size, bb),
+            FileType::Csv => read_csv(csv_file.unwrap(), target_size, bb, log),
             FileType::Json => read_json(json_file.unwrap(), target_size, bb),
             FileType::Yaml => read_yaml(yaml_file.unwrap(), target_size, bb),
             FileType::Ron => read_ron(ron_file.unwrap(), target_size, bb),
@@ -334,7 +334,7 @@ pub fn wavefunction(
     } else if mpk_file.is_some() {
         read_mpk(mpk_file.unwrap(), target_size, bb)
     } else if csv_file.is_some() {
-        read_csv(csv_file.unwrap(), target_size, bb)
+        read_csv(csv_file.unwrap(), target_size, bb, log)
     } else if json_file.is_some() {
         read_json(json_file.unwrap(), target_size, bb)
     } else if yaml_file.is_some() {
@@ -375,7 +375,7 @@ pub fn check_input_dir() -> Result<()> {
 ///
 /// * A 3D array loaded with data from the file and resampled/interpolated if required.
 /// If something goes wrong in the parsing or file handling, a `csv::Error` is passed.
-fn read_csv(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<f64>> {
+fn read_csv(file: String, target_size: [usize; 3], bb: usize, log: &Logger) -> Result<Array3<f64>> {
     let parse_file = &file.to_owned();
     let mut rdr = csv::ReaderBuilder::new()
         .has_headers(false)
@@ -416,22 +416,14 @@ fn read_csv(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<f
                     .iter()
                     .zip(target_size.iter())
                     .all(|(a, b)| a == b);
-                let smaller: bool = init_size.iter().zip(target_size.iter()).all(|(a, b)| a < b);
-                let larger: bool = init_size.iter().zip(target_size.iter()).all(|(a, b)| a > b);
                 if same {
                     // Input is the same size, copy down.
                     Zip::from(&mut work)
                         .and(result.view())
                         .par_apply(|work, &result| *work = result);
-                } else if smaller {
-                    //TODO: Input has lower resolution. Spread it out.
-                    panic!("Wavefunction is lower in resolution than requested");
-                } else if larger {
-                    //TODO: Input has higer resolution. Sample it.
-                    panic!("Wavefunction is higher in resolution than requested");
                 } else {
-                    //TODO: Dimensons are all over the shop. Sample and interp
-                    panic!("Wavefunction differs in resolution from requested");
+                    info!(log, "Interpolating input data from {:?} to requested size of {:?} (size includes central difference padding).", init_size, target_size);
+                    trilerp_resize(&result, &mut work, target_size);
                 }
             }
             Ok(complete)
@@ -440,6 +432,59 @@ fn read_csv(file: String, target_size: [usize; 3], bb: usize) -> Result<Array3<f
     }
 }
 
+/// Trilinear interpolation to resize an array.
+/// i.e, if we have v.size = (50,50,50), and size = (100, 100, 100)
+/// then the output will be (100,100,100) linearly interpolated
+fn trilerp_resize(v: &Array3<f64>, output: &mut ArrayViewMut3<f64>, size: [usize; 3]) -> () {
+    let nx = v.len_of(Axis(0)) - 1;
+    let ny = v.len_of(Axis(1)) - 1;
+    let nz = v.len_of(Axis(2)) - 1;
+
+    // Set the basis
+    let xi = Array1::linspace(0., nx as f64, size[0]);
+    let yi = Array1::linspace(0., ny as f64, size[1]);
+    let zi = Array1::linspace(0., nz as f64, size[2]);
+
+    let op = |c0, c1, d| c0 * (1. - d) + c1 * d;
+    Zip::indexed(output).par_apply(|(x, y, z), output| {
+        // we need to find x,y,z values in the basis of v.
+        let xlook = xi[x];
+        let ylook = yi[y];
+        let zlook = zi[z];
+        //No need to bounds check this since we just built it. By construction
+        //the value is here somewhere.
+        let (x0, x1) = match (0..nx).position(|xx| xx as f64 > xlook) {
+            Some(idx) => (idx - 1, idx),
+            None => (nx - 1, nx),
+        };
+        let (y0, y1) = match (0..ny).position(|yy| yy as f64 > ylook) {
+            Some(idx) => (idx - 1, idx),
+            None => (ny - 1, ny),
+        };
+        let (z0, z1) = match (0..nz).position(|zz| zz as f64 > zlook) {
+            Some(idx) => (idx - 1, idx),
+            None => (nz - 1, nz),
+        };
+
+        // Calculate distances
+        let xd = (xlook - x0 as f64) / (x1 as f64 - x0 as f64);
+        let yd = (ylook - y0 as f64) / (y1 as f64 - y0 as f64);
+        let zd = (zlook - z0 as f64) / (z1 as f64 - z0 as f64);
+
+        // Interp over x
+        let c00 = op(v[(x0, y0, z0)], v[(x1, y0, z0)], xd);
+        let c01 = op(v[(x0, y0, z1)], v[(x1, y0, z1)], xd);
+        let c10 = op(v[(x0, y1, z0)], v[(x1, y1, z0)], xd);
+        let c11 = op(v[(x0, y1, z1)], v[(x1, y1, z1)], xd);
+
+        // Interp over y
+        let c0 = op(c00, c10, yd);
+        let c1 = op(c01, c11, yd);
+
+        // Interp over z
+        *output = op(c0, c1, zd);
+    });
+}
 
 #[cfg(test)]
 mod tests {

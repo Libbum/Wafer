@@ -15,9 +15,9 @@ project_name: develop
 # Number of spatial grid points, step sizes in space and time.
 grid:
     size: # Number of grid points in Cartesian coordinates.
-        x: 50
-        y: 50
-        z: 50
+        x: 70
+        y: 70
+        z: 70
     dn: 0.01 # Spatial step
     dt: 3e-5 # Temporal step. For stability this must be < dn*dn/3.
 
@@ -83,7 +83,7 @@ mass: 15.9994
 #   Couloumb: Coulomb-like.
 #   Constant: A constant value of 0.1.
 #   Boolean: A Boolean test grid, good for benchmarks.
-init_condition: Boolean
+init_condition: FromFile
 
 # Standard Deviation of initial wavefunction noise.
 sig: 1.0
@@ -106,7 +106,7 @@ init_symmetry: NotConstrained
 output:
     screen_update: 1000 # Steps before recording measurables.
     # snap_update: 10000 # OPTIONAL: Steps befode dumping all variables to file, i.e. A 'snapshot'.
-    file_type: Json # File format for outputs. See options above
+    file_type: Csv # File format for outputs. See options above
     save_wavefns: true # Dump full 3D wavefunctions to disk once calculated.
     save_potential: true # Save potential at beginning of run.
 
