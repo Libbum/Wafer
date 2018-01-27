@@ -1,6 +1,7 @@
 use chrono::Local;
 use csv;
-use ndarray::ArrayView3;
+use ndarray::{Zip, ArrayView3, Array3};
+use ndarray_parallel::prelude::ParApply2;
 use ordinal::Ordinal;
 use rayon;
 use ron::ser::to_string_pretty as ron_string;
@@ -15,7 +16,8 @@ use term_size;
 use yansi::Color::Blue;
 
 use grid;
-use config::FileType;
+use potential;
+use config::{PotentialType, FileType, Config, Index3};
 use errors::*;
 
 lazy_static! {
@@ -76,7 +78,7 @@ pub fn print_banner(sha: &str) {
 /// Handles the saving of potential data to disk.
 ///
 /// # Arguments
-/// *`v` - The potential to output.
+/// * `v` - The potential to output.
 /// * `project` - The project name (for directory to save to).
 /// * `file_type` - What type of file format to use in the output.
 pub fn potential(v: &ArrayView3<f64>, project: &str, file_type: &FileType) -> Result<()> {
@@ -92,6 +94,54 @@ pub fn potential(v: &ArrayView3<f64>, project: &str, file_type: &FileType) -> Re
         FileType::Yaml => write_yaml(v, &filename, ErrorKind::SavePotential),
         FileType::Ron => write_ron(v, &filename, ErrorKind::SavePotential),
     }
+}
+
+/// Handles the saving of potential_sub data to disk (if required).
+///
+/// # Arguments
+/// * `config` - The configuration struct.
+pub fn potential_sub(config: &Config) -> Result<()> {
+    let filename = format!(
+        "{}/potential_sub{}",
+        get_project_dir(&config.project_name),
+        config.output.file_type.extentsion()
+    );
+
+    let mut sub = Array3::<f64>::zeros((config.grid.size.x, config.grid.size.y, config.grid.size.z));
+    let (full_sub, single_sub) = match config.potential {
+        PotentialType::FullCornell => {
+            // potential_sub is a complete array.
+            Zip::indexed(&mut sub).par_apply(
+                |(i, j, k), sub| {
+                    let idx = Index3 { x: i, y: j, z: k };
+                    *sub = match potential::potential_sub_idx(config, &idx) {
+                        Ok(p) => p,
+                        Err(err) => panic!("Calling invalid potential_sub routine: {}", err),
+                    };
+                },
+            );
+            (Some(sub.view()), None)
+        }
+        _ => {
+            // potential_sub is a single value or zero.
+            let sub_val = potential::potential_sub(config)?;
+            if sub_val > 0. {
+                (None, Some(sub_val))
+            } else {
+                // no need to write anything. Return early.
+                return Ok(());
+            }
+        }
+    };
+    match config.output.file_type {
+        //FileType::Messagepack => write_sub_mpk(full_sub, single_sub, &filename)?,
+        //FileType::Csv => write_sub_csv(full_sub, single_sub, &filename)?,
+        //FileType::Json => write_sub_json(full_sub, single_sub, &filename)?,
+        //FileType::Yaml => write_sub_yaml(full_sub, single_sub, &filename)?,
+        //FileType::Ron => write_sub_ron(full_sub, single_sub, &filename)?,
+        _ => write_sub_ron(&full_sub, single_sub, &filename)?,
+    }
+    Ok(())
 }
 
 /// Outputs an array to disk in a plain, csv format
@@ -174,6 +224,29 @@ fn write_ron(array: &ArrayView3<f64>, filename: &str, err_kind: ErrorKind) -> Re
         .chain_err(|| ErrorKind::Serialize)?;
     buffer.write(data.as_bytes())
         .chain_err(|| err_kind)?;
+    Ok(())
+}
+
+/// Outputs a potential_sub to disk in ron format
+///
+/// # Arguments
+/// * `full_sub` - If the potential_sub is an entire array, this will be a Some.
+/// * `single_sub` - If the potential_sub is a singular value, this will be Some.
+/// * `filename` - file / directory to save to.
+fn write_sub_ron(full_sub: &Option<ArrayView3<f64>>, single_sub: Option<f64>, filename: &str) -> Result<()> {
+    let mut buffer = File::create(&filename)
+        .chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
+    if single_sub.is_some() {
+        let data = ron_string(&single_sub.unwrap(), PrettyConfig::default())
+            .chain_err(|| ErrorKind::Serialize)?;
+        buffer.write(data.as_bytes())
+            .chain_err(|| ErrorKind::SavePotentialSub)?;
+    } else if full_sub.is_some() {
+        let data = ron_string(&full_sub.unwrap(), PrettyConfig::default())
+            .chain_err(|| ErrorKind::Serialize)?;
+        buffer.write(data.as_bytes())
+            .chain_err(|| ErrorKind::SavePotentialSub)?;
+    }
     Ok(())
 }
 

@@ -76,6 +76,10 @@ error_chain!{
                 description("Cannot save potential")
                 display("Unable to save potential data to disk")
         }
+        SavePotentialSub {
+                description("Cannot save potential_sub")
+                display("Unable to save potential_sub data to disk")
+        }
         SaveWavefunction {
                 description("Cannot save wavefunction")
                 display("Unable to save wavefunction data to disk")

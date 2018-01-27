@@ -310,7 +310,7 @@ pub struct Config {
 }
 
 impl Config {
-    /// Reads and parses data from the `wafer.cfg` file and command line arguments.
+    /// Reads and parses data from the `wafer.yaml` file and command line arguments.
     pub fn load(file: &str, script: &str) -> Result<Config> {
         let reader = File::open(file).chain_err(|| ErrorKind::ConfigLoad(file.to_string()))?;
         // Decode configuration file.

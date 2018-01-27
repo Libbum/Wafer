@@ -106,6 +106,9 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials> {
         if let Err(err) = output::potential(&work, &config.project_name, &config.output.file_type) {
             warn!(log, "Could not write potential to disk: {}", err);
         }
+        if let Err(err) = output::potential_sub(&config) {
+            warn!(log, "Could not write potential_sub to disk: {}", err);
+        }
     }
 
     Ok(Potentials { v: v, a: a, b: b })
@@ -256,7 +259,6 @@ fn potential(config: &Config, idx: &Index3) -> Result<f64> {
 }
 
 
-//TODO: For now we're dropping complex all together, but this is needed.
 //TODO: We need potential_sub file outputs for those which require it.
 // Then here from_file can be treated differently.
 /// Calculate binding energy offset (if any). Follows the `potential` input/output arguments.
