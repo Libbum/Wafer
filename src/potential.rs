@@ -4,7 +4,7 @@ use slog::Logger;
 use std::f64::MAX;
 use std::f64::consts::PI;
 
-use config::{Config, Index3, Grid, PotentialType};
+use config::{Config, Grid, Index3, PotentialType};
 use input;
 use output;
 use grid;
@@ -13,12 +13,22 @@ use errors::*;
 #[derive(Debug)]
 /// Holds the potential arrays for the current simulation.
 pub struct Potentials {
-    /// The potential
+    /// The potential.
     pub v: Array3<f64>,
-    /// Ancillary array `a`
+    /// Ancillary array `a`.
     pub a: Array3<f64>,
-    /// Ancillary array `b`
+    /// Ancillary array `b`.
     pub b: Array3<f64>,
+    /// Potsub value.
+    pub pot_sub: (Option<Array3<f64>>, Option<f64>),
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+/// A single value struct for potential_sub outputs that
+/// do not require an entire array.
+pub struct PotentialSubSingle {
+    /// Value of `potential_sub` for the current potential.
+    pub pot_sub: f64,
 }
 
 /// A public wrapper around `potential`. Where `potential` does the calculation for a
@@ -42,9 +52,9 @@ pub fn generate(config: &Config) -> Result<Array3<f64>> {
         match potential(config, &Index3 { x: i, y: j, z: k }) {
             Ok(result) => *x = result,
             Err(err) => panic!("{}", err), //NOTE: We panic here rather than generating an error.
-            // First: I'm not sure how to return the error out of the closure,
-            // and second: This error can only be `NotAvailable`, so this should
-            // never run here. If it does, a panic is probably a better halter.
+                                           // First: I'm not sure how to return the error out of the closure,
+                                           // and second: This error can only be `NotAvailable`, so this should
+                                           // never run here. If it does, a panic is probably a better halter.
         }
     });
     Ok(v)
@@ -64,25 +74,23 @@ pub fn generate(config: &Config) -> Result<Array3<f64>> {
 pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials> {
     let mut minima: f64 = MAX;
     let bb = config.central_difference.bb();
+    let num = &config.grid.size;
     let v: Array3<f64> = match config.potential {
         PotentialType::FromFile => {
-            info!(log, "Loading potential from file");
-            let num = &config.grid.size;
             let init_size: [usize; 3] = [num.x + bb, num.y + bb, num.z + bb];
+            info!(log, "Loading potential from file");
             let pot = input::potential(init_size, bb, &config.output.file_type, log)
                 .chain_err(|| ErrorKind::LoadPotential)?;
             Ok(pot)
         }
-        PotentialType::FromScript => {
-            match config.script_location {
-                Some(ref file) => {
-                    let pot = input::script_potential(file, &config.grid, bb, log)
-                        .chain_err(|| ErrorKind::LoadPotential)?;
-                    Ok(pot)
-                }
-                None => Err(ErrorKind::ScriptNotFound.into()),
+        PotentialType::FromScript => match config.script_location {
+            Some(ref file) => {
+                let pot = input::script_potential(file, &config.grid, bb, log)
+                    .chain_err(|| ErrorKind::LoadPotential)?;
+                Ok(pot)
             }
-        }
+            None => Err(ErrorKind::ScriptNotFound.into()),
+        },
         _ => {
             info!(log, "Calculating potential array");
             generate(config)
@@ -91,6 +99,43 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials> {
 
     let b = 1. / (1. + config.grid.dt * &v / 2.);
     let a = (1. - config.grid.dt * &v / 2.) * &b;
+
+    let sub_size: [usize; 3] = [num.x, num.y, num.z];
+    let pot_sub = if let Ok(pot_sub_info) =
+        input::potential_sub(sub_size, &config.output.file_type, log)
+    {
+        if pot_sub_info.0.is_none() && pot_sub_info.1.is_some()
+            && config.potential.variable_pot_sub()
+        {
+            error!(log, "Potential_sub input file contains a singular value, but potential type is FullCornell. Update or remove the potential file in the input directory before continuing.");
+            return Err(ErrorKind::WrongPotentialSubDims.into());
+        } else if pot_sub_info.0.is_some() && pot_sub_info.1.is_none()
+            && !config.potential.variable_pot_sub()
+        {
+            error!(log, "Potential_sub input file contains an array, but potential type is not FullCornell. Update or remove the potential file in the input directory before continuing.");
+            return Err(ErrorKind::WrongPotentialSubDims.into());
+        } else {
+            info!(log, "Potential_sub loaded from disk");
+            pot_sub_info
+        }
+    } else if config.potential.variable_pot_sub() {
+        let mut full_sub = Array3::<f64>::zeros((sub_size[0], sub_size[1], sub_size[2]));
+        Zip::indexed(&mut full_sub).par_apply(|(i, j, k), full_sub| {
+            let idx = Index3 { x: i, y: j, z: k };
+            *full_sub = match potential_sub_idx(config, &idx) {
+                Ok(p) => p,
+                Err(err) => panic!("Calling invalid potential_sub routine: {}", err),
+            };
+        });
+        (Some(full_sub), None)
+    } else {
+        let single_sub = potential_sub(config)?;
+        if single_sub > 0.0 {
+            (None, Some(single_sub))
+        } else {
+            (None, None)
+        }
+    };
 
     // We can't do this in a par.
     // AFAIK, this is the safest way to work with the float here.
@@ -111,7 +156,12 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials> {
         }
     }
 
-    Ok(Potentials { v: v, a: a, b: b })
+    Ok(Potentials {
+        v: v,
+        a: a,
+        b: b,
+        pot_sub: pot_sub,
+    })
 }
 
 /// Generates a potential for the current simulation at a particular index point.
@@ -130,9 +180,9 @@ fn potential(config: &Config, idx: &Index3) -> Result<f64> {
     match config.potential {
         PotentialType::NoPotential => Ok(0.0),
         PotentialType::Cube => {
-            if (idx.x > num.x / 4 && idx.x <= 3 * num.x / 4) &&
-                (idx.y > num.y / 4 && idx.y <= 3 * num.y / 4) &&
-                (idx.z > num.z / 4 && idx.z <= 3 * num.z / 4)
+            if (idx.x > num.x / 4 && idx.x <= 3 * num.x / 4)
+                && (idx.y > num.y / 4 && idx.y <= 3 * num.y / 4)
+                && (idx.z > num.z / 4 && idx.z <= 3 * num.z / 4)
             {
                 Ok(-10.0)
             } else {
@@ -140,9 +190,9 @@ fn potential(config: &Config, idx: &Index3) -> Result<f64> {
             }
         }
         PotentialType::QuadWell => {
-            if (idx.x > num.x / 4 && idx.x <= 3 * num.x / 4) &&
-                (idx.y > num.y / 4 && idx.y <= 3 * num.y / 4) &&
-                (idx.z > 3 * num.z / 8 && idx.z <= 5 * num.z / 8)
+            if (idx.x > num.x / 4 && idx.x <= 3 * num.x / 4)
+                && (idx.y > num.y / 4 && idx.y <= 3 * num.y / 4)
+                && (idx.z > 3 * num.z / 8 && idx.z <= 5 * num.z / 8)
             {
                 Ok(-10.0)
             } else {
@@ -150,16 +200,15 @@ fn potential(config: &Config, idx: &Index3) -> Result<f64> {
             }
         }
         PotentialType::Periodic => {
-            let mut temp = (2. * PI * (idx.x as f64 - 1.) / (num.x as f64 - 1.)).sin() *
-                (2. * PI * (idx.x as f64 - 1.) / (num.x as f64 - 1.)).sin();
-            temp *= (2. * PI * (idx.y as f64 - 1.) / (num.y as f64 - 1.)).sin() *
-                (2. * PI * (idx.y as f64 - 1.) / (num.y as f64 - 1.)).sin();
-            temp *= (2. * PI * (idx.z as f64 - 1.) / (num.z as f64 - 1.)).sin() *
-                (2. * PI * (idx.z as f64 - 1.) / (num.z as f64 - 1.)).sin();
+            let mut temp = (2. * PI * (idx.x as f64 - 1.) / (num.x as f64 - 1.)).sin()
+                * (2. * PI * (idx.x as f64 - 1.) / (num.x as f64 - 1.)).sin();
+            temp *= (2. * PI * (idx.y as f64 - 1.) / (num.y as f64 - 1.)).sin()
+                * (2. * PI * (idx.y as f64 - 1.) / (num.y as f64 - 1.)).sin();
+            temp *= (2. * PI * (idx.z as f64 - 1.) / (num.z as f64 - 1.)).sin()
+                * (2. * PI * (idx.z as f64 - 1.) / (num.z as f64 - 1.)).sin();
             Ok(-temp + 1.)
         }
-        PotentialType::Coulomb |
-        PotentialType::ComplexCoulomb => {
+        PotentialType::Coulomb | PotentialType::ComplexCoulomb => {
             //TODO: ComplexCoulomb returns real until we have complex types
             let r = config.grid.dn * (calculate_r2(idx, &config.grid)).sqrt();
             if r < config.grid.dn {
@@ -194,24 +243,21 @@ fn potential(config: &Config, idx: &Index3) -> Result<f64> {
             let xi: f64 = 0.0; //TODO: This should be an optional parameter for FullCornell only
             let dz = idx.z as f64 - (config.grid.size.z as f64 + 1.) / 2.;
             let r = config.grid.dn * (calculate_r2(idx, &config.grid)).sqrt();
-            let md = mu(t) *
-                (1. +
-                     0.07 * xi.powf(0.2) *
-                         (1. - config.grid.dn * config.grid.dn * dz * dz / (r * r))) *
-                (1. + xi).powf(-0.29);
+            let md = mu(t)
+                * (1.
+                    + 0.07 * xi.powf(0.2)
+                        * (1. - config.grid.dn * config.grid.dn * dz * dz / (r * r)))
+                * (1. + xi).powf(-0.29);
             if r < config.grid.dn {
                 Ok(4. * config.mass)
             } else {
-                Ok(
-                    -alphas(2. * PI * t) * (4. / 3.) * (-md * r).exp() / r +
-                        config.sig * (1. - (-md * r).exp()) / md -
-                        0.8 * config.sig / (4. * config.mass * config.mass * r) +
-                        4. * config.mass,
-                )
+                Ok(-alphas(2. * PI * t) * (4. / 3.) * (-md * r).exp() / r
+                    + config.sig * (1. - (-md * r).exp()) / md
+                    - 0.8 * config.sig / (4. * config.mass * config.mass * r)
+                    + 4. * config.mass)
             }
         }
-        PotentialType::Harmonic |
-        PotentialType::ComplexHarmonic => {
+        PotentialType::Harmonic | PotentialType::ComplexHarmonic => {
             //TODO: ComplexHarmonic is real until we have Complex types
             let r = config.grid.dn * (calculate_r2(idx, &config.grid)).sqrt();
             Ok(r * r / 2.)
@@ -224,39 +270,38 @@ fn potential(config: &Config, idx: &Index3) -> Result<f64> {
             let x = dx / ((num.x as f64 - 1.) / 2.);
             let y = dy / ((num.y as f64 - 1.) / 2.);
             let z = dz / ((num.z as f64 - 1.) / 2.);
-            if 12.70820393249937 + 11.210068307552588 * x >= 14.674169922690343 * z &&
-                11.210068307552588 * x <= 12.70820393249937 + 14.674169922690343 * z &&
-                5.605034153776295 * (3.23606797749979 * x - 1.2360679774997896 * z) <=
-                    6. * (4.23606797749979 + 5.23606797749979 * y) &&
-                18.1382715378281 * x + 3.464101615137755 * z <= 12.70820393249937 &&
-                9.06913576891405 * x + 15.70820393249937 * y <=
-                    12.70820393249937 + 3.464101615137755 * z &&
-                9.70820393249937 * y <=
-                    12.70820393249937 + 5.605034153776294 * x + 14.674169922690343 * z &&
-                12.70820393249937 + 5.605034153776294 * x + 9.70820393249937 * y +
-                    14.674169922690343 * z >= 0. &&
-                15.70820393249937 * y + 3.464101615137755 * z <=
-                    12.70820393249937 + 9.06913576891405 * x &&
-                5.605034153776295 * (-6.47213595499958 * x - 1.2360679774997896 * z) <=
-                    25.41640786499874 &&
-                3.464101615137755 * z <=
-                    9.06913576891405 * x + 3. * (4.23606797749979 + 5.23606797749979 * y) &&
-                1.7320508075688772 * (3.23606797749979 * x + 8.47213595499958 * z) <=
-                    3. * (4.23606797749979 + 3.23606797749979 * y) &&
-                5.605034153776294 * x + 9.70820393249937 * y + 14.674169922690343 * z <=
-                    12.70820393249937
+            if 12.70820393249937 + 11.210068307552588 * x >= 14.674169922690343 * z
+                && 11.210068307552588 * x <= 12.70820393249937 + 14.674169922690343 * z
+                && 5.605034153776295 * (3.23606797749979 * x - 1.2360679774997896 * z)
+                    <= 6. * (4.23606797749979 + 5.23606797749979 * y)
+                && 18.1382715378281 * x + 3.464101615137755 * z <= 12.70820393249937
+                && 9.06913576891405 * x + 15.70820393249937 * y
+                    <= 12.70820393249937 + 3.464101615137755 * z
+                && 9.70820393249937 * y
+                    <= 12.70820393249937 + 5.605034153776294 * x + 14.674169922690343 * z
+                && 12.70820393249937 + 5.605034153776294 * x + 9.70820393249937 * y
+                    + 14.674169922690343 * z >= 0.
+                && 15.70820393249937 * y + 3.464101615137755 * z
+                    <= 12.70820393249937 + 9.06913576891405 * x
+                && 5.605034153776295 * (-6.47213595499958 * x - 1.2360679774997896 * z)
+                    <= 25.41640786499874
+                && 3.464101615137755 * z
+                    <= 9.06913576891405 * x + 3. * (4.23606797749979 + 5.23606797749979 * y)
+                && 1.7320508075688772 * (3.23606797749979 * x + 8.47213595499958 * z)
+                    <= 3. * (4.23606797749979 + 3.23606797749979 * y)
+                && 5.605034153776294 * x + 9.70820393249937 * y + 14.674169922690343 * z
+                    <= 12.70820393249937
             {
                 Ok(-100.)
             } else {
                 Ok(0.0)
             }
         }
-        PotentialType::FromFile |
-        PotentialType::FromScript => Err(ErrorKind::PotentialNotAvailable.into()),
-        //TODO: Script may not need to error.
+        PotentialType::FromFile | PotentialType::FromScript => {
+            Err(ErrorKind::PotentialNotAvailable.into())
+        } //TODO: Script may not need to error.
     }
 }
-
 
 //TODO: We need potential_sub file outputs for those which require it.
 // Then here from_file can be treated differently.
@@ -270,11 +315,11 @@ pub fn potential_sub_idx(config: &Config, idx: &Index3) -> Result<f64> {
             let r = config.grid.dn * (calculate_r2(idx, &config.grid)).sqrt();
             let t = 1.0; //TODO: This should be an optional parameter for FullCornell only
             let xi: f64 = 0.0; //TODO: This should be an optional parameter for FullCornell only
-            let md = mu(t) *
-                (1. +
-                     0.07 * xi.powf(0.2) *
-                         (1. - config.grid.dn * config.grid.dn * dz * dz / (r * r))) *
-                (1. + xi).powf(-0.29);
+            let md = mu(t)
+                * (1.
+                    + 0.07 * xi.powf(0.2)
+                        * (1. - config.grid.dn * config.grid.dn * dz * dz / (r * r)))
+                * (1. + xi).powf(-0.29);
             Ok(config.sig / md + 4. * config.mass)
         }
         _ => Err(ErrorKind::PotentialNotAvailable.into()),
@@ -303,7 +348,6 @@ pub fn potential_sub(config: &Config) -> Result<f64> {
     }
 }
 
-
 /// Calculates squared distance
 pub fn calculate_r2(idx: &Index3, grid: &Grid) -> f64 {
     let dx = (idx.x as f64) - ((grid.size.x as f64) + 1.) / 2.;
@@ -323,11 +367,11 @@ fn alphas(mu: f64) -> f64 {
 
     let l = 2. * (mu / r).ln();
 
-    4. * PI *
-        (1. - 2. * b1 * l.ln() / (b0 * b0 * l) +
-             4. * b1 * b1 *
-                 ((l.ln() - 0.5) * (l.ln() - 0.5) + b2 * b0 / (8. * b1 * b1) - 5.0 / 4.0) /
-                 (b0 * b0 * b0 * b0 * l * l)) / (b0 * l)
+    4. * PI
+        * (1. - 2. * b1 * l.ln() / (b0 * b0 * l)
+            + 4. * b1 * b1
+                * ((l.ln() - 0.5) * (l.ln() - 0.5) + b2 * b0 / (8. * b1 * b1) - 5.0 / 4.0)
+                / (b0 * b0 * b0 * b0 * l * l)) / (b0 * l)
 }
 
 /// Debye screening mass. Used for Cornell potentials.

@@ -11,6 +11,7 @@ use rmps;
 use ndarray::{Array1, Array3, ArrayViewMut3, Axis, Zip};
 use ndarray_parallel::prelude::*;
 use grid;
+use potential::PotentialSubSingle;
 use config::{Config, FileType, Grid};
 use errors::*;
 
@@ -34,6 +35,20 @@ struct PlainRecord {
 /// * `extension` - File extension
 fn check_potential_file(extension: &str) -> Option<String> {
     let file_path = format!("./input/potential.{}", extension);
+    if Path::new(&file_path).exists() {
+        Some(file_path)
+    } else {
+        None
+    }
+}
+
+/// Checks if a potential_sub file exists in the input directory
+///
+/// #Arguments
+///
+/// * `extension` - File extension
+fn check_potential_sub_file(extension: &str) -> Option<String> {
+    let file_path = format!("./input/potential_sub.{}", extension);
     if Path::new(&file_path).exists() {
         Some(file_path)
     } else {
@@ -152,6 +167,7 @@ fn fill_data(
     let mut complete = Array3::<f64>::zeros(target_size);
     {
         let mut work = grid::get_mut_work_area(&mut complete, bb / 2);
+        warn!(log, "{:?}, {:?}", work.dim(), data.dim());
         let same: bool = init_size
             .iter()
             .zip(target_size.iter())
@@ -238,6 +254,95 @@ pub fn script_potential(file: &str, grid: &Grid, bb: usize, log: &Logger) -> Res
             .par_apply(|work, &generated| *work = generated);
     }
     Ok(complete)
+}
+
+/// Loads potential_sub file from disk. Handles cases where multiple files exist.
+///
+/// # Arguments
+///
+/// * `target_size` - Size of the requested work area for this simulation. If the file on disk
+/// is a full array, and does not meet these dimensions, it will be scaled.
+/// * `file_type` - What type of file format to use in the output. Will be used as an arbitrator
+/// when multiple files are detected.
+/// * `log` - Reference to the system logger.
+pub fn potential_sub(
+    target_size: [usize; 3],
+    file_type: &FileType,
+    log: &Logger,
+) -> Result<(Option<Array3<f64>>, Option<f64>)> {
+    let mpk_file = check_potential_sub_file("mpk");
+    let csv_file = check_potential_sub_file("csv");
+    let json_file = check_potential_sub_file("json");
+    let yaml_file = check_potential_sub_file("yaml");
+    let ron_file = check_potential_sub_file("ron");
+
+    let file_count = {
+        let files = [&mpk_file, &csv_file, &json_file, &yaml_file, &ron_file];
+        files.iter().filter(|x| x.is_some()).count()
+    };
+    if file_count > 1 {
+        warn!(
+            log,
+            "Multiple potential_sub files found in input directory. Chosing '{}' based on configuration settings.",
+            file_type
+        );
+        match *file_type {
+            //FileType::Messagepack => read_sub_mpk(mpk_file.unwrap(), target_size, bb, log),
+            //FileType::Csv => read_sub_csv(csv_file.unwrap(), target_size, bb, log),
+            //FileType::Json => read_sub_json(json_file.unwrap(), target_size, bb, log),
+            //FileType::Yaml => read_sub_yaml(yaml_file.unwrap(), target_size, bb, log),
+            //FileType::Ron => read_sub_ron(ron_file.unwrap(), target_size, bb, log),
+            _ => read_sub_ron(ron_file.unwrap(), target_size, log),
+        }
+    //    } else if mpk_file.is_some() {
+    //        read_sub_mpk(mpk_file.unwrap(), target_size, bb, log)
+    //    } else if csv_file.is_some() {
+    //        read_sub_csv(csv_file.unwrap(), target_size, bb, log)
+    //    } else if json_file.is_some() {
+    //        read_sub_json(json_file.unwrap(), target_size, bb, log)
+    //    } else if yaml_file.is_some() {
+    //        read_sub_yaml(yaml_file.unwrap(), target_size, bb, log)
+    } else if ron_file.is_some() {
+        read_sub_ron(ron_file.unwrap(), target_size, log)
+    } else {
+        //No data, potential_sub can be calculated instead
+        Ok((None, None))
+    }
+}
+
+/// Loads a potential_sub value or array from a ron file on disk.
+fn read_sub_ron(
+    file: String,
+    target_size: [usize; 3],
+    log: &Logger,
+) -> Result<(Option<Array3<f64>>, Option<f64>)> {
+    let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.clone()))?;
+    let full_data: Array3<f64> = match ron_reader(reader) {
+        Ok(data) => data,
+        Err(_) => {
+            // We didn't match on a full array, so try a single value
+            let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.clone()))?;
+            let single_data: PotentialSubSingle =
+                ron_reader(reader).chain_err(|| ErrorKind::Deserialize)?;
+
+            return Ok((None, Some(single_data.pot_sub)));
+        }
+    };
+
+    let fdim = full_data.dim();
+    let init_size = [fdim.0, fdim.1, fdim.2];
+    let mut work = Array3::<f64>::zeros((target_size[0], target_size[1], target_size[2]));
+    let same: bool = init_size
+        .iter()
+        .zip(target_size.iter())
+        .all(|(a, b)| a == b);
+    if same {
+        Ok((Some(full_data), None))
+    } else {
+        info!(log, "Interpolating {} from {:?} to requested size of {:?} (size includes central difference padding).", file, init_size, target_size);
+        trilerp_resize(&full_data, &mut work.view_mut(), target_size);
+        Ok((Some(work), None))
+    }
 }
 
 /// Loads previously computed wavefunctions from disk.

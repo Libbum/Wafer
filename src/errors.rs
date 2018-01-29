@@ -80,6 +80,10 @@ error_chain!{
                 description("Cannot save potential_sub")
                 display("Unable to save potential_sub data to disk")
         }
+        WrongPotentialSubDims {
+                description("wrong dimensions in potential_sub")
+                display("Unable to identify the correct demensions in potential_sub input file")
+        }
         SaveWavefunction {
                 description("Cannot save wavefunction")
                 display("Unable to save wavefunction data to disk")

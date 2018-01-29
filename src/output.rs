@@ -1,6 +1,6 @@
 use chrono::Local;
 use csv;
-use ndarray::{Zip, ArrayView3, Array3};
+use ndarray::{Array3, ArrayView3, Zip};
 use ndarray_parallel::prelude::ParApply2;
 use ordinal::Ordinal;
 use rayon;
@@ -10,14 +10,14 @@ use serde::Serialize;
 use serde_json;
 use serde_yaml;
 use rmps;
-use std::fs::{copy, create_dir_all, File, remove_file};
+use std::fs::{copy, create_dir_all, remove_file, File};
 use std::io::prelude::*;
 use term_size;
 use yansi::Color::Blue;
 
 use grid;
-use potential;
-use config::{PotentialType, FileType, Config, Index3};
+use potential::{self, PotentialSubSingle};
+use config::{Config, FileType, Index3};
 use errors::*;
 
 lazy_static! {
@@ -28,7 +28,7 @@ lazy_static! {
     pub static ref TERMWIDTH: usize = get_term_size();
 }
 
-#[derive(Debug, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Serialize)]
 /// Structured output of observable values
 struct ObservablesOutput {
     /// Excited state number.
@@ -107,30 +107,26 @@ pub fn potential_sub(config: &Config) -> Result<()> {
         config.output.file_type.extentsion()
     );
 
-    let mut sub = Array3::<f64>::zeros((config.grid.size.x, config.grid.size.y, config.grid.size.z));
-    let (full_sub, single_sub) = match config.potential {
-        PotentialType::FullCornell => {
-            // potential_sub is a complete array.
-            Zip::indexed(&mut sub).par_apply(
-                |(i, j, k), sub| {
-                    let idx = Index3 { x: i, y: j, z: k };
-                    *sub = match potential::potential_sub_idx(config, &idx) {
-                        Ok(p) => p,
-                        Err(err) => panic!("Calling invalid potential_sub routine: {}", err),
-                    };
-                },
-            );
-            (Some(sub.view()), None)
-        }
-        _ => {
-            // potential_sub is a single value or zero.
-            let sub_val = potential::potential_sub(config)?;
-            if sub_val > 0. {
-                (None, Some(sub_val))
-            } else {
-                // no need to write anything. Return early.
-                return Ok(());
-            }
+    let mut sub =
+        Array3::<f64>::zeros((config.grid.size.x, config.grid.size.y, config.grid.size.z));
+    let (full_sub, single_sub) = if config.potential.variable_pot_sub() {
+        // potential_sub is a complete array.
+        Zip::indexed(&mut sub).par_apply(|(i, j, k), sub| {
+            let idx = Index3 { x: i, y: j, z: k };
+            *sub = match potential::potential_sub_idx(config, &idx) {
+                Ok(p) => p,
+                Err(err) => panic!("Calling invalid potential_sub routine: {}", err),
+            };
+        });
+        (Some(sub.view()), None)
+    } else {
+        // potential_sub is a single value or zero.
+        let sub_val = potential::potential_sub(config)?;
+        if sub_val > 0. {
+            (None, Some(sub_val))
+        } else {
+            // no need to write anything. Return early.
+            return Ok(());
         }
     };
     match config.output.file_type {
@@ -177,11 +173,9 @@ fn write_mpk(array: &ArrayView3<f64>, filename: &str, err_kind: ErrorKind) -> Re
     array
         .serialize(&mut rmps::Serializer::new(&mut output))
         .chain_err(|| ErrorKind::Serialize)?;
-    let mut buffer = File::create(filename)
-        .chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
-    buffer
-        .write_all(&output)
-        .chain_err(|| err_kind)?;
+    let mut buffer =
+        File::create(filename).chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
+    buffer.write_all(&output).chain_err(|| err_kind)?;
     Ok(())
 }
 
@@ -191,10 +185,8 @@ fn write_mpk(array: &ArrayView3<f64>, filename: &str, err_kind: ErrorKind) -> Re
 /// *`array` - The array to output
 /// * `filename` - file / directory to save to.
 fn write_json(array: &ArrayView3<f64>, filename: &str, err_kind: ErrorKind) -> Result<()> {
-    let buffer = File::create(&filename)
-        .chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
-    serde_json::to_writer_pretty(buffer, array)
-        .chain_err(|| err_kind)?;
+    let buffer = File::create(&filename).chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
+    serde_json::to_writer_pretty(buffer, array).chain_err(|| err_kind)?;
     Ok(())
 }
 
@@ -204,10 +196,8 @@ fn write_json(array: &ArrayView3<f64>, filename: &str, err_kind: ErrorKind) -> R
 /// *`array` - The array to output
 /// * `filename` - file / directory to save to.
 fn write_yaml(array: &ArrayView3<f64>, filename: &str, err_kind: ErrorKind) -> Result<()> {
-    let buffer = File::create(&filename)
-        .chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
-    serde_yaml::to_writer(buffer, array)
-        .chain_err(|| err_kind)?;
+    let buffer = File::create(&filename).chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
+    serde_yaml::to_writer(buffer, array).chain_err(|| err_kind)?;
     Ok(())
 }
 
@@ -217,12 +207,10 @@ fn write_yaml(array: &ArrayView3<f64>, filename: &str, err_kind: ErrorKind) -> R
 /// *`array` - The array to output
 /// * `filename` - file / directory to save to.
 fn write_ron(array: &ArrayView3<f64>, filename: &str, err_kind: ErrorKind) -> Result<()> {
-    let mut buffer = File::create(&filename)
-        .chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
-    let data = ron_string(array, PrettyConfig::default())
-        .chain_err(|| ErrorKind::Serialize)?;
-    buffer.write(data.as_bytes())
-        .chain_err(|| err_kind)?;
+    let mut buffer =
+        File::create(&filename).chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
+    let data = ron_string(array, PrettyConfig::default()).chain_err(|| ErrorKind::Serialize)?;
+    buffer.write(data.as_bytes()).chain_err(|| err_kind)?;
     Ok(())
 }
 
@@ -232,20 +220,27 @@ fn write_ron(array: &ArrayView3<f64>, filename: &str, err_kind: ErrorKind) -> Re
 /// * `full_sub` - If the potential_sub is an entire array, this will be a Some.
 /// * `single_sub` - If the potential_sub is a singular value, this will be Some.
 /// * `filename` - file / directory to save to.
-fn write_sub_mpk(full_sub: &Option<ArrayView3<f64>>, single_sub: Option<f64>, filename: &str) -> Result<()> {
-    let mut buffer = File::create(filename)
-        .chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
+fn write_sub_mpk(
+    full_sub: &Option<ArrayView3<f64>>,
+    single_sub: Option<f64>,
+    filename: &str,
+) -> Result<()> {
+    let mut buffer =
+        File::create(filename).chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
     if single_sub.is_some() {
         let mut output = Vec::new();
-        single_sub.unwrap()
-            .serialize(&mut rmps::Serializer::new(&mut output))
+        let sub = PotentialSubSingle {
+            pot_sub: single_sub.unwrap(),
+        };
+        sub.serialize(&mut rmps::Serializer::new(&mut output))
             .chain_err(|| ErrorKind::Serialize)?;
         buffer
             .write_all(&output)
             .chain_err(|| ErrorKind::SavePotentialSub)?;
     } else if full_sub.is_some() {
         let mut output = Vec::new();
-        full_sub.unwrap()
+        full_sub
+            .unwrap()
             .serialize(&mut rmps::Serializer::new(&mut output))
             .chain_err(|| ErrorKind::Serialize)?;
         buffer
@@ -261,14 +256,20 @@ fn write_sub_mpk(full_sub: &Option<ArrayView3<f64>>, single_sub: Option<f64>, fi
 /// * `full_sub` - If the potential_sub is an entire array, this will be a Some.
 /// * `single_sub` - If the potential_sub is a singular value, this will be Some.
 /// * `filename` - file / directory to save to.
-fn write_sub_csv(full_sub: &Option<ArrayView3<f64>>, single_sub: Option<f64>, filename: &str) -> Result<()> {
+fn write_sub_csv(
+    full_sub: &Option<ArrayView3<f64>>,
+    single_sub: Option<f64>,
+    filename: &str,
+) -> Result<()> {
     let mut buffer = csv::WriterBuilder::new()
         .has_headers(false)
         .from_path(filename)
         .chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
     if single_sub.is_some() {
-        buffer.serialize(&single_sub.unwrap())
-                .chain_err(|| ErrorKind::Serialize)?;
+        let sub = PotentialSubSingle {
+            pot_sub: single_sub.unwrap(),
+        };
+        buffer.serialize(&sub).chain_err(|| ErrorKind::Serialize)?;
         buffer.flush().chain_err(|| ErrorKind::Flush)?;
     } else if full_sub.is_some() {
         for ((i, j, k), data) in full_sub.unwrap().indexed_iter() {
@@ -292,12 +293,17 @@ fn write_sub_csv(full_sub: &Option<ArrayView3<f64>>, single_sub: Option<f64>, fi
 /// * `full_sub` - If the potential_sub is an entire array, this will be a Some.
 /// * `single_sub` - If the potential_sub is a singular value, this will be Some.
 /// * `filename` - file / directory to save to.
-fn write_sub_json(full_sub: &Option<ArrayView3<f64>>, single_sub: Option<f64>, filename: &str) -> Result<()> {
-    let buffer = File::create(&filename)
-        .chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
+fn write_sub_json(
+    full_sub: &Option<ArrayView3<f64>>,
+    single_sub: Option<f64>,
+    filename: &str,
+) -> Result<()> {
+    let buffer = File::create(&filename).chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
     if single_sub.is_some() {
-        serde_json::to_writer_pretty(buffer, &single_sub.unwrap())
-            .chain_err(|| ErrorKind::SavePotentialSub)?;
+        let sub = PotentialSubSingle {
+            pot_sub: single_sub.unwrap(),
+        };
+        serde_json::to_writer_pretty(buffer, &sub).chain_err(|| ErrorKind::SavePotentialSub)?;
     } else if full_sub.is_some() {
         serde_json::to_writer_pretty(buffer, &full_sub.unwrap())
             .chain_err(|| ErrorKind::SavePotentialSub)?;
@@ -311,12 +317,17 @@ fn write_sub_json(full_sub: &Option<ArrayView3<f64>>, single_sub: Option<f64>, f
 /// * `full_sub` - If the potential_sub is an entire array, this will be a Some.
 /// * `single_sub` - If the potential_sub is a singular value, this will be Some.
 /// * `filename` - file / directory to save to.
-fn write_sub_yaml(full_sub: &Option<ArrayView3<f64>>, single_sub: Option<f64>, filename: &str) -> Result<()> {
-    let buffer = File::create(&filename)
-        .chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
+fn write_sub_yaml(
+    full_sub: &Option<ArrayView3<f64>>,
+    single_sub: Option<f64>,
+    filename: &str,
+) -> Result<()> {
+    let buffer = File::create(&filename).chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
     if single_sub.is_some() {
-        serde_yaml::to_writer(buffer, &single_sub.unwrap())
-            .chain_err(|| ErrorKind::SavePotentialSub)?;
+        let sub = PotentialSubSingle {
+            pot_sub: single_sub.unwrap(),
+        };
+        serde_yaml::to_writer(buffer, &sub).chain_err(|| ErrorKind::SavePotentialSub)?;
     } else if full_sub.is_some() {
         serde_yaml::to_writer(buffer, &full_sub.unwrap())
             .chain_err(|| ErrorKind::SavePotentialSub)?;
@@ -330,18 +341,26 @@ fn write_sub_yaml(full_sub: &Option<ArrayView3<f64>>, single_sub: Option<f64>, f
 /// * `full_sub` - If the potential_sub is an entire array, this will be a Some.
 /// * `single_sub` - If the potential_sub is a singular value, this will be Some.
 /// * `filename` - file / directory to save to.
-fn write_sub_ron(full_sub: &Option<ArrayView3<f64>>, single_sub: Option<f64>, filename: &str) -> Result<()> {
-    let mut buffer = File::create(&filename)
-        .chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
+fn write_sub_ron(
+    full_sub: &Option<ArrayView3<f64>>,
+    single_sub: Option<f64>,
+    filename: &str,
+) -> Result<()> {
+    let mut buffer =
+        File::create(&filename).chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
     if single_sub.is_some() {
-        let data = ron_string(&single_sub.unwrap(), PrettyConfig::default())
-            .chain_err(|| ErrorKind::Serialize)?;
-        buffer.write(data.as_bytes())
+        let sub = PotentialSubSingle {
+            pot_sub: single_sub.unwrap(),
+        };
+        let data = ron_string(&sub, PrettyConfig::default()).chain_err(|| ErrorKind::Serialize)?;
+        buffer
+            .write(data.as_bytes())
             .chain_err(|| ErrorKind::SavePotentialSub)?;
     } else if full_sub.is_some() {
         let data = ron_string(&full_sub.unwrap(), PrettyConfig::default())
             .chain_err(|| ErrorKind::Serialize)?;
-        buffer.write(data.as_bytes())
+        buffer
+            .write(data.as_bytes())
             .chain_err(|| ErrorKind::SavePotentialSub)?;
     }
     Ok(())
@@ -395,8 +414,7 @@ pub fn remove_partial(wnum: u8, project: &str, file_type: &FileType) -> Result<(
         wnum,
         file_type.extentsion()
     );
-    remove_file(&filename)
-        .chain_err(|| ErrorKind::DeletePartial(wnum))?;
+    remove_file(&filename).chain_err(|| ErrorKind::DeletePartial(wnum))?;
     Ok(())
 }
 
@@ -499,7 +517,6 @@ pub fn print_measurements(tau: f64, diff: f64, observables: &grid::Observables) 
             "--   ",
             space = spacer
         )
-
     }
 }
 
@@ -573,19 +590,16 @@ fn print_summary(output: &ObservablesOutput) {
         let state = Ordinal::from(output.state);
         println!(
             "══▶ {} excited state energy = {}",
-            state,
-            output.energy
+            state, output.energy
         );
         println!(
             "══▶ {} excited state binding energy = {}",
-            state,
-            output.binding_energy
+            state, output.binding_energy
         );
     }
     println!("══▶ rᵣₘₛ = {}", output.r);
     println!("══▶ L/rᵣₘₛ = {}", output.l_r);
     println!("");
-
 }
 
 /// Saves the observables to a messagepack binary file.
@@ -599,8 +613,7 @@ fn observables_mpk(observables: &ObservablesOutput, project: &str) -> Result<()>
     observables
         .serialize(&mut rmps::Serializer::new(&mut output))
         .chain_err(|| ErrorKind::Serialize)?;
-    let mut buffer = File::create(&filename)
-        .chain_err(|| ErrorKind::CreateFile(filename))?;
+    let mut buffer = File::create(&filename).chain_err(|| ErrorKind::CreateFile(filename))?;
     buffer
         .write_all(&output)
         .chain_err(|| ErrorKind::SaveObservables)?;
@@ -630,10 +643,8 @@ fn observables_json(observables: &ObservablesOutput, project: &str) -> Result<()
         get_project_dir(project),
         observables.state
     );
-    let buffer = File::create(&filename)
-        .chain_err(|| ErrorKind::CreateFile(filename))?;
-    serde_json::to_writer_pretty(buffer, observables)
-        .chain_err(|| ErrorKind::SaveObservables)?;
+    let buffer = File::create(&filename).chain_err(|| ErrorKind::CreateFile(filename))?;
+    serde_json::to_writer_pretty(buffer, observables).chain_err(|| ErrorKind::SaveObservables)?;
     Ok(())
 }
 
@@ -644,10 +655,8 @@ fn observables_yaml(observables: &ObservablesOutput, project: &str) -> Result<()
         get_project_dir(project),
         observables.state
     );
-    let buffer = File::create(&filename)
-        .chain_err(|| ErrorKind::CreateFile(filename))?;
-    serde_yaml::to_writer(buffer, observables)
-        .chain_err(|| ErrorKind::SaveObservables)?;
+    let buffer = File::create(&filename).chain_err(|| ErrorKind::CreateFile(filename))?;
+    serde_yaml::to_writer(buffer, observables).chain_err(|| ErrorKind::SaveObservables)?;
     Ok(())
 }
 
@@ -658,11 +667,11 @@ fn observables_ron(observables: &ObservablesOutput, project: &str) -> Result<()>
         get_project_dir(project),
         observables.state
     );
-    let mut buffer = File::create(&filename)
-        .chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
-    let data = ron_string(observables, PrettyConfig::default())
-        .chain_err(|| ErrorKind::Serialize)?;
-    buffer.write(data.as_bytes())
+    let mut buffer =
+        File::create(&filename).chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
+    let data = ron_string(observables, PrettyConfig::default()).chain_err(|| ErrorKind::Serialize)?;
+    buffer
+        .write(data.as_bytes())
         .chain_err(|| ErrorKind::SaveObservables)?;
     Ok(())
 }
@@ -670,8 +679,7 @@ fn observables_ron(observables: &ObservablesOutput, project: &str) -> Result<()>
 /// Generates a unique folder inside an `output` directory for the current simulation.
 pub fn check_output_dir(project: &str) -> Result<()> {
     let proj_dir = get_project_dir(project);
-    create_dir_all(&proj_dir)
-        .chain_err(|| ErrorKind::CreateOutputDir(proj_dir))?;
+    create_dir_all(&proj_dir).chain_err(|| ErrorKind::CreateOutputDir(proj_dir))?;
     Ok(())
 }
 
@@ -693,8 +701,7 @@ pub fn get_project_dir(project: &str) -> String {
 /// Copies the current configuration file to the project folder
 pub fn copy_config(project: &str, file: &str) -> Result<()> {
     let copy_file = get_project_dir(project) + "/" + file;
-    copy(file, &copy_file)
-        .chain_err(|| ErrorKind::CreateFile(copy_file))?;
+    copy(file, &copy_file).chain_err(|| ErrorKind::CreateFile(copy_file))?;
     Ok(())
 }
 
@@ -762,12 +769,21 @@ mod tests {
     #[test]
     fn project_directory() {
         let project = "test";
-        assert_eq!(get_project_dir(project), format!("./output/{}_{}", project, &**PROJDATE));
+        assert_eq!(
+            get_project_dir(project),
+            format!("./output/{}_{}", project, &**PROJDATE)
+        );
     }
 
     #[test]
     fn output_observables() {
-        let observables = ObservablesOutput { state: 1, energy: 4.0, binding_energy: 0.0, r: 1.2, l_r: 0.3 };
+        let observables = ObservablesOutput {
+            state: 1,
+            energy: 4.0,
+            binding_energy: 0.0,
+            r: 1.2,
+            l_r: 0.3,
+        };
         let project = "test";
         // create a dummy output directory.
         let _output = check_output_dir(project);
@@ -782,11 +798,19 @@ mod tests {
 
     #[test]
     fn output_potential_sub() {
+        let arr = Array3::zeros((2, 2, 2));
+
         assert!(write_sub_mpk(&None, Some(213.0), "test.mpk").is_ok());
         assert!(write_sub_csv(&None, Some(21.0), "test.csv").is_ok());
         assert!(write_sub_yaml(&None, Some(24.8), "test.yaml").is_ok());
         assert!(write_sub_json(&None, Some(29.1), "test.json").is_ok());
         assert!(write_sub_ron(&None, Some(94.32), "test.ron").is_ok());
+
+        assert!(write_sub_mpk(&Some(arr.view()), None, "test.mpk").is_ok());
+        assert!(write_sub_csv(&Some(arr.view()), None, "test.csv").is_ok());
+        assert!(write_sub_yaml(&Some(arr.view()), None, "test.yaml").is_ok());
+        assert!(write_sub_json(&Some(arr.view()), None, "test.json").is_ok());
+        assert!(write_sub_ron(&Some(arr.view()), None, "test.ron").is_ok());
         // Remove test files
         let _mpk = fs::remove_file("test.mpk");
         let _csv = fs::remove_file("test.csv");
