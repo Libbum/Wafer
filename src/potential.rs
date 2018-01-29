@@ -114,7 +114,6 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials> {
     Ok(Potentials { v: v, a: a, b: b })
 }
 
-//TODO: For now we're dropping complex all together, but this is needed.
 /// Generates a potential for the current simulation at a particular index point.
 ///
 /// # Arguments

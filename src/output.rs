@@ -134,12 +134,11 @@ pub fn potential_sub(config: &Config) -> Result<()> {
         }
     };
     match config.output.file_type {
-        //FileType::Messagepack => write_sub_mpk(full_sub, single_sub, &filename)?,
-        //FileType::Csv => write_sub_csv(full_sub, single_sub, &filename)?,
-        //FileType::Json => write_sub_json(full_sub, single_sub, &filename)?,
-        //FileType::Yaml => write_sub_yaml(full_sub, single_sub, &filename)?,
-        //FileType::Ron => write_sub_ron(full_sub, single_sub, &filename)?,
-        _ => write_sub_ron(&full_sub, single_sub, &filename)?,
+        FileType::Messagepack => write_sub_mpk(&full_sub, single_sub, &filename)?,
+        FileType::Csv => write_sub_csv(&full_sub, single_sub, &filename)?,
+        FileType::Json => write_sub_json(&full_sub, single_sub, &filename)?,
+        FileType::Yaml => write_sub_yaml(&full_sub, single_sub, &filename)?,
+        FileType::Ron => write_sub_ron(&full_sub, single_sub, &filename)?,
     }
     Ok(())
 }
@@ -224,6 +223,104 @@ fn write_ron(array: &ArrayView3<f64>, filename: &str, err_kind: ErrorKind) -> Re
         .chain_err(|| ErrorKind::Serialize)?;
     buffer.write(data.as_bytes())
         .chain_err(|| err_kind)?;
+    Ok(())
+}
+
+/// Outputs a potential_sub to disk in messagepack format
+///
+/// # Arguments
+/// * `full_sub` - If the potential_sub is an entire array, this will be a Some.
+/// * `single_sub` - If the potential_sub is a singular value, this will be Some.
+/// * `filename` - file / directory to save to.
+fn write_sub_mpk(full_sub: &Option<ArrayView3<f64>>, single_sub: Option<f64>, filename: &str) -> Result<()> {
+    let mut buffer = File::create(filename)
+        .chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
+    if single_sub.is_some() {
+        let mut output = Vec::new();
+        single_sub.unwrap()
+            .serialize(&mut rmps::Serializer::new(&mut output))
+            .chain_err(|| ErrorKind::Serialize)?;
+        buffer
+            .write_all(&output)
+            .chain_err(|| ErrorKind::SavePotentialSub)?;
+    } else if full_sub.is_some() {
+        let mut output = Vec::new();
+        full_sub.unwrap()
+            .serialize(&mut rmps::Serializer::new(&mut output))
+            .chain_err(|| ErrorKind::Serialize)?;
+        buffer
+            .write_all(&output)
+            .chain_err(|| ErrorKind::SavePotentialSub)?;
+    }
+    Ok(())
+}
+
+/// Outputs a potential_sub to disk in csv format
+///
+/// # Arguments
+/// * `full_sub` - If the potential_sub is an entire array, this will be a Some.
+/// * `single_sub` - If the potential_sub is a singular value, this will be Some.
+/// * `filename` - file / directory to save to.
+fn write_sub_csv(full_sub: &Option<ArrayView3<f64>>, single_sub: Option<f64>, filename: &str) -> Result<()> {
+    let mut buffer = csv::WriterBuilder::new()
+        .has_headers(false)
+        .from_path(filename)
+        .chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
+    if single_sub.is_some() {
+        buffer.serialize(&single_sub.unwrap())
+                .chain_err(|| ErrorKind::Serialize)?;
+        buffer.flush().chain_err(|| ErrorKind::Flush)?;
+    } else if full_sub.is_some() {
+        for ((i, j, k), data) in full_sub.unwrap().indexed_iter() {
+            buffer
+                .serialize(PlainRecord {
+                    i: i,
+                    j: j,
+                    k: k,
+                    data: *data,
+                })
+                .chain_err(|| ErrorKind::Serialize)?;
+        }
+        buffer.flush().chain_err(|| ErrorKind::Flush)?;
+    }
+    Ok(())
+}
+
+/// Outputs a potential_sub to disk in json format
+///
+/// # Arguments
+/// * `full_sub` - If the potential_sub is an entire array, this will be a Some.
+/// * `single_sub` - If the potential_sub is a singular value, this will be Some.
+/// * `filename` - file / directory to save to.
+fn write_sub_json(full_sub: &Option<ArrayView3<f64>>, single_sub: Option<f64>, filename: &str) -> Result<()> {
+    let buffer = File::create(&filename)
+        .chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
+    if single_sub.is_some() {
+        serde_json::to_writer_pretty(buffer, &single_sub.unwrap())
+            .chain_err(|| ErrorKind::SavePotentialSub)?;
+    } else if full_sub.is_some() {
+        serde_json::to_writer_pretty(buffer, &full_sub.unwrap())
+            .chain_err(|| ErrorKind::SavePotentialSub)?;
+    }
+    Ok(())
+}
+
+/// Outputs a potential_sub to disk in yaml format
+///
+/// # Arguments
+/// * `full_sub` - If the potential_sub is an entire array, this will be a Some.
+/// * `single_sub` - If the potential_sub is a singular value, this will be Some.
+/// * `filename` - file / directory to save to.
+fn write_sub_yaml(full_sub: &Option<ArrayView3<f64>>, single_sub: Option<f64>, filename: &str) -> Result<()> {
+    let buffer = File::create(&filename)
+        .chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
+    if single_sub.is_some() {
+        serde_yaml::to_writer(buffer, &single_sub.unwrap())
+            .chain_err(|| ErrorKind::SavePotentialSub)?;
+    } else if full_sub.is_some() {
+        serde_yaml::to_writer(buffer, &full_sub.unwrap())
+            .chain_err(|| ErrorKind::SavePotentialSub)?;
+    }
     Ok(())
 }
 
@@ -643,6 +740,8 @@ fn sanitize_string(component: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+
     #[test]
     fn term_bounds() {
         let term_size = get_term_size();
@@ -653,5 +752,46 @@ mod tests {
     fn directory_string() {
         let bad_string = " $//Project*\\";
         assert_eq!(sanitize_string(&bad_string), "_,36,,47,,47,Project,42,,92,");
+    }
+
+    #[test]
+    fn output_directory() {
+        assert!(check_output_dir("test").is_ok());
+    }
+
+    #[test]
+    fn project_directory() {
+        let project = "test";
+        assert_eq!(get_project_dir(project), format!("./output/{}_{}", project, &**PROJDATE));
+    }
+
+    #[test]
+    fn output_observables() {
+        let observables = ObservablesOutput { state: 1, energy: 4.0, binding_energy: 0.0, r: 1.2, l_r: 0.3 };
+        let project = "test";
+        // create a dummy output directory.
+        let _output = check_output_dir(project);
+        assert!(observables_mpk(&observables, &project).is_ok());
+        assert!(observables_csv(&observables, &project).is_ok());
+        assert!(observables_yaml(&observables, &project).is_ok());
+        assert!(observables_json(&observables, &project).is_ok());
+        assert!(observables_ron(&observables, &project).is_ok());
+        // remove directory
+        let _remove = fs::remove_dir_all(get_project_dir(project));
+    }
+
+    #[test]
+    fn output_potential_sub() {
+        assert!(write_sub_mpk(&None, Some(213.0), "test.mpk").is_ok());
+        assert!(write_sub_csv(&None, Some(21.0), "test.csv").is_ok());
+        assert!(write_sub_yaml(&None, Some(24.8), "test.yaml").is_ok());
+        assert!(write_sub_json(&None, Some(29.1), "test.json").is_ok());
+        assert!(write_sub_ron(&None, Some(94.32), "test.ron").is_ok());
+        // Remove test files
+        let _mpk = fs::remove_file("test.mpk");
+        let _csv = fs::remove_file("test.csv");
+        let _yaml = fs::remove_file("test.yaml");
+        let _json = fs::remove_file("test.json");
+        let _ron = fs::remove_file("test.ron");
     }
 }
