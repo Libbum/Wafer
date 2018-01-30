@@ -101,6 +101,8 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials> {
     let a = (1. - config.grid.dt * &v / 2.) * &b;
 
     let sub_size: [usize; 3] = [num.x, num.y, num.z];
+    // Try to read a potential_sub from file first, and deal with inconsistencies in the setup.
+    // If there are no files on disk, then potential_sub should be calculated.
     let pot_sub = if let Ok(pot_sub_info) =
         input::potential_sub(sub_size, &config.output.file_type, log)
     {
@@ -127,9 +129,11 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials> {
                 Err(err) => panic!("Calling invalid potential_sub routine: {}", err),
             };
         });
+        info!(log, "Variable potential_sub calculated directly");
         (Some(full_sub), None)
     } else {
         let single_sub = potential_sub(config)?;
+        info!(log, "Constant potential_sub calculated directly");
         if single_sub > 0.0 {
             (None, Some(single_sub))
         } else {

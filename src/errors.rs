@@ -44,9 +44,17 @@ error_chain!{
                 description("Cannot create file")
                 display("Unable to create {}", file)
         }
+        ReadFile(file: String) {
+                description("Cannot read file")
+                display("Unable to read {}", file)
+        }
         ParseFloat {
                 description("Cannot parse float")
                 display("Unable to parse string to f64")
+        }
+        ParsePotentialSubSingle(file: String) {
+                description("Cannot parse csv data")
+                display("Unable to parse a string of data into a valid record from file {}", file)
         }
         ParsePlainRecord(file: String) {
                 description("Cannot parse csv data")

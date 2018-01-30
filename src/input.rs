@@ -287,27 +287,157 @@ pub fn potential_sub(
             file_type
         );
         match *file_type {
-            //FileType::Messagepack => read_sub_mpk(mpk_file.unwrap(), target_size, bb, log),
-            //FileType::Csv => read_sub_csv(csv_file.unwrap(), target_size, bb, log),
-            //FileType::Json => read_sub_json(json_file.unwrap(), target_size, bb, log),
-            //FileType::Yaml => read_sub_yaml(yaml_file.unwrap(), target_size, bb, log),
-            //FileType::Ron => read_sub_ron(ron_file.unwrap(), target_size, bb, log),
-            _ => read_sub_ron(ron_file.unwrap(), target_size, log),
+            FileType::Messagepack => read_sub_mpk(mpk_file.unwrap(), target_size, log),
+            FileType::Csv => read_sub_csv(csv_file.unwrap(), target_size, log),
+            FileType::Json => read_sub_json(json_file.unwrap(), target_size, log),
+            FileType::Yaml => read_sub_yaml(yaml_file.unwrap(), target_size, log),
+            FileType::Ron => read_sub_ron(ron_file.unwrap(), target_size, log),
         }
-    //    } else if mpk_file.is_some() {
-    //        read_sub_mpk(mpk_file.unwrap(), target_size, bb, log)
-    //    } else if csv_file.is_some() {
-    //        read_sub_csv(csv_file.unwrap(), target_size, bb, log)
-    //    } else if json_file.is_some() {
-    //        read_sub_json(json_file.unwrap(), target_size, bb, log)
-    //    } else if yaml_file.is_some() {
-    //        read_sub_yaml(yaml_file.unwrap(), target_size, bb, log)
+    } else if mpk_file.is_some() {
+        read_sub_mpk(mpk_file.unwrap(), target_size, log)
+    } else if csv_file.is_some() {
+        read_sub_csv(csv_file.unwrap(), target_size, log)
+    } else if json_file.is_some() {
+        read_sub_json(json_file.unwrap(), target_size, log)
+    } else if yaml_file.is_some() {
+        read_sub_yaml(yaml_file.unwrap(), target_size, log)
     } else if ron_file.is_some() {
         read_sub_ron(ron_file.unwrap(), target_size, log)
     } else {
         //No data, potential_sub can be calculated instead
-        Ok((None, None))
+        Err(ErrorKind::FileNotFound("input/potential_sub.*".to_string()).into())
     }
+}
+
+/// Loads a potential_sub value or array from a messagepack file on disk.
+fn read_sub_mpk(
+    file: String,
+    target_size: [usize; 3],
+    log: &Logger,
+) -> Result<(Option<Array3<f64>>, Option<f64>)> {
+    let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.clone()))?;
+    let full_data: Array3<f64> = match rmps::decode::from_read(reader) {
+        Ok(data) => data,
+        Err(_) => {
+            // We didn't match on a full array, so try a single value
+            let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.clone()))?;
+            let single_data: PotentialSubSingle =
+                rmps::decode::from_read(reader).chain_err(|| ErrorKind::Deserialize)?;
+
+            return Ok((None, Some(single_data.pot_sub)));
+        }
+    };
+
+    fill_sub_data(full_data, target_size, log)
+}
+
+/// Loads a potential_sub value or array from a csv file on disk.
+fn read_sub_csv(
+    file: String,
+    target_size: [usize; 3],
+    log: &Logger,
+) -> Result<(Option<Array3<f64>>, Option<f64>)> {
+    let mut rdr = csv::ReaderBuilder::new()
+        .has_headers(false)
+        .from_path(&file)
+        .chain_err(|| ErrorKind::ReadFile(file.clone()))?;
+    let mut max_i = 0;
+    let mut max_j = 0;
+    let mut max_k = 0;
+    let mut data: Vec<f64> = Vec::new();
+    let mut rdr_iter = rdr.deserialize();
+    // Check the first entry separately. If it contains a PlainRecord, then
+    // continue looping.
+    if let Some(result) = rdr_iter.next() {
+        let record: PlainRecord = match result {
+            Ok(r) => r,
+            Err(_) => {
+                // We didn't match on a full array, so try a single value.
+                // No need to invoke a csv parser here, it's just a number
+                // we can import directly.
+                let mut buffer =
+                    File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.clone()))?;
+                let mut data = String::new();
+                buffer
+                    .read_to_string(&mut data)
+                    .chain_err(|| ErrorKind::ReadFile(file.clone()))?;
+                let single_data = data.trim()
+                    .parse::<f64>()
+                    .chain_err(|| ErrorKind::ParseFloat)?;
+
+                return Ok((None, Some(single_data)));
+            }
+        };
+        max_i = record.i;
+        max_j = record.j;
+        max_k = record.k;
+        data.push(record.data);
+    };
+    for result in rdr_iter {
+        let record: PlainRecord = result.chain_err(|| ErrorKind::ParsePlainRecord(file.clone()))?;
+        if record.i > max_i {
+            max_i = record.i
+        };
+        if record.j > max_j {
+            max_j = record.j
+        };
+        if record.k > max_k {
+            max_k = record.k
+        };
+        data.push(record.data);
+    }
+    let numx = max_i + 1;
+    let numy = max_j + 1;
+    let numz = max_k + 1;
+    let dlen = data.len();
+    let full_data = Array3::<f64>::from_shape_vec((numx, numy, numz), data)
+        .chain_err(|| ErrorKind::ArrayShape(dlen, [numx, numy, numz]))?;
+
+    fill_sub_data(full_data, target_size, log)
+}
+
+/// Loads a potential_sub value or array from a json file on disk.
+fn read_sub_json(
+    file: String,
+    target_size: [usize; 3],
+    log: &Logger,
+) -> Result<(Option<Array3<f64>>, Option<f64>)> {
+    let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.clone()))?;
+    let full_data: Array3<f64> = match serde_json::from_reader(reader) {
+        Ok(data) => data,
+        Err(_) => {
+            // We didn't match on a full array, so try a single value
+            let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.clone()))?;
+            let single_data: PotentialSubSingle =
+                serde_json::from_reader(reader).chain_err(|| ErrorKind::Deserialize)?;
+
+            return Ok((None, Some(single_data.pot_sub)));
+        }
+    };
+
+    fill_sub_data(full_data, target_size, log)
+}
+
+/// Loads a potential_sub value or array from a yaml file on disk.
+fn read_sub_yaml(
+    file: String,
+    target_size: [usize; 3],
+    log: &Logger,
+) -> Result<(Option<Array3<f64>>, Option<f64>)> {
+    let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.clone()))?;
+    let full_data: Array3<f64> = match serde_yaml::from_reader(reader) {
+        Ok(data) => data,
+        Err(_) => {
+            // We didn't match on a full array, so try a single value
+            let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.clone()))?;
+            let single_data: PotentialSubSingle =
+                serde_yaml::from_reader(reader).chain_err(|| ErrorKind::Deserialize)?;
+
+            return Ok((None, Some(single_data.pot_sub)));
+        }
+    };
+
+    fill_sub_data(full_data, target_size, log)
 }
 
 /// Loads a potential_sub value or array from a ron file on disk.
@@ -329,6 +459,15 @@ fn read_sub_ron(
         }
     };
 
+    fill_sub_data(full_data, target_size, log)
+}
+
+/// Returns a variable array of `potential_sub` data, which is resized if needed.
+fn fill_sub_data(
+    full_data: Array3<f64>,
+    target_size: [usize; 3],
+    log: &Logger,
+) -> Result<(Option<Array3<f64>>, Option<f64>)> {
     let fdim = full_data.dim();
     let init_size = [fdim.0, fdim.1, fdim.2];
     let mut work = Array3::<f64>::zeros((target_size[0], target_size[1], target_size[2]));
@@ -339,7 +478,12 @@ fn read_sub_ron(
     if same {
         Ok((Some(full_data), None))
     } else {
-        info!(log, "Interpolating {} from {:?} to requested size of {:?} (size includes central difference padding).", file, init_size, target_size);
+        info!(
+            log,
+            "Interpolating potential_sub from {:?} to requested size of {:?}.",
+            init_size,
+            target_size
+        );
         trilerp_resize(&full_data, &mut work.view_mut(), target_size);
         Ok((Some(work), None))
     }

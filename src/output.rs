@@ -266,10 +266,7 @@ fn write_sub_csv(
         .from_path(filename)
         .chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
     if single_sub.is_some() {
-        let sub = PotentialSubSingle {
-            pot_sub: single_sub.unwrap(),
-        };
-        buffer.serialize(&sub).chain_err(|| ErrorKind::Serialize)?;
+        buffer.write_record(&[single_sub.unwrap().to_string()]).chain_err(|| ErrorKind::Serialize)?;
         buffer.flush().chain_err(|| ErrorKind::Flush)?;
     } else if full_sub.is_some() {
         for ((i, j, k), data) in full_sub.unwrap().indexed_iter() {
