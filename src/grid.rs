@@ -4,7 +4,7 @@ use ndarray_parallel::prelude::*;
 use slog::Logger;
 use std::f64::MAX;
 use config;
-use config::{Config, CentralDifference, Index3, InitialCondition, PotentialType};
+use config::{CentralDifference, Config, Index3, InitialCondition};
 use potential;
 use potential::Potentials;
 use input;
@@ -28,7 +28,6 @@ pub struct Observables {
 
 /// Runs the calculation and holds long term (system time) wavefunction storage
 pub fn run(config: &Config, log: &Logger, debug_level: usize) -> Result<()> {
-
     let potentials = potential::load_arrays(config, log)?;
 
     let mut w_store: Vec<Array3<f64>> = Vec::new();
@@ -46,7 +45,6 @@ pub fn run(config: &Config, log: &Logger, debug_level: usize) -> Result<()> {
     Ok(())
 }
 
-
 /// Runs the actual computation once system is setup and ready.
 fn solve(
     config: &Config,
@@ -56,7 +54,6 @@ fn solve(
     wnum: u8,
     w_store: &mut Vec<Array3<f64>>,
 ) -> Result<()> {
-
     // Initial conditions from config file if ground state,
     // but start from previously converged wfn if we're an excited state.
     let mut phi: Array3<f64> = if wnum > 0 {
@@ -98,24 +95,26 @@ fn solve(
         }
     } else {
         //This sorts out loading from disk if we are on wavefunction 0.
-        config::set_initial_conditions(config, log)
-            .chain_err(|| ErrorKind::SetInitialConditions)?
+        config::set_initial_conditions(config, log).chain_err(|| ErrorKind::SetInitialConditions)?
     };
 
     output::print_observable_header(wnum);
 
     let prog_bar = ProgressBar::new(100);
-    if debug_level == 3 { //If debug_level is 4 or 5 we have info on the screen. Remove the progress bar
+    if debug_level == 3 {
+        //If debug_level is 4 or 5 we have info on the screen. Remove the progress bar
         let term_width = *output::TERMWIDTH;
         let bar_width = (term_width - 24).to_string();
         let mut bar_template = String::new();
         bar_template.push_str("{msg}\n\n[{elapsed_precise}] |{bar:");
         bar_template.push_str(&bar_width);
         bar_template.push_str(".cyan/blue}| {spinner:.green} ETA: {eta:>3}");
-        prog_bar.set_style(ProgressStyle::default_bar()
-                        .template(&bar_template)
-                        .progress_chars("█▓░")
-                        .tick_chars("⣾⣽⣻⢿⡿⣟⣯⣷ "));
+        prog_bar.set_style(
+            ProgressStyle::default_bar()
+                .template(&bar_template)
+                .progress_chars("█▓░")
+                .tick_chars("⣾⣽⣻⢿⡿⣟⣯⣷ "),
+        );
         prog_bar.set_position(0);
     }
 
@@ -124,7 +123,6 @@ fn solve(
     let mut last_energy = MAX; //std::f64::MAX
     let mut diff_old = MAX;
     loop {
-
         let observables = compute_observables(config, potentials, &phi);
         let norm_energy = observables.energy / observables.norm2;
         let tau = (step as f64) * config.grid.dt;
@@ -142,8 +140,7 @@ fn solve(
             let work = get_work_area(&phi, ext);
             info!(
                 log,
-                "Saving partially converged wavefunction {} to disk.",
-                wnum
+                "Saving partially converged wavefunction {} to disk.", wnum
             );
             if let Err(err) = output::wavefunction(
                 &work,
@@ -154,8 +151,7 @@ fn solve(
             ) {
                 warn!(
                     log,
-                    "Could not output partial wavefunction per snap_update request: {}",
-                    err
+                    "Could not output partial wavefunction per snap_update request: {}", err
                 );
             }
         }
@@ -177,14 +173,11 @@ fn solve(
             if config.output.snap_update.is_some() {
                 info!(
                     log,
-                    "Removing partially converged wavefunction {} from disk.",
-                    wnum
+                    "Removing partially converged wavefunction {} from disk.", wnum
                 );
-                if let Err(err) = output::remove_partial(
-                    wnum,
-                    &config.project_name,
-                    &config.output.file_type,
-                ) {
+                if let Err(err) =
+                    output::remove_partial(wnum, &config.project_name, &config.output.file_type)
+                {
                     warn!(
                         log,
                         "The temporary wavefunction_{}_partial{} file could not be removed from the output directory: {}",
@@ -203,10 +196,9 @@ fn solve(
         // Output status to screen
         if debug_level == 3 {
             if let Some(estimate) = eta(step, diff_old, diff, config) {
-                let percent = (100. -
-                                (estimate /
-                                        ((step as f64 / config.output.screen_update as f64) +
-                                            estimate) * 100.))
+                let percent = (100.
+                    - (estimate / ((step as f64 / config.output.screen_update as f64) + estimate)
+                        * 100.))
                     .floor();
                 if percent.is_finite() {
                     prog_bar.set_position(percent as u64);
@@ -326,13 +318,13 @@ fn compute_observables(config: &Config, potentials: &Potentials, phi: &Array3<f6
                         // get a slice which gives us our matrix of central difference points
                         let l = phi.slice(s![lx - 1..lx + 2, ly - 1..ly + 2, lz - 1..lz + 2]);
                         // l can now be indexed with local offset `o` and modifiers
-                        *work = v * w * w -
-                            w *
-                                (l[[o + 1, o, o]] + l[[o - 1, o, o]] + l[[o, o + 1, o]] +
-                                     l[[o, o - 1, o]] +
-                                     l[[o, o, o + 1]] +
-                                     l[[o, o, o - 1]] - 6. * w) /
-                                denominator;
+                        *work = v * w * w
+                            - w
+                                * (l[[o + 1, o, o]] + l[[o - 1, o, o]] + l[[o, o + 1, o]]
+                                    + l[[o, o - 1, o]]
+                                    + l[[o, o, o + 1]]
+                                    + l[[o, o, o - 1]] - 6. * w)
+                                / denominator;
                     },
                 );
             }
@@ -348,20 +340,20 @@ fn compute_observables(config: &Config, potentials: &Potentials, phi: &Array3<f6
                         // get a slice which gives us our matrix of central difference points
                         let l = phi.slice(s![lx - 2..lx + 3, ly - 2..ly + 3, lz - 2..lz + 3]);
                         // l can now be indexed with local offset `o` and modifiers
-                        *work = v * w * w -
-                            w *
-                                (-l[[o + 2, o, o]] + 16. * l[[o + 1, o, o]] +
-                                     16. * l[[o - 1, o, o]] -
-                                     l[[o - 2, o, o]] -
-                                     l[[o, o + 2, o]] +
-                                     16. * l[[o, o + 1, o]] +
-                                     16. * l[[o, o - 1, o]] -
-                                     l[[o, o - 2, o]] -
-                                     l[[o, o, o + 2]] +
-                                     16. * l[[o, o, o + 1]] +
-                                     16. * l[[o, o, o - 1]] -
-                                     l[[o, o, o - 2]] - 90. * w) /
-                                denominator;
+                        *work = v * w * w
+                            - w
+                                * (-l[[o + 2, o, o]] + 16. * l[[o + 1, o, o]]
+                                    + 16. * l[[o - 1, o, o]]
+                                    - l[[o - 2, o, o]]
+                                    - l[[o, o + 2, o]]
+                                    + 16. * l[[o, o + 1, o]]
+                                    + 16. * l[[o, o - 1, o]]
+                                    - l[[o, o - 2, o]]
+                                    - l[[o, o, o + 2]]
+                                    + 16. * l[[o, o, o + 1]]
+                                    + 16. * l[[o, o, o - 1]]
+                                    - l[[o, o, o - 2]] - 90. * w)
+                                / denominator;
                     },
                 );
             }
@@ -377,26 +369,26 @@ fn compute_observables(config: &Config, potentials: &Potentials, phi: &Array3<f6
                         // get a slice which gives us our matrix of central difference points
                         let l = phi.slice(s![lx - 3..lx + 4, ly - 3..ly + 4, lz - 3..lz + 4]);
                         // l can now be indexed with local offset `o` and modifiers
-                        *work = v * w * w -
-                            w *
-                                (2. * l[[o + 3, o, o]] - 27. * l[[o + 2, o, o]] +
-                                     270. * l[[o + 1, o, o]] +
-                                     270. * l[[o - 1, o, o]] -
-                                     27. * l[[o - 2, o, o]] +
-                                     2. * l[[o - 3, o, o]] +
-                                     2. * l[[o, o + 3, o]] -
-                                     27. * l[[o, o + 2, o]] +
-                                     270. * l[[o, o + 1, o]] +
-                                     270. * l[[o, o - 1, o]] -
-                                     27. * l[[o, o - 2, o]] +
-                                     2. * l[[o, o - 3, o]] +
-                                     2. * l[[o, o, o + 3]] -
-                                     27. * l[[o, o, o + 2]] +
-                                     270. * l[[o, o, o + 1]] +
-                                     270. * l[[o, o, o - 1]] -
-                                     27. * l[[o, o, o - 2]] +
-                                     2. * l[[o, o, o - 3]] -
-                                     1470. * w) / denominator;
+                        *work = v * w * w
+                            - w
+                                * (2. * l[[o + 3, o, o]] - 27. * l[[o + 2, o, o]]
+                                    + 270. * l[[o + 1, o, o]]
+                                    + 270. * l[[o - 1, o, o]]
+                                    - 27. * l[[o - 2, o, o]]
+                                    + 2. * l[[o - 3, o, o]]
+                                    + 2. * l[[o, o + 3, o]]
+                                    - 27. * l[[o, o + 2, o]]
+                                    + 270. * l[[o, o + 1, o]]
+                                    + 270. * l[[o, o - 1, o]]
+                                    - 27. * l[[o, o - 2, o]]
+                                    + 2. * l[[o, o - 3, o]]
+                                    + 2. * l[[o, o, o + 3]]
+                                    - 27. * l[[o, o, o + 2]]
+                                    + 270. * l[[o, o, o + 1]]
+                                    + 270. * l[[o, o, o - 1]]
+                                    - 27. * l[[o, o, o - 2]]
+                                    + 2. * l[[o, o, o - 3]]
+                                    - 1470. * w) / denominator;
                     },
                 );
             }
@@ -406,36 +398,33 @@ fn compute_observables(config: &Config, potentials: &Potentials, phi: &Array3<f6
     };
     let norm2 = phi_work.into_par_iter().map(|&el| el * el).sum();
     let v_infinity = {
-        if let PotentialType::FullCornell = config.potential {
-            Zip::indexed(&mut work).and(phi_work).par_apply(
-                |(i, j, k), work, &w| {
-                    let idx = Index3 { x: i, y: j, z: k };
-                    let potsub = match potential::potential_sub_idx(config, &idx) {
-                        Ok(p) => p,
-                        Err(err) => panic!("Calling invalid potential_sub routine: {}", err),
-                    };
+        match potentials.pot_sub {
+            (Some(ref potsub), None) => {
+                Zip::from(&mut work)
+                    .and(phi_work)
+                    .and(potsub.view())
+                    .par_apply(|work, &w, &potsub| {
+                        *work = w * w * potsub;
+                    });
+                work.into_par_iter().sum()
+            }
+            (None, Some(potsub)) => {
+                Zip::from(&mut work).and(phi_work).par_apply(|work, &w| {
                     *work = w * w * potsub;
-                },
-            );
-        } else {
-            let potsub = match potential::potential_sub(config) {
-                Ok(p) => p,
-                Err(err) => panic!("Calling invalid potential_sub routine: {}", err),
-            };
-            Zip::from(&mut work)
-                .and(phi_work)
-                .par_apply(|work, &w| { *work = w * w * potsub; });
+                });
+                work.into_par_iter().sum()
+            }
+            _ => 0.,
         }
-        work.into_par_iter().sum()
     };
     let r2 = {
-        Zip::indexed(&mut work).and(phi_work).par_apply(
-            |(i, j, k), work, &w| {
+        Zip::indexed(&mut work)
+            .and(phi_work)
+            .par_apply(|(i, j, k), work, &w| {
                 let idx = Index3 { x: i, y: j, z: k };
                 let r2 = potential::calculate_r2(&idx, &config.grid);
                 *work = w * w * r2;
-            },
-        );
+            });
         work.into_par_iter().sum()
     };
 
@@ -563,10 +552,8 @@ fn evolve(
     let mut work = Array3::<f64>::zeros(work_dims);
     let mut steps = 0;
     loop {
-
         {
             let w = get_work_area(phi, ext);
-
 
             //TODO: We don't have any complex conjugation here.
             match config.central_difference {
@@ -582,13 +569,13 @@ fn evolve(
                             // get a slice which gives us our matrix of central difference points
                             let l = phi.slice(s![lx - 1..lx + 2, ly - 1..ly + 2, lz - 1..lz + 2]);
                             // l can now be indexed with local offset `o` and modifiers
-                            *work = w * pa +
-                                pb * config.grid.dt *
-                                    (l[[o + 1, o, o]] + l[[o - 1, o, o]] + l[[o, o + 1, o]] +
-                                         l[[o, o - 1, o]] +
-                                         l[[o, o, o + 1]] +
-                                         l[[o, o, o - 1]] -
-                                         6. * w) / denominator;
+                            *work = w * pa
+                                + pb * config.grid.dt
+                                    * (l[[o + 1, o, o]] + l[[o - 1, o, o]] + l[[o, o + 1, o]]
+                                        + l[[o, o - 1, o]]
+                                        + l[[o, o, o + 1]]
+                                        + l[[o, o, o - 1]]
+                                        - 6. * w) / denominator;
                         },
                     );
                 }
@@ -604,20 +591,20 @@ fn evolve(
                             // get a slice which gives us our matrix of central difference points
                             let l = phi.slice(s![lx - 2..lx + 3, ly - 2..ly + 3, lz - 2..lz + 3]);
                             // l can now be indexed with local offset `o` and modifiers
-                            *work = w * pa +
-                                pb * config.grid.dt *
-                                    (-l[[o + 2, o, o]] + 16. * l[[o + 1, o, o]] +
-                                         16. * l[[o - 1, o, o]] -
-                                         l[[o - 2, o, o]] -
-                                         l[[o, o + 2, o]] +
-                                         16. * l[[o, o + 1, o]] +
-                                         16. * l[[o, o - 1, o]] -
-                                         l[[o, o - 2, o]] -
-                                         l[[o, o, o + 2]] +
-                                         16. * l[[o, o, o + 1]] +
-                                         16. * l[[o, o, o - 1]] -
-                                         l[[o, o, o - 2]] -
-                                         90. * w) / denominator;
+                            *work = w * pa
+                                + pb * config.grid.dt
+                                    * (-l[[o + 2, o, o]] + 16. * l[[o + 1, o, o]]
+                                        + 16. * l[[o - 1, o, o]]
+                                        - l[[o - 2, o, o]]
+                                        - l[[o, o + 2, o]]
+                                        + 16. * l[[o, o + 1, o]]
+                                        + 16. * l[[o, o - 1, o]]
+                                        - l[[o, o - 2, o]]
+                                        - l[[o, o, o + 2]]
+                                        + 16. * l[[o, o, o + 1]]
+                                        + 16. * l[[o, o, o - 1]]
+                                        - l[[o, o, o - 2]]
+                                        - 90. * w) / denominator;
                         },
                     );
                 }
@@ -633,26 +620,27 @@ fn evolve(
                             // get a slice which gives us our matrix of central difference points
                             let l = phi.slice(s![lx - 3..lx + 4, ly - 3..ly + 4, lz - 3..lz + 4]);
                             // l can now be indexed with local offset `o` and modifiers
-                            *work = w * pa +
-                                pb * config.grid.dt *
-                                    (2. * l[[o + 3, o, o]] - 27. * l[[o + 2, o, o]] +
-                                         270. * l[[o + 1, o, o]] +
-                                         270. * l[[o - 1, o, o]] -
-                                         27. * l[[o - 2, o, o]] +
-                                         2. * l[[o - 3, o, o]] +
-                                         2. * l[[o, o + 3, o]] -
-                                         27. * l[[o, o + 2, o]] +
-                                         270. * l[[o, o + 1, o]] +
-                                         270. * l[[o, o - 1, o]] -
-                                         27. * l[[o, o - 2, o]] +
-                                         2. * l[[o, o - 3, o]] +
-                                         2. * l[[o, o, o + 3]] -
-                                         27. * l[[o, o, o + 2]] +
-                                         270. * l[[o, o, o + 1]] +
-                                         270. * l[[o, o, o - 1]] -
-                                         27. * l[[o, o, o - 2]] +
-                                         2. * l[[o, o, o - 3]] -
-                                         1470. * w) / denominator;
+                            *work = w * pa
+                                + pb * config.grid.dt
+                                    * (2. * l[[o + 3, o, o]] - 27. * l[[o + 2, o, o]]
+                                        + 270. * l[[o + 1, o, o]]
+                                        + 270. * l[[o - 1, o, o]]
+                                        - 27. * l[[o - 2, o, o]]
+                                        + 2. * l[[o - 3, o, o]]
+                                        + 2. * l[[o, o + 3, o]]
+                                        - 27. * l[[o, o + 2, o]]
+                                        + 270. * l[[o, o + 1, o]]
+                                        + 270. * l[[o, o - 1, o]]
+                                        - 27. * l[[o, o - 2, o]]
+                                        + 2. * l[[o, o - 3, o]]
+                                        + 2. * l[[o, o, o + 3]]
+                                        - 27. * l[[o, o, o + 2]]
+                                        + 270. * l[[o, o, o + 1]]
+                                        + 270. * l[[o, o, o - 1]]
+                                        - 27. * l[[o, o, o - 2]]
+                                        + 2. * l[[o, o, o - 3]]
+                                        - 1470. * w)
+                                    / denominator;
                         },
                     );
                 }
@@ -662,7 +650,9 @@ fn evolve(
             let mut w_fill = get_mut_work_area(phi, ext);
             Zip::from(&mut w_fill)
                 .and(&work)
-                .par_apply(|w_fill, &work| { *w_fill = work; });
+                .par_apply(|w_fill, &work| {
+                    *w_fill = work;
+                });
         }
         if wnum > 0 {
             let norm2 = {

@@ -44,9 +44,17 @@ error_chain!{
                 description("Cannot create file")
                 display("Unable to create {}", file)
         }
+        ReadFile(file: String) {
+                description("Cannot read file")
+                display("Unable to read {}", file)
+        }
         ParseFloat {
                 description("Cannot parse float")
                 display("Unable to parse string to f64")
+        }
+        ParsePotentialSubSingle(file: String) {
+                description("Cannot parse csv data")
+                display("Unable to parse a string of data into a valid record from file {}", file)
         }
         ParsePlainRecord(file: String) {
                 description("Cannot parse csv data")
@@ -75,6 +83,14 @@ error_chain!{
         SavePotential {
                 description("Cannot save potential")
                 display("Unable to save potential data to disk")
+        }
+        SavePotentialSub {
+                description("Cannot save potential_sub")
+                display("Unable to save potential_sub data to disk")
+        }
+        WrongPotentialSubDims {
+                description("wrong dimensions in potential_sub")
+                display("Unable to identify the correct demensions in potential_sub input file")
         }
         SaveWavefunction {
                 description("Cannot save wavefunction")

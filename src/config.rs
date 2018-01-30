@@ -69,7 +69,7 @@ pub struct Output {
 /// 2. Use a **python** script called from `potential_generator.py`: `FromScript`
 /// 3. Submit an issue or pull request for a potential you deem worthy of
 /// inclusion to the built in selection.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub enum PotentialType {
     /// V = 0, no potential at all.
     NoPotential,
@@ -100,6 +100,28 @@ pub enum PotentialType {
     FromFile,
     /// Calls a python script the user can implement.
     FromScript,
+}
+
+impl PotentialType {
+    /// Returns true if `potential_sub` has a non-constant response function
+    pub fn variable_pot_sub(&self) -> bool {
+        match self {
+            &PotentialType::NoPotential |
+            &PotentialType::Cube |
+            &PotentialType::QuadWell |
+            &PotentialType::Periodic |
+            &PotentialType::Coulomb |
+            &PotentialType::ComplexCoulomb |
+            &PotentialType::Harmonic |
+            &PotentialType::ComplexHarmonic |
+            &PotentialType::Dodecahedron |
+            &PotentialType::FromScript |
+            &PotentialType::FromFile |
+            &PotentialType::ElipticalCoulomb |
+            &PotentialType::SimpleCornell => false,
+            &PotentialType::FullCornell => true,
+        }
+    }
 }
 
 impl fmt::Display for PotentialType {
@@ -310,7 +332,7 @@ pub struct Config {
 }
 
 impl Config {
-    /// Reads and parses data from the `wafer.cfg` file and command line arguments.
+    /// Reads and parses data from the `wafer.yaml` file and command line arguments.
     pub fn load(file: &str, script: &str) -> Result<Config> {
         let reader = File::open(file).chain_err(|| ErrorKind::ConfigLoad(file.to_string()))?;
         // Decode configuration file.
