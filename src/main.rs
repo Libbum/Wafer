@@ -183,9 +183,7 @@ fn main() {
     };
 
     //Override rayon's defaults of threads (including HT cores) to physical cores
-    if let Err(err) = rayon::initialize(
-        rayon::Configuration::new().num_threads(num_cpus::get_physical()),
-    ) {
+    if let Err(err) = rayon::ThreadPoolBuilder::new().num_threads(num_cpus::get_physical()).build_global() {
         crit!(log, "Failed to initialise thread pool: {}", err);
         exit_with_pause();
     };
