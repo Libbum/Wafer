@@ -34,6 +34,7 @@ extern crate lazy_static;
 #[macro_use(s)]
 extern crate ndarray;
 extern crate ndarray_parallel;
+extern crate noisy_float;
 extern crate num;
 extern crate num_cpus;
 extern crate ordinal;

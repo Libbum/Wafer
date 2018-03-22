@@ -1,5 +1,6 @@
 use ndarray::{Array3, Zip};
 use ndarray_parallel::prelude::*;
+use noisy_float::prelude::*;
 use rand::distributions::{IndependentSample, Normal};
 use rand;
 use slog::Logger;
@@ -16,20 +17,20 @@ pub struct Grid {
     /// Number of grid points (Cartesian coordinates).
     pub size: Index3,
     /// The spatial grid size, i.e. Δ{x,y,z}.
-    pub dn: f64,
+    pub dn: R64,
     /// The temporal step size, i.e. Δτ.
-    pub dt: f64,
+    pub dt: R64,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 /// A data point in 3D space.
 struct Point3 {
     /// Position in *x*.
-    x: f64,
+    x: R64,
     /// Position in *y*.
-    y: f64,
+    y: R64,
     /// Position in *z*.
-    z: f64,
+    z: R64,
 }
 
 // TODO: In the future it may be a good idea to cast/imply an `ndarray::NdIndex` from/to this.
@@ -295,7 +296,7 @@ pub struct Config {
     /// Information about the required grid to calculate on.
     pub grid: Grid,
     /// A convergence value, how accurate the total energy needs to be.
-    pub tolerance: f64,
+    pub tolerance: R64,
     /// Precision of the central difference formalism. The higher the value here the
     /// lower the resultant error will be, provided the step size has been optimally chosen.
     pub central_difference: CentralDifference,
@@ -315,7 +316,7 @@ pub struct Config {
     /// directly from a pre-calculated file or from a python script.
     pub potential: PotentialType,
     /// Atomic mass if required by the selected potential.
-    pub mass: f64,
+    pub mass: R64,
     /// A first guess at the wavefunction. Can range from Gaussian noise to a low resolution,
     /// pre-calculated solution which will be scaled up to enable a faster convergence at high
     /// resolution.
@@ -359,7 +360,7 @@ impl Config {
     /// Additional checks to the configuration file that cannot be done implicitly
     /// by the type checker.
     fn parse(&self) -> Result<()> {
-        if self.grid.dt > self.grid.dn.powi(2) / 3. {
+        if self.grid.dt > self.grid.dn.powi(2) / r64(3.) {
             return Err(ErrorKind::LargeDt.into());
         }
         if self.wavenum > self.wavemax {
@@ -573,7 +574,7 @@ impl Config {
 ///
 /// * `config` - a reference to the configuration struct.
 /// * `log` - a reference to the logger.
-pub fn set_initial_conditions(config: &Config, log: &Logger) -> Result<Array3<f64>> {
+pub fn set_initial_conditions(config: &Config, log: &Logger) -> Result<Array3<R64>> {
     info!(log, "Setting initial conditions for wavefunction");
     let num = &config.grid.size;
     let bb = config.central_difference.bb();
@@ -582,14 +583,14 @@ pub fn set_initial_conditions(config: &Config, log: &Logger) -> Result<Array3<f6
         num.y as usize + bb,
         num.z as usize + bb,
     ];
-    let mut w: Array3<f64> = match config.init_condition {
+    let mut w: Array3<R64> = match config.init_condition {
         InitialCondition::FromFile => {
             input::wavefunction(config.wavenum, init_size, bb, &config.output.file_type, log)
                 .chain_err(|| ErrorKind::LoadWavefunction(config.wavenum))?
         }
         InitialCondition::Gaussian => generate_gaussian(config, init_size),
         InitialCondition::Coulomb => generate_coulomb(config, init_size),
-        InitialCondition::Constant => Array3::<f64>::from_elem(init_size, 0.1),
+        InitialCondition::Constant => Array3::<R64>::from_elem(init_size, r64(0.1)),
         InitialCondition::Boolean => generate_boolean(init_size),
     };
 
@@ -597,28 +598,28 @@ pub fn set_initial_conditions(config: &Config, log: &Logger) -> Result<Array3<f6
     let ext = config.central_difference.ext() as isize;
     // In Z
     w.slice_mut(s![.., .., 0..ext])
-        .par_map_inplace(|el| *el = 0.);
+        .par_map_inplace(|el| *el = r64(0.));
     w.slice_mut(s![
         ..,
         ..,
         init_size[2] as isize - ext..init_size[2] as isize
-    ]).par_map_inplace(|el| *el = 0.);
+    ]).par_map_inplace(|el| *el = r64(0.));
     // In X
     w.slice_mut(s![0..ext, .., ..])
-        .par_map_inplace(|el| *el = 0.);
+        .par_map_inplace(|el| *el = r64(0.));
     w.slice_mut(s![
         init_size[0] as isize - ext..init_size[0] as isize,
         ..,
         ..
-    ]).par_map_inplace(|el| *el = 0.);
+    ]).par_map_inplace(|el| *el = r64(0.));
     // In Y
     w.slice_mut(s![.., 0..ext, ..])
-        .par_map_inplace(|el| *el = 0.);
+        .par_map_inplace(|el| *el = r64(0.));
     w.slice_mut(s![
         ..,
         init_size[1] as isize - ext..init_size[1] as isize,
         ..
-    ]).par_map_inplace(|el| *el = 0.);
+    ]).par_map_inplace(|el| *el = r64(0.));
 
     // Symmetrise the IC.
     symmetrise_wavefunction(config, &mut w);
@@ -632,11 +633,11 @@ pub fn set_initial_conditions(config: &Config, log: &Logger) -> Result<Array3<f6
 ///
 /// * `config` - a reference to the configuration struct
 /// * `init_size` - {x,y,z} dimensions of the required wavefunction
-fn generate_gaussian(config: &Config, init_size: [usize; 3]) -> Array3<f64> {
+fn generate_gaussian(config: &Config, init_size: [usize; 3]) -> Array3<R64> {
     let normal = Normal::new(0.0, config.sig);
-    let mut w = Array3::<f64>::zeros(init_size);
+    let mut w = Array3::<R64>::zeros(init_size);
 
-    w.par_map_inplace(|el| *el = normal.ind_sample(&mut rand::thread_rng()));
+    w.par_map_inplace(|el| *el = r64(normal.ind_sample(&mut rand::thread_rng())));
     w
 }
 
@@ -646,22 +647,22 @@ fn generate_gaussian(config: &Config, init_size: [usize; 3]) -> Array3<f64> {
 ///
 /// * `config` - a reference to the configuration struct
 /// * `init_size` - {x,y,z} dimensions of the required wavefunction
-fn generate_coulomb(config: &Config, init_size: [usize; 3]) -> Array3<f64> {
-    let mut w = Array3::<f64>::zeros(init_size);
+fn generate_coulomb(config: &Config, init_size: [usize; 3]) -> Array3<R64> {
+    let mut w = Array3::<R64>::zeros(init_size);
 
     Zip::indexed(&mut w).par_apply(|(i, j, k), x| {
         //Coordinate system is centered in simulation volume
-        let dx = i as f64 - (init_size[0] as f64 / 2.);
-        let dy = j as f64 - (init_size[1] as f64 / 2.);
-        let dz = k as f64 - (init_size[2] as f64 / 2.);
+        let dx = r64(i as f64) - (r64(init_size[0] as f64) / r64(2.));
+        let dy = r64(j as f64) - (r64(init_size[1] as f64) / r64(2.));
+        let dz = r64(k as f64) - (r64(init_size[2] as f64) / r64(2.));
         let r = config.grid.dn * (dx.powi(2) + dy.powi(2) + dz.powi(2)).sqrt();
         let costheta = config.grid.dn * dz / r;
         let cosphi = config.grid.dn * dx / r;
-        let mr2 = (-config.mass * r / 2.).exp();
+        let mr2 = (-config.mass * r / r64(2.)).exp();
         // Terms here represent: n=1; n=2, l=0; n=2,l=1,m=0; n=2,l=1,m±1 respectively.
-        *x = (-config.mass * r).exp() + (2. - config.mass * r) * mr2
+        *x = (-config.mass * r).exp() + (r64(2.) - config.mass * r) * mr2
             + config.mass * r * mr2 * costheta
-            + config.mass * r * mr2 * (1. - costheta.powi(2)).sqrt() * cosphi;
+            + config.mass * r * mr2 * (r64(1.) - costheta.powi(2)).sqrt() * cosphi;
     });
     w
 }
@@ -671,11 +672,11 @@ fn generate_coulomb(config: &Config, init_size: [usize; 3]) -> Array3<f64> {
 /// # Arguments
 ///
 /// * `init_size` - {x,y,z} dimensions of the required wavefunction
-fn generate_boolean(init_size: [usize; 3]) -> Array3<f64> {
-    let mut w = Array3::<f64>::zeros(init_size);
+fn generate_boolean(init_size: [usize; 3]) -> Array3<R64> {
+    let mut w = Array3::<R64>::zeros(init_size);
 
     Zip::indexed(&mut w).par_apply(|(i, j, k), el| {
-        *el = i as f64 % 2. * j as f64 % 2. * k as f64 % 2.;
+        *el = r64(i as f64) % r64(2.) * r64(j as f64) % r64(2.) * r64(k as f64) % r64(2.);
     });
     w
 }
@@ -686,12 +687,12 @@ fn generate_boolean(init_size: [usize; 3]) -> Array3<f64> {
 ///
 /// * `config` - a reference to the configuration struct
 /// * `w` - Reference to a wavefunction to impose symmetry conditions on.
-pub fn symmetrise_wavefunction(config: &Config, w: &mut Array3<f64>) {
+pub fn symmetrise_wavefunction(config: &Config, w: &mut Array3<R64>) {
     let num = &config.grid.size;
     let sign = match config.init_symmetry {
-        SymmetryConstraint::NotConstrained => 0.,
-        SymmetryConstraint::AntisymAboutY | SymmetryConstraint::AntisymAboutZ => -1.,
-        SymmetryConstraint::AboutY | SymmetryConstraint::AboutZ => 1.,
+        SymmetryConstraint::NotConstrained => r64(0.),
+        SymmetryConstraint::AntisymAboutY | SymmetryConstraint::AntisymAboutZ => r64(-1.),
+        SymmetryConstraint::AboutY | SymmetryConstraint::AboutZ => r64(1.),
     };
 
     match config.init_symmetry {

@@ -33,6 +33,7 @@ openblas-src = { version = "0.5.6", default-features = false, features = ["cblas
 ndarray-parallel = "0.8"
 num = "0.1"
 num_cpus = "1.8"
+noisy_float = { version = "0.1", features = ["serde-1"] }
 ordinal = "0.1"
 rand = "0.4"
 rayon = "1.0"
