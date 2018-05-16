@@ -7,7 +7,7 @@ error_chain!{
 
         ConfigParse {
             description("Error parsing config")
-            display("an error occurred trying to parse the configuratation file")
+            display("an error occurred trying to parse the configuration file")
         }
 
         SetInitialConditions {
@@ -90,7 +90,7 @@ error_chain!{
         }
         WrongPotentialSubDims {
                 description("wrong dimensions in potential_sub")
-                display("Unable to identify the correct demensions in potential_sub input file")
+                display("Unable to identify the correct dimensions in potential_sub input file")
         }
         SaveWavefunction {
                 description("Cannot save wavefunction")
