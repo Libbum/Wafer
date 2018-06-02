@@ -1,14 +1,14 @@
+use errors::*;
+use input;
 use ndarray::{Array3, Zip};
 use ndarray_parallel::prelude::*;
-use rand::distributions::{IndependentSample, Normal};
+use output;
 use rand;
+use rand::distributions::{Distribution, Normal};
+use serde_yaml;
 use slog::Logger;
 use std::fmt;
 use std::fs::File;
-use serde_yaml;
-use input;
-use output;
-use errors::*;
 
 /// Grid size information.
 #[derive(Serialize, Deserialize, Debug)]
@@ -106,19 +106,19 @@ impl PotentialType {
     /// Returns true if `potential_sub` has a non-constant response function
     pub fn variable_pot_sub(&self) -> bool {
         match self {
-            &PotentialType::NoPotential |
-            &PotentialType::Cube |
-            &PotentialType::QuadWell |
-            &PotentialType::Periodic |
-            &PotentialType::Coulomb |
-            &PotentialType::ComplexCoulomb |
-            &PotentialType::Harmonic |
-            &PotentialType::ComplexHarmonic |
-            &PotentialType::Dodecahedron |
-            &PotentialType::FromScript |
-            &PotentialType::FromFile |
-            &PotentialType::ElipticalCoulomb |
-            &PotentialType::SimpleCornell => false,
+            &PotentialType::NoPotential
+            | &PotentialType::Cube
+            | &PotentialType::QuadWell
+            | &PotentialType::Periodic
+            | &PotentialType::Coulomb
+            | &PotentialType::ComplexCoulomb
+            | &PotentialType::Harmonic
+            | &PotentialType::ComplexHarmonic
+            | &PotentialType::Dodecahedron
+            | &PotentialType::FromScript
+            | &PotentialType::FromFile
+            | &PotentialType::ElipticalCoulomb
+            | &PotentialType::SimpleCornell => false,
             &PotentialType::FullCornell => true,
         }
     }
@@ -636,7 +636,7 @@ fn generate_gaussian(config: &Config, init_size: [usize; 3]) -> Array3<f64> {
     let normal = Normal::new(0.0, config.sig);
     let mut w = Array3::<f64>::zeros(init_size);
 
-    w.par_map_inplace(|el| *el = normal.ind_sample(&mut rand::thread_rng()));
+    w.par_map_inplace(|el| *el = normal.sample(&mut rand::thread_rng()));
     w
 }
 
@@ -659,7 +659,8 @@ fn generate_coulomb(config: &Config, init_size: [usize; 3]) -> Array3<f64> {
         let cosphi = config.grid.dn * dx / r;
         let mr2 = (-config.mass * r / 2.).exp();
         // Terms here represent: n=1; n=2, l=0; n=2,l=1,m=0; n=2,l=1,m±1 respectively.
-        *x = (-config.mass * r).exp() + (2. - config.mass * r) * mr2
+        *x = (-config.mass * r).exp()
+            + (2. - config.mass * r) * mr2
             + config.mass * r * mr2 * costheta
             + config.mass * r * mr2 * (1. - costheta.powi(2)).sqrt() * cosphi;
     });

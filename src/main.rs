@@ -14,10 +14,8 @@
 //! [Journal of Computational Physics __229__, 6015–6026 (2010)](http://dx.doi.org/10.1016/j.jcp.2010.04.032).
 
 
-#![cfg_attr(feature="clippy", feature(plugin))]
-#![cfg_attr(feature="clippy", plugin(clippy))]
-#![cfg_attr(feature="clippy", warn(missing_docs_in_private_items))]
-#![cfg_attr(feature="clippy", warn(single_match_else))]
+#![cfg_attr(feature="cargo-clippy", warn(missing_docs_in_private_items))]
+#![cfg_attr(feature="cargo-clippy", warn(single_match_else))]
 
 // `error_chain!` can recurse deeply
 #![recursion_limit = "1024"]
