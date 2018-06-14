@@ -18,6 +18,7 @@ addons:
     packages:
       - libopenblas-dev
       - gfortran
+      - libssl-dev
       - libcurl4-openssl-dev
       - libelf-dev
       - libdw-dev
@@ -36,15 +37,10 @@ before_script:
   - export PATH=$PATH:~/.cargo/bin
 script:
   - cargo build
-  - |
-      if [[ "$TRAVIS_RUST_VERSION" == "stable" ]]; then
-        RUSTFLAGS=-Clink-dead-code cargo test # link dead code here bloats the file size, but gives us correct coverage results.
-      else
-        cargo test
-      fi
+  - cargo test
   - |
       if [[ "$TRAVIS_RUST_VERSION" == "nightly" && $CLIPPY ]]; then
-        cargo build --features="clippy"
+        cargo clippy
       fi
 after_success:
   # Upload docs
@@ -59,17 +55,8 @@ after_success:
   # Coverage report
   - |
       if [[ "$TRAVIS_OS_NAME" == "linux" && "$TRAVIS_RUST_VERSION" == "stable" ]]; then
-        wget https://github.com/SimonKagstrom/kcov/archive/master.tar.gz &&
-        tar xzf master.tar.gz &&
-        cd kcov-master &&
-        mkdir build &&
-        cd build &&
-        cmake .. &&
-        make &&
-        sudo make install &&
-        cd ../.. &&
-        rm -rf kcov-master &&
-        for file in target/debug/wafer-*[^\.d]; do mkdir -p "target/cov/$(basename $file)"; kcov --exclude-pattern=/.cargo,/usr/lib --verify "target/cov/$(basename $file)" "$file"; done &&
-        bash <(curl -s https://codecov.io/bash) &&
+        bash <(curl https://raw.githubusercontent.com/xd009642/tarpaulin/master/travis-install.sh)
+        cargo tarpaulin --out Xml
+        bash <(curl -s https://codecov.io/bash)
         echo "Uploaded code coverage"
       fi
