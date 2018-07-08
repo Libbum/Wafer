@@ -105,21 +105,21 @@ pub enum PotentialType {
 impl PotentialType {
     /// Returns true if `potential_sub` has a non-constant response function
     pub fn variable_pot_sub(&self) -> bool {
-        match self {
-            &PotentialType::NoPotential
-            | &PotentialType::Cube
-            | &PotentialType::QuadWell
-            | &PotentialType::Periodic
-            | &PotentialType::Coulomb
-            | &PotentialType::ComplexCoulomb
-            | &PotentialType::Harmonic
-            | &PotentialType::ComplexHarmonic
-            | &PotentialType::Dodecahedron
-            | &PotentialType::FromScript
-            | &PotentialType::FromFile
-            | &PotentialType::ElipticalCoulomb
-            | &PotentialType::SimpleCornell => false,
-            &PotentialType::FullCornell => true,
+        match *self {
+            PotentialType::NoPotential
+            | PotentialType::Cube
+            | PotentialType::QuadWell
+            | PotentialType::Periodic
+            | PotentialType::Coulomb
+            | PotentialType::ComplexCoulomb
+            | PotentialType::Harmonic
+            | PotentialType::ComplexHarmonic
+            | PotentialType::Dodecahedron
+            | PotentialType::FromScript
+            | PotentialType::FromFile
+            | PotentialType::ElipticalCoulomb
+            | PotentialType::SimpleCornell => false,
+            PotentialType::FullCornell => true,
         }
     }
 }

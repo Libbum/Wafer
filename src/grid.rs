@@ -1,15 +1,15 @@
-use indicatif::{ProgressBar, ProgressStyle};
-use ndarray::{Array3, ArrayView3, ArrayViewMut3, Zip};
-use ndarray_parallel::prelude::*;
-use slog::Logger;
-use std::f64::MAX;
 use config;
 use config::{CentralDifference, Config, Index3, InitialCondition};
+use errors::*;
+use indicatif::{ProgressBar, ProgressStyle};
+use input;
+use ndarray::{Array3, ArrayView3, ArrayViewMut3, Zip};
+use ndarray_parallel::prelude::*;
+use output;
 use potential;
 use potential::Potentials;
-use input;
-use output;
-use errors::*;
+use slog::Logger;
+use std::f64::MAX;
 
 #[derive(Debug)]
 /// Holds all computed observables for the current wavefunction.
@@ -196,9 +196,9 @@ fn solve(
         // Output status to screen
         if debug_level == 3 {
             if let Some(estimate) = eta(step, diff_old, diff, config) {
-                let percent = (100.
-                    - (estimate / ((step as f64 / config.output.screen_update as f64) + estimate)
-                        * 100.))
+                let percent = (100. - (estimate
+                    / ((step as f64 / config.output.screen_update as f64) + estimate)
+                    * 100.))
                     .floor();
                 if percent.is_finite() {
                     prog_bar.set_position(percent as u64);
@@ -319,11 +319,12 @@ fn compute_observables(config: &Config, potentials: &Potentials, phi: &Array3<f6
                         let l = phi.slice(s![lx - 1..lx + 2, ly - 1..ly + 2, lz - 1..lz + 2]);
                         // l can now be indexed with local offset `o` and modifiers
                         *work = v * w * w
-                            - w
-                                * (l[[o + 1, o, o]] + l[[o - 1, o, o]] + l[[o, o + 1, o]]
-                                    + l[[o, o - 1, o]]
-                                    + l[[o, o, o + 1]]
-                                    + l[[o, o, o - 1]] - 6. * w)
+                            - w * (l[[o + 1, o, o]]
+                                + l[[o - 1, o, o]]
+                                + l[[o, o + 1, o]]
+                                + l[[o, o - 1, o]]
+                                + l[[o, o, o + 1]]
+                                + l[[o, o, o - 1]] - 6. * w)
                                 / denominator;
                     },
                 );
@@ -341,18 +342,18 @@ fn compute_observables(config: &Config, potentials: &Potentials, phi: &Array3<f6
                         let l = phi.slice(s![lx - 2..lx + 3, ly - 2..ly + 3, lz - 2..lz + 3]);
                         // l can now be indexed with local offset `o` and modifiers
                         *work = v * w * w
-                            - w
-                                * (-l[[o + 2, o, o]] + 16. * l[[o + 1, o, o]]
-                                    + 16. * l[[o - 1, o, o]]
-                                    - l[[o - 2, o, o]]
-                                    - l[[o, o + 2, o]]
-                                    + 16. * l[[o, o + 1, o]]
-                                    + 16. * l[[o, o - 1, o]]
-                                    - l[[o, o - 2, o]]
-                                    - l[[o, o, o + 2]]
-                                    + 16. * l[[o, o, o + 1]]
-                                    + 16. * l[[o, o, o - 1]]
-                                    - l[[o, o, o - 2]] - 90. * w)
+                            - w * (-l[[o + 2, o, o]]
+                                + 16. * l[[o + 1, o, o]]
+                                + 16. * l[[o - 1, o, o]]
+                                - l[[o - 2, o, o]]
+                                - l[[o, o + 2, o]]
+                                + 16. * l[[o, o + 1, o]]
+                                + 16. * l[[o, o - 1, o]]
+                                - l[[o, o - 2, o]]
+                                - l[[o, o, o + 2]]
+                                + 16. * l[[o, o, o + 1]]
+                                + 16. * l[[o, o, o - 1]]
+                                - l[[o, o, o - 2]] - 90. * w)
                                 / denominator;
                     },
                 );
@@ -370,25 +371,24 @@ fn compute_observables(config: &Config, potentials: &Potentials, phi: &Array3<f6
                         let l = phi.slice(s![lx - 3..lx + 4, ly - 3..ly + 4, lz - 3..lz + 4]);
                         // l can now be indexed with local offset `o` and modifiers
                         *work = v * w * w
-                            - w
-                                * (2. * l[[o + 3, o, o]] - 27. * l[[o + 2, o, o]]
-                                    + 270. * l[[o + 1, o, o]]
-                                    + 270. * l[[o - 1, o, o]]
-                                    - 27. * l[[o - 2, o, o]]
-                                    + 2. * l[[o - 3, o, o]]
-                                    + 2. * l[[o, o + 3, o]]
-                                    - 27. * l[[o, o + 2, o]]
-                                    + 270. * l[[o, o + 1, o]]
-                                    + 270. * l[[o, o - 1, o]]
-                                    - 27. * l[[o, o - 2, o]]
-                                    + 2. * l[[o, o - 3, o]]
-                                    + 2. * l[[o, o, o + 3]]
-                                    - 27. * l[[o, o, o + 2]]
-                                    + 270. * l[[o, o, o + 1]]
-                                    + 270. * l[[o, o, o - 1]]
-                                    - 27. * l[[o, o, o - 2]]
-                                    + 2. * l[[o, o, o - 3]]
-                                    - 1470. * w) / denominator;
+                            - w * (2. * l[[o + 3, o, o]] - 27. * l[[o + 2, o, o]]
+                                + 270. * l[[o + 1, o, o]]
+                                + 270. * l[[o - 1, o, o]]
+                                - 27. * l[[o - 2, o, o]]
+                                + 2. * l[[o - 3, o, o]]
+                                + 2. * l[[o, o + 3, o]]
+                                - 27. * l[[o, o + 2, o]]
+                                + 270. * l[[o, o + 1, o]]
+                                + 270. * l[[o, o - 1, o]]
+                                - 27. * l[[o, o - 2, o]]
+                                + 2. * l[[o, o - 3, o]]
+                                + 2. * l[[o, o, o + 3]]
+                                - 27. * l[[o, o, o + 2]]
+                                + 270. * l[[o, o, o + 1]]
+                                + 270. * l[[o, o, o - 1]]
+                                - 27. * l[[o, o, o - 2]]
+                                + 2. * l[[o, o, o - 3]]
+                                - 1470. * w) / denominator;
                     },
                 );
             }
@@ -429,10 +429,10 @@ fn compute_observables(config: &Config, potentials: &Potentials, phi: &Array3<f6
     };
 
     Observables {
-        energy: energy,
-        norm2: norm2,
-        v_infinity: v_infinity,
-        r2: r2,
+        energy,
+        norm2,
+        v_infinity,
+        r2,
     }
 }
 
@@ -571,7 +571,9 @@ fn evolve(
                             // l can now be indexed with local offset `o` and modifiers
                             *work = w * pa
                                 + pb * config.grid.dt
-                                    * (l[[o + 1, o, o]] + l[[o - 1, o, o]] + l[[o, o + 1, o]]
+                                    * (l[[o + 1, o, o]]
+                                        + l[[o - 1, o, o]]
+                                        + l[[o, o + 1, o]]
                                         + l[[o, o - 1, o]]
                                         + l[[o, o, o + 1]]
                                         + l[[o, o, o - 1]]
@@ -593,7 +595,8 @@ fn evolve(
                             // l can now be indexed with local offset `o` and modifiers
                             *work = w * pa
                                 + pb * config.grid.dt
-                                    * (-l[[o + 2, o, o]] + 16. * l[[o + 1, o, o]]
+                                    * (-l[[o + 2, o, o]]
+                                        + 16. * l[[o + 1, o, o]]
                                         + 16. * l[[o - 1, o, o]]
                                         - l[[o - 2, o, o]]
                                         - l[[o, o + 2, o]]
@@ -674,21 +677,31 @@ mod tests {
     use super::*;
 
     macro_rules! assert_approx_eq {
-    ($a:expr, $b:expr) => ({
-        let eps = 1.0e-6;
-        let (a, b) = (&$a, &$b);
-        assert!((*a - *b).abs() < eps,
+        ($a:expr, $b:expr) => {{
+            let eps = 1.0e-6;
+            let (a, b) = (&$a, &$b);
+            assert!(
+                (*a - *b).abs() < eps,
                 "assertion failed: `(left !== right)` \
-                           (left: `{:?}`, right: `{:?}`, expect diff: `{:?}`, real diff: `{:?}`)",
-                 *a, *b, eps, (*a - *b).abs());
-    });
-    ($a:expr, $b:expr, $eps:expr) => ({
-        let (a, b) = (&$a, &$b);
-        assert!((*a - *b).abs() < $eps,
+                 (left: `{:?}`, right: `{:?}`, expect diff: `{:?}`, real diff: `{:?}`)",
+                *a,
+                *b,
+                eps,
+                (*a - *b).abs()
+            );
+        }};
+        ($a:expr, $b:expr, $eps:expr) => {{
+            let (a, b) = (&$a, &$b);
+            assert!(
+                (*a - *b).abs() < $eps,
                 "assertion failed: `(left !== right)` \
-                           (left: `{:?}`, right: `{:?}`, expect diff: `{:?}`, real diff: `{:?}`)",
-                 *a, *b, $eps, (*a - *b).abs());
-    })
+                 (left: `{:?}`, right: `{:?}`, expect diff: `{:?}`, real diff: `{:?}`)",
+                *a,
+                *b,
+                $eps,
+                (*a - *b).abs()
+            );
+        }};
     }
 
     #[test]

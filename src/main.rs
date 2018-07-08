@@ -13,10 +13,11 @@
 //! Schrödinger equation”,
 //! [Journal of Computational Physics __229__, 6015–6026 (2010)](http://dx.doi.org/10.1016/j.jcp.2010.04.032).
 
-
-#![cfg_attr(feature="cargo-clippy", warn(missing_docs_in_private_items))]
-#![cfg_attr(feature="cargo-clippy", warn(single_match_else))]
-
+#![cfg_attr(
+    feature = "cargo-clippy",
+    warn(missing_docs_in_private_items)
+)]
+#![cfg_attr(feature = "cargo-clippy", warn(single_match_else))]
 // `error_chain!` can recurse deeply
 #![recursion_limit = "1024"]
 
@@ -37,8 +38,8 @@ extern crate num_cpus;
 extern crate ordinal;
 extern crate rand;
 extern crate rayon;
-extern crate ron;
 extern crate rmp_serde as rmps;
+extern crate ron;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
@@ -53,13 +54,13 @@ extern crate term_size;
 extern crate yansi;
 
 use clap::{App, Arg};
-use slog::{Drain, Duplicate, Logger, Fuse, LevelFilter, Level};
+use config::Config;
+use errors::*;
+use slog::{Drain, Duplicate, Fuse, Level, LevelFilter, Logger};
 use std::fs::OpenOptions;
 use std::process;
 use std::thread;
 use std::time::{Duration, Instant};
-use config::Config;
-use errors::*;
 
 include!(concat!(env!("OUT_DIR"), "/version.rs"));
 
@@ -67,6 +68,8 @@ include!(concat!(env!("OUT_DIR"), "/version.rs"));
 /// and populates the `Config` struct with the information required to run the current
 /// instance of the application.
 pub mod config;
+/// Handles the error chain of the program.
+mod errors;
 /// The meat of the calculation is performed on a finite grid. Basically all of the computation
 /// work is done within this module.
 mod grid;
@@ -77,8 +80,6 @@ mod output;
 /// Handles the potential generation, binding energy offsets, callouts to files or scripts
 /// if needed etc.
 mod potential;
-/// Handles the error chain of the program.
-mod errors;
 
 /// Exits (with error, but no display) after a short pause. Because we're using async logs, sometimes we dump before
 /// the log system outputs information. We spool for a little first in these instances so we get the
@@ -137,7 +138,8 @@ fn main() {
         .write(true)
         .truncate(true)
         .open(&log_location)
-        .chain_err(|| ErrorKind::CreateLog(log_location.to_string())) {
+        .chain_err(|| ErrorKind::CreateLog(log_location.to_string()))
+    {
         Ok(f) => f,
         Err(ref err) => {
             println!("Error initialising log file: {}", err);
@@ -169,7 +171,10 @@ fn main() {
 
     info!(log, "Starting Wafer solver"; "version" => crate_version!(), "build-id" => short_sha());
     if screen_level.as_usize() > 3 {
-        warn!(log,"Debugging information displayed on screen. Progress bar hidden.");
+        warn!(
+            log,
+            "Debugging information displayed on screen. Progress bar hidden."
+        );
     }
     info!(log, "Checking/creating directories");
     if let Err(ref err) = input::check_input_dir() {
@@ -181,7 +186,10 @@ fn main() {
     };
 
     //Override rayon's defaults of threads (including HT cores) to physical cores
-    if let Err(err) = rayon::ThreadPoolBuilder::new().num_threads(num_cpus::get_physical()).build_global() {
+    if let Err(err) = rayon::ThreadPoolBuilder::new()
+        .num_threads(num_cpus::get_physical())
+        .build_global()
+    {
         crit!(log, "Failed to initialise thread pool: {}", err);
         exit_with_pause();
     };
@@ -204,7 +212,8 @@ fn main() {
     };
 
     let elapsed = start_time.elapsed();
-    let time_taken = (elapsed.as_secs() as f64) + (elapsed.subsec_nanos() as f64 / 1000_000_000.0);
+    let time_taken =
+        (elapsed.as_secs() as f64) + (f64::from(elapsed.subsec_nanos()) / 1_000_000_000.0);
     if time_taken < 60.0 {
         println!(
             "Simulation complete. Elapsed time: {:.3} seconds.",
@@ -215,8 +224,7 @@ fn main() {
         let seconds = time_taken - 60. * minutes;
         println!(
             "Simulation complete. Elapsed time: {} minutes, {:.3} seconds.",
-            minutes,
-            seconds
+            minutes, seconds
         );
     } else {
         let hours = (time_taken / 3600.).floor();
@@ -224,9 +232,7 @@ fn main() {
         let seconds = time_taken - 3600. * hours - 60. * minutes;
         println!(
             "Simulation complete. Elapsed time: {} hours, {} minutes, {:.3} seconds.",
-            hours,
-            minutes,
-            seconds
+            hours, minutes, seconds
         );
     }
     info!(log, "Simulation completed");
