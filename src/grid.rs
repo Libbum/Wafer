@@ -16,22 +16,22 @@ use errors::*;
 /// Holds all computed observables for the current wavefunction.
 pub struct Observables {
     /// Normalised total energy.
-    pub energy: f64,
+    pub energy: R64,
     /// A squared normalisation. Square root occurs later when needed to apply a complete
     /// normalisation condition. This needs to be separate as we include other adjustments
     /// from time to time.
-    pub norm2: f64,
+    pub norm2: R64,
     /// The value of the potential at infinity. This is used to calculate the binding energy.
-    pub v_infinity: f64,
+    pub v_infinity: R64,
     /// Coefficient of determination
-    pub r2: f64,
+    pub r2: R64,
 }
 
 /// Runs the calculation and holds long term (system time) wavefunction storage
 pub fn run(config: &Config, log: &Logger, debug_level: usize) -> Result<()> {
     let potentials = potential::load_arrays(config, log)?;
 
-    let mut w_store: Vec<Array3<f64>> = Vec::new();
+    let mut w_store: Vec<Array3<R64>> = Vec::new();
     if config.wavenum > 0 {
         //We require wavefunctions from disk, even if initial condition is not `FromFile`
         //The wavenum = 0 case is handled later
@@ -53,11 +53,11 @@ fn solve(
     debug_level: usize,
     potentials: &Potentials,
     wnum: u8,
-    w_store: &mut Vec<Array3<f64>>,
+    w_store: &mut Vec<Array3<R64>>,
 ) -> Result<()> {
     // Initial conditions from config file if ground state,
     // but start from previously converged wfn if we're an excited state.
-    let mut phi: Array3<f64> = if wnum > 0 {
+    let mut phi: Array3<R64> = if wnum > 0 {
         let num = &config.grid.size;
         let bb = config.central_difference.bb();
         let init_size: [usize; 3] = [
@@ -251,7 +251,7 @@ fn solve(
 ///
 /// An estimate of the number of `screen_update` cycles to go until convergence.
 /// Uses an option as it may not be finite.
-fn eta(step: u64, diff_old: f64, diff_new: f64, config: &Config) -> Option<f64> {
+fn eta(step: u64, diff_old: R64, diff_new: R64, config: &Config) -> Option<R64> {
     //Convergenge is done in exponential time after a short stabilisation stage.
     //So we can use the point slope form of a linear equation to find an estimate
     //to hit the tolerance on a semilogy scale. y - y1 = m(x-x1); where here we
@@ -297,10 +297,10 @@ fn eta(step: u64, diff_old: f64, diff_new: f64, config: &Config) -> Option<f64> 
 ///
 /// Previously each of the variables were calculated in their own function.
 /// The current implementation seems to be much faster though...
-fn compute_observables(config: &Config, potentials: &Potentials, phi: &Array3<f64>) -> Observables {
+fn compute_observables(config: &Config, potentials: &Potentials, phi: &Array3<R64>) -> Observables {
     let ext = config.central_difference.ext();
     let phi_work = get_work_area(phi, ext);
-    let mut work = Array3::<f64>::zeros(phi_work.dim());
+    let mut work = Array3::<R64>::zeros(phi_work.dim());
 
     let energy = {
         let v = get_work_area(&potentials.v, ext);
@@ -444,7 +444,7 @@ fn compute_observables(config: &Config, potentials: &Potentials, phi: &Array3<f6
 /// # Arguments
 ///
 /// * `w` - Current wavefunction array.
-fn get_norm_squared(w: &ArrayView3<f64>) -> f64 {
+fn get_norm_squared(w: &ArrayView3<R64>) -> R64 {
     //NOTE: No complex conjugation due to all real input for now
     w.into_par_iter().map(|&el| el * el).sum()
 }
@@ -455,7 +455,7 @@ fn get_norm_squared(w: &ArrayView3<f64>) -> f64 {
 ///
 /// * `w` - Wavefunction to normalise.
 /// * `norm2` - The squared normalisation observable.
-fn normalise_wavefunction(w: &mut Array3<f64>, norm2: f64) {
+fn normalise_wavefunction(w: &mut Array3<R64>, norm2: R64) {
     let norm = norm2.sqrt();
     w.par_map_inplace(|el| *el /= norm);
 }
@@ -467,12 +467,12 @@ fn normalise_wavefunction(w: &mut Array3<f64>, norm2: f64) {
 /// * `wnum` - Current exited state value.
 /// * `w` - Current, active wavefunction array.
 /// * `w_store` - Vector of currently converged wavefunctions.
-fn orthogonalise_wavefunction(wnum: u8, w: &mut Array3<f64>, w_store: &[Array3<f64>]) {
+fn orthogonalise_wavefunction(wnum: u8, w: &mut Array3<R64>, w_store: &[Array3<R64>]) {
     for lower in w_store.iter().take(wnum as usize) {
         // This MUST be created inside the loop or else we throw nans.
         // I've tried a number of ways to treat this method as it's
         // pretty expensive. Here is the best one I've identified.
-        let mut overlap = Array3::<f64>::zeros(w.dim());
+        let mut overlap = Array3::<R64>::zeros(w.dim());
         Zip::from(&mut overlap)
             .and(lower)
             .and(w.view())
@@ -516,7 +516,7 @@ pub fn get_work_area(arr: &Array3<R64>, ext: usize) -> ArrayView3<R64> {
 /// # Returns
 ///
 /// A mutable arrav view containing only the workable area of the array.
-pub fn get_mut_work_area(arr: &mut Array3<f64>, ext: usize) -> ArrayViewMut3<f64> {
+pub fn get_mut_work_area(arr: &mut Array3<R64>, ext: usize) -> ArrayViewMut3<R64> {
     let dims = arr.dim();
     let exti = ext as isize;
     arr.slice_mut(s![
@@ -538,8 +538,8 @@ fn evolve(
     wnum: u8,
     config: &Config,
     potentials: &Potentials,
-    phi: &mut Array3<f64>,
-    w_store: &[Array3<f64>],
+    phi: &mut Array3<R64>,
+    w_store: &[Array3<R64>],
 ) {
     //without mpi, this is just update interior (which is really updaterule if we dont need W)
     let bb = config.central_difference.bb();
@@ -550,7 +550,7 @@ fn evolve(
     work_dims.2 -= bb;
     let pa = get_work_area(&potentials.a, ext);
     let pb = get_work_area(&potentials.b, ext);
-    let mut work = Array3::<f64>::zeros(work_dims);
+    let mut work = Array3::<R64>::zeros(work_dims);
     let mut steps = 0;
     loop {
         {
@@ -694,24 +694,24 @@ mod tests {
 
     #[test]
     fn gram_schmidt() {
-        let ground = Array3::<f64>::from_shape_fn((2, 2, 2), |(i, j, k)| (i + j + k) as f64);
-        let w_store: Vec<Array3<f64>> = vec![ground];
+        let ground = Array3::<R64>::from_shape_fn((2, 2, 2), |(i, j, k)| (i + j + k) as f64);
+        let w_store: Vec<Array3<R64>> = vec![ground];
 
-        let mut test = Array3::<f64>::from_shape_fn((2, 2, 2), |(i, j, k)| {
+        let mut test = Array3::<R64>::from_shape_fn((2, 2, 2), |(i, j, k)| {
             let (fi, fj, fk) = (i as f64, j as f64, k as f64);
             -fi - fj - fk
         });
         orthogonalise_wavefunction(1, &mut test, &w_store);
 
         let compare =
-            Array3::<f64>::from_shape_vec((2, 2, 2), vec![0., 23., 23., 46., 23., 46., 46., 69.])
+            Array3::<R64>::from_shape_vec((2, 2, 2), vec![0., 23., 23., 46., 23., 46., 46., 69.])
                 .unwrap();
         assert!(compare.all_close(&test, 0.01));
     }
 
     #[test]
     fn work_area() {
-        let test = Array3::<f64>::zeros((5, 8, 7));
+        let test = Array3::<R64>::zeros((5, 8, 7));
         let work = get_work_area(&test, 1);
         let dims = work.dim();
         assert_eq!(dims.0, 3);
@@ -721,14 +721,14 @@ mod tests {
 
     #[test]
     fn mut_work_area() {
-        let mut test = Array3::<f64>::zeros((5, 8, 7));
+        let mut test = Array3::<R64>::zeros((5, 8, 7));
         let dims = {
             let mut work = get_mut_work_area(&mut test, 1);
             work.fill(1.);
             work.dim()
         };
 
-        let compare = Array3::<f64>::from_shape_fn((5, 8, 7), |(i, j, k)| {
+        let compare = Array3::<R64>::from_shape_fn((5, 8, 7), |(i, j, k)| {
             if (i == 0 || i == 4) || (j == 0 || j == 7) || (k == 0 || k == 6) {
                 0.
             } else {
@@ -743,7 +743,7 @@ mod tests {
 
     #[test]
     fn norm2() {
-        let test = Array3::<f64>::from_shape_fn((5, 8, 7), |(i, j, k)| (i * j * k) as f64);
+        let test = Array3::<R64>::from_shape_fn((5, 8, 7), |(i, j, k)| (i * j * k) as R64);
         let work = get_work_area(&test, 1);
         let result = get_norm_squared(&work);
         assert_approx_eq!(result, 70070.);
@@ -751,12 +751,12 @@ mod tests {
 
     #[test]
     fn wfn_normalise() {
-        let normalised = Array3::<f64>::from_shape_fn((3, 2, 5), |(i, j, k)| {
+        let normalised = Array3::<R64>::from_shape_fn((3, 2, 5), |(i, j, k)| {
             let norm = 1.1091;
             ((i * j * k) as f64) / norm
         });
 
-        let mut test = Array3::<f64>::from_shape_fn((3, 2, 5), |(i, j, k)| (i * j * k) as f64);
+        let mut test = Array3::<R64>::from_shape_fn((3, 2, 5), |(i, j, k)| (i * j * k) as f64);
         normalise_wavefunction(&mut test, 1.23);
 
         assert!(test.all_close(&normalised, 0.01));

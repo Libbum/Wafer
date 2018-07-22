@@ -1,4 +1,5 @@
 use csv;
+use noisy_float::prelude::*;
 use ron::de::from_reader as ron_reader;
 use slog::Logger;
 use std::fs::{create_dir, File};
@@ -26,7 +27,7 @@ struct PlainRecord {
     /// Index in *z*
     k: usize,
     /// Data at this position
-    data: f64,
+    data: R64,
 }
 
 /// Checks if a potential file exists in the input directory
@@ -111,9 +112,9 @@ pub fn potential(
 }
 
 /// Loads an array from a mpk file on disk.
-fn read_mpk(file: String, target_size: [usize; 3], bb: usize, log: &Logger) -> Result<Array3<f64>> {
+fn read_mpk(file: String, target_size: [usize; 3], bb: usize, log: &Logger) -> Result<Array3<R64>> {
     let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.clone()))?;
-    let data: Array3<f64> = rmps::decode::from_read(reader).chain_err(|| ErrorKind::Deserialize)?;
+    let data: Array3<R64> = rmps::decode::from_read(reader).chain_err(|| ErrorKind::Deserialize)?;
 
     Ok(fill_data(&file, &data, target_size, bb, log))
 }
@@ -124,9 +125,9 @@ fn read_json(
     target_size: [usize; 3],
     bb: usize,
     log: &Logger,
-) -> Result<Array3<f64>> {
+) -> Result<Array3<R64>> {
     let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.clone()))?;
-    let data: Array3<f64> = serde_json::from_reader(reader).chain_err(|| ErrorKind::Deserialize)?;
+    let data: Array3<R64> = serde_json::from_reader(reader).chain_err(|| ErrorKind::Deserialize)?;
 
     Ok(fill_data(&file, &data, target_size, bb, log))
 }
@@ -137,17 +138,17 @@ fn read_yaml(
     target_size: [usize; 3],
     bb: usize,
     log: &Logger,
-) -> Result<Array3<f64>> {
+) -> Result<Array3<R64>> {
     let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.clone()))?;
-    let data: Array3<f64> = serde_yaml::from_reader(reader).chain_err(|| ErrorKind::Deserialize)?;
+    let data: Array3<R64> = serde_yaml::from_reader(reader).chain_err(|| ErrorKind::Deserialize)?;
 
     Ok(fill_data(&file, &data, target_size, bb, log))
 }
 
 /// Loads an array from a ron file on disk.
-fn read_ron(file: String, target_size: [usize; 3], bb: usize, log: &Logger) -> Result<Array3<f64>> {
+fn read_ron(file: String, target_size: [usize; 3], bb: usize, log: &Logger) -> Result<Array3<R64>> {
     let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.clone()))?;
-    let data: Array3<f64> = ron_reader(reader).chain_err(|| ErrorKind::Deserialize)?;
+    let data: Array3<R64> = ron_reader(reader).chain_err(|| ErrorKind::Deserialize)?;
 
     Ok(fill_data(&file, &data, target_size, bb, log))
 }
@@ -158,14 +159,14 @@ fn read_ron(file: String, target_size: [usize; 3], bb: usize, log: &Logger) -> R
 /// the data to be resampled if input sizes differ from the size of the data on disk.
 fn fill_data(
     file: &str,
-    data: &Array3<f64>,
+    data: &Array3<R64>,
     target_size: [usize; 3],
     bb: usize,
     log: &Logger,
-) -> Array3<f64> {
+) -> Array3<R64> {
     let dims = data.dim();
     let init_size: [usize; 3] = [dims.0, dims.1, dims.2];
-    let mut complete = Array3::<f64>::zeros(target_size);
+    let mut complete = Array3::<R64>::zeros(target_size);
     {
         let mut work = grid::get_mut_work_area(&mut complete, bb / 2);
         warn!(log, "{:?}, {:?}", work.dim(), data.dim());
@@ -236,17 +237,17 @@ pub fn script_potential(file: &str, grid: &Grid, bb: usize, log: &Logger) -> Res
     // Finally, parse the captured string.
     // NOTE: I investigated passing this using messagepack. Ends up being more bytes.
     // Well, that may not be totally true, but printing the byte array to screen is problematic...
-    let mut values: Vec<f64> = Vec::new();
+    let mut values: Vec<R64> = Vec::new();
     for line in python_stdout.lines() {
         let value = line.parse::<f64>().chain_err(|| ErrorKind::ParseFloat)?;
-        values.push(value);
+        values.push(r64(value));
     }
     let vlen = values.len();
-    let generated = Array3::<f64>::from_shape_vec((grid.size.x, grid.size.y, grid.size.z), values)
+    let generated = Array3::<R64>::from_shape_vec((grid.size.x, grid.size.y, grid.size.z), values)
         .chain_err(|| ErrorKind::ArrayShape(vlen, [grid.size.x, grid.size.y, grid.size.z]))?;
 
     // generated is now the work area. We need to return a full framed array.
-    let mut complete = Array3::<f64>::zeros(target_size);
+    let mut complete = Array3::<R64>::zeros(target_size);
     {
         let mut work = grid::get_mut_work_area(&mut complete, bb / 2);
         // generated is the right size by definition: copy down.
@@ -315,9 +316,9 @@ fn read_sub_mpk(
     file: String,
     target_size: [usize; 3],
     log: &Logger,
-) -> Result<(Option<Array3<f64>>, Option<f64>)> {
+) -> Result<(Option<Array3<R64>>, Option<R64>)> {
     let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.clone()))?;
-    let full_data: Array3<f64> = match rmps::decode::from_read(reader) {
+    let full_data: Array3<R64> = match rmps::decode::from_read(reader) {
         Ok(data) => data,
         Err(_) => {
             // We didn't match on a full array, so try a single value
@@ -337,7 +338,7 @@ fn read_sub_csv(
     file: String,
     target_size: [usize; 3],
     log: &Logger,
-) -> Result<(Option<Array3<f64>>, Option<f64>)> {
+) -> Result<(Option<Array3<R64>>, Option<R64>)> {
     let mut rdr = csv::ReaderBuilder::new()
         .has_headers(false)
         .from_path(&file)
@@ -345,7 +346,7 @@ fn read_sub_csv(
     let mut max_i = 0;
     let mut max_j = 0;
     let mut max_k = 0;
-    let mut data: Vec<f64> = Vec::new();
+    let mut data: Vec<R64> = Vec::new();
     let mut rdr_iter = rdr.deserialize();
     // Check the first entry separately. If it contains a PlainRecord, then
     // continue looping.
@@ -366,7 +367,7 @@ fn read_sub_csv(
                     .parse::<f64>()
                     .chain_err(|| ErrorKind::ParseFloat)?;
 
-                return Ok((None, Some(single_data)));
+                return Ok((None, Some(r64(single_data))));
             }
         };
         max_i = record.i;
@@ -391,7 +392,7 @@ fn read_sub_csv(
     let numy = max_j + 1;
     let numz = max_k + 1;
     let dlen = data.len();
-    let full_data = Array3::<f64>::from_shape_vec((numx, numy, numz), data)
+    let full_data = Array3::<R64>::from_shape_vec((numx, numy, numz), data)
         .chain_err(|| ErrorKind::ArrayShape(dlen, [numx, numy, numz]))?;
 
     fill_sub_data(full_data, target_size, log)
@@ -402,9 +403,9 @@ fn read_sub_json(
     file: String,
     target_size: [usize; 3],
     log: &Logger,
-) -> Result<(Option<Array3<f64>>, Option<f64>)> {
+) -> Result<(Option<Array3<R64>>, Option<R64>)> {
     let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.clone()))?;
-    let full_data: Array3<f64> = match serde_json::from_reader(reader) {
+    let full_data: Array3<R64> = match serde_json::from_reader(reader) {
         Ok(data) => data,
         Err(_) => {
             // We didn't match on a full array, so try a single value
@@ -424,9 +425,9 @@ fn read_sub_yaml(
     file: String,
     target_size: [usize; 3],
     log: &Logger,
-) -> Result<(Option<Array3<f64>>, Option<f64>)> {
+) -> Result<(Option<Array3<R64>>, Option<R64>)> {
     let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.clone()))?;
-    let full_data: Array3<f64> = match serde_yaml::from_reader(reader) {
+    let full_data: Array3<R64> = match serde_yaml::from_reader(reader) {
         Ok(data) => data,
         Err(_) => {
             // We didn't match on a full array, so try a single value
@@ -446,9 +447,9 @@ fn read_sub_ron(
     file: String,
     target_size: [usize; 3],
     log: &Logger,
-) -> Result<(Option<Array3<f64>>, Option<f64>)> {
+) -> Result<(Option<Array3<R64>>, Option<R64>)> {
     let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.clone()))?;
-    let full_data: Array3<f64> = match ron_reader(reader) {
+    let full_data: Array3<R64> = match ron_reader(reader) {
         Ok(data) => data,
         Err(_) => {
             // We didn't match on a full array, so try a single value
@@ -465,13 +466,13 @@ fn read_sub_ron(
 
 /// Returns a variable array of `potential_sub` data, which is resized if needed.
 fn fill_sub_data(
-    full_data: Array3<f64>,
+    full_data: Array3<R64>,
     target_size: [usize; 3],
     log: &Logger,
-) -> Result<(Option<Array3<f64>>, Option<f64>)> {
+) -> Result<(Option<Array3<R64>>, Option<R64>)> {
     let fdim = full_data.dim();
     let init_size = [fdim.0, fdim.1, fdim.2];
-    let mut work = Array3::<f64>::zeros((target_size[0], target_size[1], target_size[2]));
+    let mut work = Array3::<R64>::zeros((target_size[0], target_size[1], target_size[2]));
     let same: bool = init_size
         .iter()
         .zip(target_size.iter())
@@ -500,7 +501,7 @@ fn fill_sub_data(
 pub fn load_wavefunctions(
     config: &Config,
     log: &Logger,
-    w_store: &mut Vec<Array3<f64>>,
+    w_store: &mut Vec<Array3<R64>>,
 ) -> Result<()> {
     let num = &config.grid.size;
     let bb = config.central_difference.bb();
@@ -551,7 +552,7 @@ pub fn wavefunction(
     bb: usize,
     file_type: &FileType,
     log: &Logger,
-) -> Result<Array3<f64>> {
+) -> Result<Array3<R64>> {
     let mpk_file = check_wavefunction_file(wnum, "mpk");
     let csv_file = check_wavefunction_file(wnum, "csv");
     let json_file = check_wavefunction_file(wnum, "json");
@@ -617,7 +618,7 @@ pub fn check_input_dir() -> Result<()> {
 ///
 /// * A 3D array loaded with data from the file and resampled/interpolated if required.
 /// If something goes wrong in the parsing or file handling, a `csv::Error` is passed.
-fn read_csv(file: String, target_size: [usize; 3], bb: usize, log: &Logger) -> Result<Array3<f64>> {
+fn read_csv(file: String, target_size: [usize; 3], bb: usize, log: &Logger) -> Result<Array3<R64>> {
     let parse_file = &file.to_owned();
     let mut rdr = csv::ReaderBuilder::new()
         .has_headers(false)
@@ -626,7 +627,7 @@ fn read_csv(file: String, target_size: [usize; 3], bb: usize, log: &Logger) -> R
     let mut max_i = 0;
     let mut max_j = 0;
     let mut max_k = 0;
-    let mut data: Vec<f64> = Vec::new();
+    let mut data: Vec<R64> = Vec::new();
     for result in rdr.deserialize() {
         let record: PlainRecord =
             result.chain_err(|| ErrorKind::ParsePlainRecord(parse_file.to_string()))?;
@@ -645,13 +646,13 @@ fn read_csv(file: String, target_size: [usize; 3], bb: usize, log: &Logger) -> R
     let numy = max_j + 1;
     let numz = max_k + 1;
     let dlen = data.len();
-    match Array3::<f64>::from_shape_vec((numx, numy, numz), data) {
+    match Array3::<R64>::from_shape_vec((numx, numy, numz), data) {
         Ok(result) => {
             //result is now a parsed Array3 with the work area inside.
             //We must fill this into an array with CD boundaries, provided
             //it is the correct size. If not, we must scale it.
             let init_size: [usize; 3] = [numx + bb, numy + bb, numz + bb];
-            let mut complete = Array3::<f64>::zeros(target_size);
+            let mut complete = Array3::<R64>::zeros(target_size);
             {
                 let mut work = grid::get_mut_work_area(&mut complete, bb / 2);
                 let same: bool = init_size
@@ -677,7 +678,7 @@ fn read_csv(file: String, target_size: [usize; 3], bb: usize, log: &Logger) -> R
 /// Trilinear interpolation to resize an array.
 /// i.e, if we have v.size = (50,50,50), and size = (100, 100, 100)
 /// then the output will be (100,100,100) linearly interpolated
-fn trilerp_resize(v: &Array3<f64>, output: &mut ArrayViewMut3<f64>, size: [usize; 3]) -> () {
+fn trilerp_resize(v: &Array3<R64>, output: &mut ArrayViewMut3<R64>, size: [usize; 3]) -> () {
     let nx = v.len_of(Axis(0)) - 1;
     let ny = v.len_of(Axis(1)) - 1;
     let nz = v.len_of(Axis(2)) - 1;
@@ -745,15 +746,15 @@ mod tests {
     #[test]
     fn interpolation() {
         let array =
-            Array3::<f64>::from_shape_vec((2, 2, 2), vec![1., 2., 3., 4., 5., 6., 7., 8.]).unwrap();
+            Array3::<R64>::from_shape_vec((2, 2, 2), vec![1., 2., 3., 4., 5., 6., 7., 8.]).unwrap();
 
-        let mut complete = Array3::<f64>::zeros((6, 6, 6));
+        let mut complete = Array3::<R64>::zeros((6, 6, 6));
         let mut work = grid::get_mut_work_area(&mut complete, 1);
         println!("{:?}", work.dim());
         trilerp_resize(&array, &mut work, [4, 4, 4]);
         assert_eq!(
             work,
-            Array3::<f64>::from_shape_vec(
+            Array3::<R64>::from_shape_vec(
                 (4, 4, 4),
                 vec![
                     1.0,
