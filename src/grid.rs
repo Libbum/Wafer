@@ -121,12 +121,12 @@ fn solve(
 
     let mut step = 0;
     let mut converged = false;
-    let mut last_energy = MAX; //std::f64::MAX
+    let mut last_energy = r64(MAX); //std::f64::MAX
     let mut diff_old = MAX;
     loop {
         let observables = compute_observables(config, potentials, &phi);
         let norm_energy = observables.energy / observables.norm2;
-        let tau = (step as f64) * config.grid.dt;
+        let tau = r64(step as f64) * config.grid.dt;
         normalise_wavefunction(&mut phi, observables.norm2);
 
         // Orthoganalise wavefunction
@@ -167,7 +167,7 @@ fn solve(
             output::finalise_measurement(
                 &observables,
                 wnum,
-                config.grid.size.x as f64,
+                r64(config.grid.size.x as f64),
                 &config.project_name,
                 &config.output.file_type,
             )?;
@@ -196,7 +196,7 @@ fn solve(
 
         // Output status to screen
         if debug_level == 3 {
-            if let Some(estimate) = eta(step, diff_old, diff, config) {
+            if let Some(estimate) = eta(step, diff_old, diff.raw(), config) {
                 let percent = (100.
                     - (estimate / ((step as f64 / config.output.screen_update as f64) + estimate)
                         * 100.))
@@ -216,7 +216,7 @@ fn solve(
         evolve(wnum, config, potentials, &mut phi, w_store);
 
         // Ready next iteration
-        diff_old = diff;
+        diff_old = diff.raw();
         step += config.output.screen_update;
     }
 
@@ -251,11 +251,14 @@ fn solve(
 ///
 /// An estimate of the number of `screen_update` cycles to go until convergence.
 /// Uses an option as it may not be finite.
-fn eta(step: u64, diff_old: R64, diff_new: R64, config: &Config) -> Option<R64> {
+fn eta(step: u64, diff_old: f64, diff_new: f64, config: &Config) -> Option<f64> {
     //Convergenge is done in exponential time after a short stabilisation stage.
     //So we can use the point slope form of a linear equation to find an estimate
     //to hit the tolerance on a semilogy scale. y - y1 = m(x-x1); where here we
     //use (x1,y1) as (step,diff_new), y is tolerance, find m then solve for x
+    //
+    //We don't use noisy floats here since it's already handled and fails gracefully
+    //when out of bounds.
     let x1 = step as f64;
     let y1 = diff_new.log10();
     let rise = y1 - diff_old.log10();
@@ -263,7 +266,7 @@ fn eta(step: u64, diff_old: R64, diff_new: R64, config: &Config) -> Option<R64> 
     let m = rise / run;
 
     //Step at which we estimate reaching tolerance.
-    let x = ((config.tolerance.log10() - y1) / m) + x1;
+    let x = ((config.tolerance.log10().raw() - y1) / m) + x1;
 
     //Now to return an expectation
     // Initially, we obtain a -inf which needs to be treated, and we can't correctly estimate the runtime until
@@ -308,7 +311,7 @@ fn compute_observables(config: &Config, potentials: &Potentials, phi: &Array3<R6
         //TODO: We don't have any complex conjugation here.
         match config.central_difference {
             CentralDifference::ThreePoint => {
-                let denominator = 2. * config.grid.dn * config.grid.dn * config.mass;
+                let denominator = r64(2.) * config.grid.dn * config.grid.dn * config.mass;
                 Zip::indexed(&mut work).and(v).and(phi_work).par_apply(
                     |(i, j, k), work, &v, &w| {
                         // Offset indexes as we are already in a slice
@@ -324,13 +327,13 @@ fn compute_observables(config: &Config, potentials: &Potentials, phi: &Array3<R6
                                 * (l[[o + 1, o, o]] + l[[o - 1, o, o]] + l[[o, o + 1, o]]
                                     + l[[o, o - 1, o]]
                                     + l[[o, o, o + 1]]
-                                    + l[[o, o, o - 1]] - 6. * w)
+                                    + l[[o, o, o - 1]] - r64(6.) * w)
                                 / denominator;
                     },
                 );
             }
             CentralDifference::FivePoint => {
-                let denominator = 24. * config.grid.dn * config.grid.dn * config.mass;
+                let denominator = r64(24.) * config.grid.dn * config.grid.dn * config.mass;
                 Zip::indexed(&mut work).and(v).and(phi_work).par_apply(
                     |(i, j, k), work, &v, &w| {
                         // Offset indexes as we are already in a slice
@@ -338,28 +341,29 @@ fn compute_observables(config: &Config, potentials: &Potentials, phi: &Array3<R6
                         let ly = j as isize + 2;
                         let lz = k as isize + 2;
                         let o = 2;
+                        let _16 = r64(16.);
                         // get a slice which gives us our matrix of central difference points
                         let l = phi.slice(s![lx - 2..lx + 3, ly - 2..ly + 3, lz - 2..lz + 3]);
                         // l can now be indexed with local offset `o` and modifiers
                         *work = v * w * w
                             - w
-                                * (-l[[o + 2, o, o]] + 16. * l[[o + 1, o, o]]
-                                    + 16. * l[[o - 1, o, o]]
+                                * (-l[[o + 2, o, o]] + _16 * l[[o + 1, o, o]]
+                                    + _16 * l[[o - 1, o, o]]
                                     - l[[o - 2, o, o]]
                                     - l[[o, o + 2, o]]
-                                    + 16. * l[[o, o + 1, o]]
-                                    + 16. * l[[o, o - 1, o]]
+                                    + _16 * l[[o, o + 1, o]]
+                                    + _16 * l[[o, o - 1, o]]
                                     - l[[o, o - 2, o]]
                                     - l[[o, o, o + 2]]
-                                    + 16. * l[[o, o, o + 1]]
-                                    + 16. * l[[o, o, o - 1]]
-                                    - l[[o, o, o - 2]] - 90. * w)
+                                    + _16 * l[[o, o, o + 1]]
+                                    + _16 * l[[o, o, o - 1]]
+                                    - l[[o, o, o - 2]] - r64(90.) * w)
                                 / denominator;
                     },
                 );
             }
             CentralDifference::SevenPoint => {
-                let denominator = 360. * config.grid.dn * config.grid.dn * config.mass;
+                let denominator = r64(360.) * config.grid.dn * config.grid.dn * config.mass;
                 Zip::indexed(&mut work).and(v).and(phi_work).par_apply(
                     |(i, j, k), work, &v, &w| {
                         // Offset indexes as we are already in a slice
@@ -367,35 +371,38 @@ fn compute_observables(config: &Config, potentials: &Potentials, phi: &Array3<R6
                         let ly = j as isize + 3;
                         let lz = k as isize + 3;
                         let o = 3;
+                        let _2 = r64(2.);
+                        let _27 = r64(27.);
+                        let _270 = r64(270.);
                         // get a slice which gives us our matrix of central difference points
                         let l = phi.slice(s![lx - 3..lx + 4, ly - 3..ly + 4, lz - 3..lz + 4]);
                         // l can now be indexed with local offset `o` and modifiers
                         *work = v * w * w
                             - w
-                                * (2. * l[[o + 3, o, o]] - 27. * l[[o + 2, o, o]]
-                                    + 270. * l[[o + 1, o, o]]
-                                    + 270. * l[[o - 1, o, o]]
-                                    - 27. * l[[o - 2, o, o]]
-                                    + 2. * l[[o - 3, o, o]]
-                                    + 2. * l[[o, o + 3, o]]
-                                    - 27. * l[[o, o + 2, o]]
-                                    + 270. * l[[o, o + 1, o]]
-                                    + 270. * l[[o, o - 1, o]]
-                                    - 27. * l[[o, o - 2, o]]
-                                    + 2. * l[[o, o - 3, o]]
-                                    + 2. * l[[o, o, o + 3]]
-                                    - 27. * l[[o, o, o + 2]]
-                                    + 270. * l[[o, o, o + 1]]
-                                    + 270. * l[[o, o, o - 1]]
-                                    - 27. * l[[o, o, o - 2]]
-                                    + 2. * l[[o, o, o - 3]]
-                                    - 1470. * w) / denominator;
+                                * (_2 * l[[o + 3, o, o]] - _27 * l[[o + 2, o, o]]
+                                    + _270 * l[[o + 1, o, o]]
+                                    + _270 * l[[o - 1, o, o]]
+                                    - _27 * l[[o - 2, o, o]]
+                                    + _2 * l[[o - 3, o, o]]
+                                    + _2 * l[[o, o + 3, o]]
+                                    - _27 * l[[o, o + 2, o]]
+                                    + _270 * l[[o, o + 1, o]]
+                                    + _270 * l[[o, o - 1, o]]
+                                    - _27 * l[[o, o - 2, o]]
+                                    + _2 * l[[o, o - 3, o]]
+                                    + _2 * l[[o, o, o + 3]]
+                                    - _27 * l[[o, o, o + 2]]
+                                    + _270 * l[[o, o, o + 1]]
+                                    + _270 * l[[o, o, o - 1]]
+                                    - _27 * l[[o, o, o - 2]]
+                                    + _2 * l[[o, o, o - 3]]
+                                    - r64(1470.) * w) / denominator;
                     },
                 );
             }
         }
         // Sum result for total energy.
-        work.into_par_iter().sum()
+        r64(work.into_par_iter().map(|i| i.raw()).sum())
     };
     let norm2 = phi_work.into_par_iter().map(|&el| el * el).sum();
     let v_infinity = {
@@ -407,13 +414,13 @@ fn compute_observables(config: &Config, potentials: &Potentials, phi: &Array3<R6
                     .par_apply(|work, &w, &potsub| {
                         *work = w * w * potsub;
                     });
-                work.into_par_iter().sum()
+                work.into_par_iter().map(|i| i.raw()).sum()
             }
             (None, Some(potsub)) => {
                 Zip::from(&mut work).and(phi_work).par_apply(|work, &w| {
                     *work = w * w * potsub;
                 });
-                work.into_par_iter().sum()
+                work.into_par_iter().map(|i| i.raw()).sum()
             }
             _ => 0.,
         }
@@ -426,14 +433,14 @@ fn compute_observables(config: &Config, potentials: &Potentials, phi: &Array3<R6
                 let r2 = potential::calculate_r2(&idx, &config.grid);
                 *work = w * w * r2;
             });
-        work.into_par_iter().sum()
+        work.into_par_iter().map(|i| i.raw()).sum()
     };
 
     Observables {
         energy: energy,
         norm2: norm2,
-        v_infinity: v_infinity,
-        r2: r2,
+        v_infinity: r64(v_infinity),
+        r2: r64(r2),
     }
 }
 
@@ -477,7 +484,7 @@ fn orthogonalise_wavefunction(wnum: u8, w: &mut Array3<R64>, w_store: &[Array3<R
             .and(lower)
             .and(w.view())
             .par_apply(|overlap, &lower, &w| *overlap = lower * w);
-        let overlap_sum: f64 = overlap.into_par_iter().sum();
+        let overlap_sum: f64 = overlap.into_par_iter().map(|i| i.raw()).sum();
         Zip::from(w.view_mut())
             .and(lower)
             .par_apply(|w, &lower| *w -= lower * overlap_sum);
@@ -559,7 +566,7 @@ fn evolve(
             //TODO: We don't have any complex conjugation here.
             match config.central_difference {
                 CentralDifference::ThreePoint => {
-                    let denominator = 2. * config.grid.dn * config.grid.dn * config.mass;
+                    let denominator = r64(2.) * config.grid.dn * config.grid.dn * config.mass;
                     Zip::indexed(&mut work).and(pa).and(pb).and(w).par_apply(
                         |(i, j, k), work, &pa, &pb, &w| {
                             // Offset indexes as we are already in a slice
@@ -576,12 +583,12 @@ fn evolve(
                                         + l[[o, o - 1, o]]
                                         + l[[o, o, o + 1]]
                                         + l[[o, o, o - 1]]
-                                        - 6. * w) / denominator;
+                                        - r64(6.) * w) / denominator;
                         },
                     );
                 }
                 CentralDifference::FivePoint => {
-                    let denominator = 24. * config.grid.dn * config.grid.dn * config.mass;
+                    let denominator = r64(24.) * config.grid.dn * config.grid.dn * config.mass;
                     Zip::indexed(&mut work).and(pa).and(pb).and(w).par_apply(
                         |(i, j, k), work, &pa, &pb, &w| {
                             // Offset indexes as we are already in a slice
@@ -589,28 +596,29 @@ fn evolve(
                             let ly = j as isize + 2;
                             let lz = k as isize + 2;
                             let o = 2;
+                            let _16 = r64(16.);
                             // get a slice which gives us our matrix of central difference points
                             let l = phi.slice(s![lx - 2..lx + 3, ly - 2..ly + 3, lz - 2..lz + 3]);
                             // l can now be indexed with local offset `o` and modifiers
                             *work = w * pa
                                 + pb * config.grid.dt
-                                    * (-l[[o + 2, o, o]] + 16. * l[[o + 1, o, o]]
-                                        + 16. * l[[o - 1, o, o]]
+                                    * (-l[[o + 2, o, o]] + _16 * l[[o + 1, o, o]]
+                                        + _16 * l[[o - 1, o, o]]
                                         - l[[o - 2, o, o]]
                                         - l[[o, o + 2, o]]
-                                        + 16. * l[[o, o + 1, o]]
-                                        + 16. * l[[o, o - 1, o]]
+                                        + _16 * l[[o, o + 1, o]]
+                                        + _16 * l[[o, o - 1, o]]
                                         - l[[o, o - 2, o]]
                                         - l[[o, o, o + 2]]
-                                        + 16. * l[[o, o, o + 1]]
-                                        + 16. * l[[o, o, o - 1]]
+                                        + _16 * l[[o, o, o + 1]]
+                                        + _16 * l[[o, o, o - 1]]
                                         - l[[o, o, o - 2]]
-                                        - 90. * w) / denominator;
+                                        - r64(90.) * w) / denominator;
                         },
                     );
                 }
                 CentralDifference::SevenPoint => {
-                    let denominator = 360. * config.grid.dn * config.grid.dn * config.mass;
+                    let denominator = r64(360.) * config.grid.dn * config.grid.dn * config.mass;
                     Zip::indexed(&mut work).and(pa).and(pb).and(w).par_apply(
                         |(i, j, k), work, &pa, &pb, &w| {
                             // Offset indexes as we are already in a slice
@@ -618,29 +626,32 @@ fn evolve(
                             let ly = j as isize + 3;
                             let lz = k as isize + 3;
                             let o = 3;
+                            let _2 = r64(2.);
+                            let _27 = r64(27.);
+                            let _270 = r64(270.);
                             // get a slice which gives us our matrix of central difference points
                             let l = phi.slice(s![lx - 3..lx + 4, ly - 3..ly + 4, lz - 3..lz + 4]);
                             // l can now be indexed with local offset `o` and modifiers
                             *work = w * pa
                                 + pb * config.grid.dt
-                                    * (2. * l[[o + 3, o, o]] - 27. * l[[o + 2, o, o]]
-                                        + 270. * l[[o + 1, o, o]]
-                                        + 270. * l[[o - 1, o, o]]
-                                        - 27. * l[[o - 2, o, o]]
-                                        + 2. * l[[o - 3, o, o]]
-                                        + 2. * l[[o, o + 3, o]]
-                                        - 27. * l[[o, o + 2, o]]
-                                        + 270. * l[[o, o + 1, o]]
-                                        + 270. * l[[o, o - 1, o]]
-                                        - 27. * l[[o, o - 2, o]]
-                                        + 2. * l[[o, o - 3, o]]
-                                        + 2. * l[[o, o, o + 3]]
-                                        - 27. * l[[o, o, o + 2]]
-                                        + 270. * l[[o, o, o + 1]]
-                                        + 270. * l[[o, o, o - 1]]
-                                        - 27. * l[[o, o, o - 2]]
-                                        + 2. * l[[o, o, o - 3]]
-                                        - 1470. * w)
+                                    * (_2 * l[[o + 3, o, o]] - _27 * l[[o + 2, o, o]]
+                                        + _270 * l[[o + 1, o, o]]
+                                        + _270 * l[[o - 1, o, o]]
+                                        - _27 * l[[o - 2, o, o]]
+                                        + _2 * l[[o - 3, o, o]]
+                                        + _2 * l[[o, o + 3, o]]
+                                        - _27 * l[[o, o + 2, o]]
+                                        + _270 * l[[o, o + 1, o]]
+                                        + _270 * l[[o, o - 1, o]]
+                                        - _27 * l[[o, o - 2, o]]
+                                        + _2 * l[[o, o - 3, o]]
+                                        + _2 * l[[o, o, o + 3]]
+                                        - _27 * l[[o, o, o + 2]]
+                                        + _270 * l[[o, o, o + 1]]
+                                        + _270 * l[[o, o, o - 1]]
+                                        - _27 * l[[o, o, o - 2]]
+                                        + _2 * l[[o, o, o - 3]]
+                                        - r64(1470.) * w)
                                     / denominator;
                         },
                     );
@@ -694,19 +705,19 @@ mod tests {
 
     #[test]
     fn gram_schmidt() {
-        let ground = Array3::<R64>::from_shape_fn((2, 2, 2), |(i, j, k)| (i + j + k) as f64);
+        let ground = Array3::<R64>::from_shape_fn((2, 2, 2), |(i, j, k)| r64((i + j + k) as f64));
         let w_store: Vec<Array3<R64>> = vec![ground];
 
         let mut test = Array3::<R64>::from_shape_fn((2, 2, 2), |(i, j, k)| {
             let (fi, fj, fk) = (i as f64, j as f64, k as f64);
-            -fi - fj - fk
+            r64(-fi - fj - fk)
         });
         orthogonalise_wavefunction(1, &mut test, &w_store);
 
         let compare =
-            Array3::<R64>::from_shape_vec((2, 2, 2), vec![0., 23., 23., 46., 23., 46., 46., 69.])
+            Array3::<R64>::from_shape_vec((2, 2, 2), vec![r64(0.), r64(23.), r64(23.), r64(46.), r64(23.), r64(46.), r64(46.), r64(69.)])
                 .unwrap();
-        assert!(compare.all_close(&test, 0.01));
+        assert!(compare.all_close(&test, r64(0.01)));
     }
 
     #[test]
@@ -724,41 +735,41 @@ mod tests {
         let mut test = Array3::<R64>::zeros((5, 8, 7));
         let dims = {
             let mut work = get_mut_work_area(&mut test, 1);
-            work.fill(1.);
+            work.fill(r64(1.));
             work.dim()
         };
 
         let compare = Array3::<R64>::from_shape_fn((5, 8, 7), |(i, j, k)| {
             if (i == 0 || i == 4) || (j == 0 || j == 7) || (k == 0 || k == 6) {
-                0.
+                r64(0.)
             } else {
-                1.
+                r64(1.)
             }
         });
         assert_eq!(dims.0, 3);
         assert_eq!(dims.1, 6);
         assert_eq!(dims.2, 5);
-        assert!(compare.all_close(&test, 0.01));
+        assert!(compare.all_close(&test, r64(0.01)));
     }
 
     #[test]
     fn norm2() {
-        let test = Array3::<R64>::from_shape_fn((5, 8, 7), |(i, j, k)| (i * j * k) as R64);
+        let test = Array3::<R64>::from_shape_fn((5, 8, 7), |(i, j, k)| r64((i * j * k) as f64));
         let work = get_work_area(&test, 1);
         let result = get_norm_squared(&work);
-        assert_approx_eq!(result, 70070.);
+        assert_approx_eq!(result, r64(70070.));
     }
 
     #[test]
     fn wfn_normalise() {
         let normalised = Array3::<R64>::from_shape_fn((3, 2, 5), |(i, j, k)| {
-            let norm = 1.1091;
-            ((i * j * k) as f64) / norm
+            let norm = r64(1.1091);
+            r64((i * j * k) as f64) / norm
         });
 
-        let mut test = Array3::<R64>::from_shape_fn((3, 2, 5), |(i, j, k)| (i * j * k) as f64);
-        normalise_wavefunction(&mut test, 1.23);
+        let mut test = Array3::<R64>::from_shape_fn((3, 2, 5), |(i, j, k)| r64((i * j * k) as f64));
+        normalise_wavefunction(&mut test, r64(1.23));
 
-        assert!(test.all_close(&normalised, 0.01));
+        assert!(test.all_close(&normalised, r64(0.01)));
     }
 }

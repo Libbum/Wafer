@@ -261,7 +261,7 @@ fn potential(config: &Config, idx: &Index3) -> Result<R64> {
             let xi: f64 = 0.0; //TODO: This should be an optional parameter for FullCornell only
             let dz = r64(idx.z as f64 - (config.grid.size.z as f64 + 1.) / 2.);
             let r = config.grid.dn * (calculate_r2(idx, &config.grid)).sqrt();
-            let md = mu(t)
+            let md = r64(mu(t))
                 * (r64(1.)
                     + r64(0.07 * xi.powf(0.2))
                         * (r64(1.) - config.grid.dn * config.grid.dn * dz * dz / (r * r)))
@@ -333,7 +333,7 @@ pub fn potential_sub_idx(config: &Config, idx: &Index3) -> Result<R64> {
             let r = config.grid.dn * calculate_r2(idx, &config.grid).sqrt();
             let t = 1.0; //TODO: This should be an optional parameter for FullCornell only
             let xi: f64 = 0.0; //TODO: This should be an optional parameter for FullCornell only
-            let md = mu(t)
+            let md = r64(mu(t))
                 * r64(1.)
                     + r64(0.07 * xi.powf(0.2))
                         * (r64(1.) - config.grid.dn * config.grid.dn * dz * dz / (r * r))
@@ -393,10 +393,10 @@ fn alphas(mu: f64) -> f64 {
 }
 
 /// Debye screening mass. Used for Cornell potentials.
-fn mu(t: f64) -> R64 {
+fn mu(t: f64) -> f64 {
     let nf = 2.0; //TODO: This should be an optional parameter for FullCornell only
     let tc = 0.2; //TODO: This should be an optional parameter for FullCornell only
-    r64(1.4 * (1. + nf / 6.) * 4. * PI * alphas(2. * PI * t).sqrt() * t * tc)
+    1.4 * ((1. + nf / 6.) * 4. * PI * alphas(2. * PI * t)).sqrt() * t * tc
 }
 
 #[cfg(test)]
@@ -427,8 +427,8 @@ mod tests {
     fn distance_squared() {
         let grid = Grid {
             size: Index3 { x: 5, y: 6, z: 3 },
-            dn: 0.1,
-            dt: 3e-5,
+            dn: r64(0.1),
+            dt: r64(3e-5),
         };
         let idx = Index3 { x: 3, y: 3, z: 3 };
         assert_approx_eq!(calculate_r2(&idx, &grid), 1.25);
@@ -436,12 +436,12 @@ mod tests {
 
     #[test]
     fn running_coupling() {
-        let md = r64(3.2);
+        let md = 3.2;
         assert_approx_eq!(alphas(md), 6.189593433886306, 1e-14);
     }
     #[test]
     fn debye_screening_mass() {
-        let t = r64(5.2);
+        let t = 5.2;
         assert_approx_eq!(mu(t), 2.604838027702063, 1e-14);
     }
 }

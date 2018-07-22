@@ -777,10 +777,10 @@ mod tests {
     fn output_observables() {
         let observables = ObservablesOutput {
             state: 1,
-            energy: 4.0,
-            binding_energy: 0.0,
-            r: 1.2,
-            l_r: 0.3,
+            energy: r64(4.0),
+            binding_energy: r64(0.0),
+            r: r64(1.2),
+            l_r: r64(0.3),
         };
         let project = "test";
         // create a dummy output directory.
@@ -798,11 +798,11 @@ mod tests {
     fn output_potential_sub() {
         let arr = Array3::zeros((2, 2, 2));
 
-        assert!(write_sub_mpk(&None, Some(213.0), "test.mpk").is_ok());
-        assert!(write_sub_csv(&None, Some(21.0), "test.csv").is_ok());
-        assert!(write_sub_yaml(&None, Some(24.8), "test.yaml").is_ok());
-        assert!(write_sub_json(&None, Some(29.1), "test.json").is_ok());
-        assert!(write_sub_ron(&None, Some(94.32), "test.ron").is_ok());
+        assert!(write_sub_mpk(&None, Some(r64(213.0)), "test.mpk").is_ok());
+        assert!(write_sub_csv(&None, Some(r64(21.0)), "test.csv").is_ok());
+        assert!(write_sub_yaml(&None, Some(r64(24.8)), "test.yaml").is_ok());
+        assert!(write_sub_json(&None, Some(r64(29.1)), "test.json").is_ok());
+        assert!(write_sub_ron(&None, Some(r64(94.32)), "test.ron").is_ok());
 
         assert!(write_sub_mpk(&Some(arr.view()), None, "test.mpk").is_ok());
         assert!(write_sub_csv(&Some(arr.view()), None, "test.csv").is_ok());
