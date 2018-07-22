@@ -1,20 +1,20 @@
+use config::{Config, FileType, Grid};
 use csv;
+use errors::*;
+use grid;
+use ndarray::{Array1, Array3, ArrayViewMut3, Axis, Zip};
+use ndarray_parallel::prelude::*;
+use potential::PotentialSubSingle;
+use rmps;
 use ron::de::from_reader as ron_reader;
+use serde_json;
+use serde_yaml;
 use slog::Logger;
 use std::fs::{create_dir, File};
+use std::io::prelude::*;
 use std::path::Path;
 use noisy_float::prelude::*;
 use std::process::{Command, Stdio};
-use std::io::prelude::*;
-use serde_json;
-use serde_yaml;
-use rmps;
-use ndarray::{Array1, Array3, ArrayViewMut3, Axis, Zip};
-use ndarray_parallel::prelude::*;
-use grid;
-use potential::PotentialSubSingle;
-use config::{Config, FileType, Grid};
-use errors::*;
 
 #[derive(Debug, Deserialize)]
 /// A simple struct to parse data from a plain csv file
@@ -89,22 +89,22 @@ pub fn potential(
             file_type
         );
         match *file_type {
-            FileType::Messagepack => read_mpk(mpk_file.unwrap(), target_size, bb, log),
-            FileType::Csv => read_csv(csv_file.unwrap(), target_size, bb, log),
-            FileType::Json => read_json(json_file.unwrap(), target_size, bb, log),
-            FileType::Yaml => read_yaml(yaml_file.unwrap(), target_size, bb, log),
-            FileType::Ron => read_ron(ron_file.unwrap(), target_size, bb, log),
+            FileType::Messagepack => read_mpk(&mpk_file.unwrap(), target_size, bb, log),
+            FileType::Csv => read_csv(&csv_file.unwrap(), target_size, bb, log),
+            FileType::Json => read_json(&json_file.unwrap(), target_size, bb, log),
+            FileType::Yaml => read_yaml(&yaml_file.unwrap(), target_size, bb, log),
+            FileType::Ron => read_ron(&ron_file.unwrap(), target_size, bb, log),
         }
     } else if mpk_file.is_some() {
-        read_mpk(mpk_file.unwrap(), target_size, bb, log)
+        read_mpk(&mpk_file.unwrap(), target_size, bb, log)
     } else if csv_file.is_some() {
-        read_csv(csv_file.unwrap(), target_size, bb, log)
+        read_csv(&csv_file.unwrap(), target_size, bb, log)
     } else if json_file.is_some() {
-        read_json(json_file.unwrap(), target_size, bb, log)
+        read_json(&json_file.unwrap(), target_size, bb, log)
     } else if yaml_file.is_some() {
-        read_yaml(yaml_file.unwrap(), target_size, bb, log)
+        read_yaml(&yaml_file.unwrap(), target_size, bb, log)
     } else if ron_file.is_some() {
-        read_ron(ron_file.unwrap(), target_size, bb, log)
+        read_ron(&ron_file.unwrap(), target_size, bb, log)
     } else {
         Err(ErrorKind::FileNotFound("input/potential.*".to_string()).into())
     }
@@ -112,7 +112,7 @@ pub fn potential(
 
 /// Loads an array from a mpk file on disk.
 fn read_mpk(file: String, target_size: [usize; 3], bb: usize, log: &Logger) -> Result<Array3<R64>> {
-    let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.clone()))?;
+    let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.to_string()))?;
     let data: Array3<R64> = rmps::decode::from_read(reader).chain_err(|| ErrorKind::Deserialize)?;
 
     Ok(fill_data(&file, &data, target_size, bb, log))
@@ -120,12 +120,12 @@ fn read_mpk(file: String, target_size: [usize; 3], bb: usize, log: &Logger) -> R
 
 /// Loads an array from a json file on disk.
 fn read_json(
-    file: String,
+    file: &str,
     target_size: [usize; 3],
     bb: usize,
     log: &Logger,
 ) -> Result<Array3<R64>> {
-    let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.clone()))?;
+    let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.to_string()))?;
     let data: Array3<R64> = serde_json::from_reader(reader).chain_err(|| ErrorKind::Deserialize)?;
 
     Ok(fill_data(&file, &data, target_size, bb, log))
@@ -133,12 +133,12 @@ fn read_json(
 
 /// Loads an array from a yaml file on disk.
 fn read_yaml(
-    file: String,
+    file: &str,
     target_size: [usize; 3],
     bb: usize,
     log: &Logger,
 ) -> Result<Array3<R64>> {
-    let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.clone()))?;
+    let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.to_string()))?;
     let data: Array3<R64> = serde_yaml::from_reader(reader).chain_err(|| ErrorKind::Deserialize)?;
 
     Ok(fill_data(&file, &data, target_size, bb, log))
@@ -146,7 +146,7 @@ fn read_yaml(
 
 /// Loads an array from a ron file on disk.
 fn read_ron(file: String, target_size: [usize; 3], bb: usize, log: &Logger) -> Result<Array3<R64>> {
-    let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.clone()))?;
+    let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.to_string()))?;
     let data: Array3<R64> = ron_reader(reader).chain_err(|| ErrorKind::Deserialize)?;
 
     Ok(fill_data(&file, &data, target_size, bb, log))
@@ -288,22 +288,22 @@ pub fn potential_sub(
             file_type
         );
         match *file_type {
-            FileType::Messagepack => read_sub_mpk(mpk_file.unwrap(), target_size, log),
-            FileType::Csv => read_sub_csv(csv_file.unwrap(), target_size, log),
-            FileType::Json => read_sub_json(json_file.unwrap(), target_size, log),
-            FileType::Yaml => read_sub_yaml(yaml_file.unwrap(), target_size, log),
-            FileType::Ron => read_sub_ron(ron_file.unwrap(), target_size, log),
+            FileType::Messagepack => read_sub_mpk(&mpk_file.unwrap(), target_size, log),
+            FileType::Csv => read_sub_csv(&csv_file.unwrap(), target_size, log),
+            FileType::Json => read_sub_json(&json_file.unwrap(), target_size, log),
+            FileType::Yaml => read_sub_yaml(&yaml_file.unwrap(), target_size, log),
+            FileType::Ron => read_sub_ron(&ron_file.unwrap(), target_size, log),
         }
     } else if mpk_file.is_some() {
-        read_sub_mpk(mpk_file.unwrap(), target_size, log)
+        read_sub_mpk(&mpk_file.unwrap(), target_size, log)
     } else if csv_file.is_some() {
-        read_sub_csv(csv_file.unwrap(), target_size, log)
+        read_sub_csv(&csv_file.unwrap(), target_size, log)
     } else if json_file.is_some() {
-        read_sub_json(json_file.unwrap(), target_size, log)
+        read_sub_json(&json_file.unwrap(), target_size, log)
     } else if yaml_file.is_some() {
-        read_sub_yaml(yaml_file.unwrap(), target_size, log)
+        read_sub_yaml(&yaml_file.unwrap(), target_size, log)
     } else if ron_file.is_some() {
-        read_sub_ron(ron_file.unwrap(), target_size, log)
+        read_sub_ron(&ron_file.unwrap(), target_size, log)
     } else {
         //No data, potential_sub can be calculated instead
         Err(ErrorKind::FileNotFound("input/potential_sub.*".to_string()).into())
@@ -312,21 +312,20 @@ pub fn potential_sub(
 
 /// Loads a potential_sub value or array from a messagepack file on disk.
 fn read_sub_mpk(
-    file: String,
+    file: &str,
     target_size: [usize; 3],
     log: &Logger,
 ) -> Result<(Option<Array3<R64>>, Option<R64>)> {
-    let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.clone()))?;
-    let full_data: Array3<R64> = match rmps::decode::from_read(reader) {
-        Ok(data) => data,
-        Err(_) => {
-            // We didn't match on a full array, so try a single value
-            let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.clone()))?;
-            let single_data: PotentialSubSingle =
-                rmps::decode::from_read(reader).chain_err(|| ErrorKind::Deserialize)?;
+    let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.to_string()))?;
+    let full_data: Array3<R64> = if let Ok(data) = rmps::decode::from_read(reader) {
+        data
+    } else {
+        // We didn't match on a full array, so try a single value
+        let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.to_string()))?;
+        let single_data: PotentialSubSingle =
+            rmps::decode::from_read(reader).chain_err(|| ErrorKind::Deserialize)?;
 
-            return Ok((None, Some(single_data.pot_sub)));
-        }
+        return Ok((None, Some(single_data.pot_sub)));
     };
 
     fill_sub_data(full_data, target_size, log)
@@ -334,14 +333,14 @@ fn read_sub_mpk(
 
 /// Loads a potential_sub value or array from a csv file on disk.
 fn read_sub_csv(
-    file: String,
+    file: &str,
     target_size: [usize; 3],
     log: &Logger,
 ) -> Result<(Option<Array3<R64>>, Option<R64>)> {
     let mut rdr = csv::ReaderBuilder::new()
         .has_headers(false)
         .from_path(&file)
-        .chain_err(|| ErrorKind::ReadFile(file.clone()))?;
+        .chain_err(|| ErrorKind::ReadFile(file.to_string()))?;
     let mut max_i = 0;
     let mut max_j = 0;
     let mut max_k = 0;
@@ -350,24 +349,24 @@ fn read_sub_csv(
     // Check the first entry separately. If it contains a PlainRecord, then
     // continue looping.
     if let Some(result) = rdr_iter.next() {
-        let record: PlainRecord = match result {
-            Ok(r) => r,
-            Err(_) => {
-                // We didn't match on a full array, so try a single value.
-                // No need to invoke a csv parser here, it's just a number
-                // we can import directly.
-                let mut buffer =
-                    File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.clone()))?;
-                let mut data = String::new();
-                buffer
-                    .read_to_string(&mut data)
-                    .chain_err(|| ErrorKind::ReadFile(file.clone()))?;
-                let single_data = data.trim()
-                    .parse::<f64>()
-                    .chain_err(|| ErrorKind::ParseFloat)?;
+        let record: PlainRecord = if let Ok(r) = result {
+            r
+        } else {
+            // We didn't match on a full array, so try a single value.
+            // No need to invoke a csv parser here, it's just a number
+            // we can import directly.
+            let mut buffer =
+                File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.to_string()))?;
+            let mut data = String::new();
+            buffer
+                .read_to_string(&mut data)
+                .chain_err(|| ErrorKind::ReadFile(file.to_string()))?;
+            let single_data = data
+                .trim()
+                .parse::<f64>()
+                .chain_err(|| ErrorKind::ParseFloat)?;
 
-                return Ok((None, Some(r64(single_data))));
-            }
+            return Ok((None, Some(r64(single_data))));
         };
         max_i = record.i;
         max_j = record.j;
@@ -375,7 +374,7 @@ fn read_sub_csv(
         data.push(record.data);
     };
     for result in rdr_iter {
-        let record: PlainRecord = result.chain_err(|| ErrorKind::ParsePlainRecord(file.clone()))?;
+        let record: PlainRecord = result.chain_err(|| ErrorKind::ParsePlainRecord(file.to_string()))?;
         if record.i > max_i {
             max_i = record.i
         };
@@ -399,21 +398,20 @@ fn read_sub_csv(
 
 /// Loads a potential_sub value or array from a json file on disk.
 fn read_sub_json(
-    file: String,
+    file: &str,
     target_size: [usize; 3],
     log: &Logger,
 ) -> Result<(Option<Array3<R64>>, Option<R64>)> {
-    let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.clone()))?;
-    let full_data: Array3<R64> = match serde_json::from_reader(reader) {
-        Ok(data) => data,
-        Err(_) => {
-            // We didn't match on a full array, so try a single value
-            let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.clone()))?;
-            let single_data: PotentialSubSingle =
-                serde_json::from_reader(reader).chain_err(|| ErrorKind::Deserialize)?;
+    let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.to_string()))?;
+    let full_data: Array3<R64> = if let Ok(data) = serde_json::from_reader(reader) {
+        data
+    } else {
+        // We didn't match on a full array, so try a single value
+        let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.to_string()))?;
+        let single_data: PotentialSubSingle =
+            serde_json::from_reader(reader).chain_err(|| ErrorKind::Deserialize)?;
 
-            return Ok((None, Some(single_data.pot_sub)));
-        }
+        return Ok((None, Some(single_data.pot_sub)));
     };
 
     fill_sub_data(full_data, target_size, log)
@@ -421,21 +419,20 @@ fn read_sub_json(
 
 /// Loads a potential_sub value or array from a yaml file on disk.
 fn read_sub_yaml(
-    file: String,
+    file: &str,
     target_size: [usize; 3],
     log: &Logger,
 ) -> Result<(Option<Array3<R64>>, Option<R64>)> {
-    let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.clone()))?;
-    let full_data: Array3<R64> = match serde_yaml::from_reader(reader) {
-        Ok(data) => data,
-        Err(_) => {
-            // We didn't match on a full array, so try a single value
-            let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.clone()))?;
-            let single_data: PotentialSubSingle =
-                serde_yaml::from_reader(reader).chain_err(|| ErrorKind::Deserialize)?;
+    let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.to_string()))?;
+    let full_data: Array3<R64> = if let Ok(data) = serde_yaml::from_reader(reader) {
+        data
+    } else {
+        // We didn't match on a full array, so try a single value
+        let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.to_string()))?;
+        let single_data: PotentialSubSingle =
+            serde_yaml::from_reader(reader).chain_err(|| ErrorKind::Deserialize)?;
 
-            return Ok((None, Some(single_data.pot_sub)));
-        }
+        return Ok((None, Some(single_data.pot_sub)));
     };
 
     fill_sub_data(full_data, target_size, log)
@@ -443,21 +440,20 @@ fn read_sub_yaml(
 
 /// Loads a potential_sub value or array from a ron file on disk.
 fn read_sub_ron(
-    file: String,
+    file: &str,
     target_size: [usize; 3],
     log: &Logger,
 ) -> Result<(Option<Array3<R64>>, Option<R64>)> {
-    let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.clone()))?;
-    let full_data: Array3<R64> = match ron_reader(reader) {
-        Ok(data) => data,
-        Err(_) => {
-            // We didn't match on a full array, so try a single value
-            let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.clone()))?;
-            let single_data: PotentialSubSingle =
-                ron_reader(reader).chain_err(|| ErrorKind::Deserialize)?;
+    let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.to_string()))?;
+    let full_data: Array3<R64> = if let Ok(data) = ron_reader(reader) {
+        data
+    } else {
+        // We didn't match on a full array, so try a single value
+        let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.to_string()))?;
+        let single_data: PotentialSubSingle =
+            ron_reader(reader).chain_err(|| ErrorKind::Deserialize)?;
 
-            return Ok((None, Some(single_data.pot_sub)));
-        }
+        return Ok((None, Some(single_data.pot_sub)));
     };
 
     fill_sub_data(full_data, target_size, log)
@@ -568,22 +564,22 @@ pub fn wavefunction(
               wnum,
               file_type);
         match *file_type {
-            FileType::Messagepack => read_mpk(mpk_file.unwrap(), target_size, bb, log),
-            FileType::Csv => read_csv(csv_file.unwrap(), target_size, bb, log),
-            FileType::Json => read_json(json_file.unwrap(), target_size, bb, log),
-            FileType::Yaml => read_yaml(yaml_file.unwrap(), target_size, bb, log),
-            FileType::Ron => read_ron(ron_file.unwrap(), target_size, bb, log),
+            FileType::Messagepack => read_mpk(&mpk_file.unwrap(), target_size, bb, log),
+            FileType::Csv => read_csv(&csv_file.unwrap(), target_size, bb, log),
+            FileType::Json => read_json(&json_file.unwrap(), target_size, bb, log),
+            FileType::Yaml => read_yaml(&yaml_file.unwrap(), target_size, bb, log),
+            FileType::Ron => read_ron(&ron_file.unwrap(), target_size, bb, log),
         }
     } else if mpk_file.is_some() {
-        read_mpk(mpk_file.unwrap(), target_size, bb, log)
+        read_mpk(&mpk_file.unwrap(), target_size, bb, log)
     } else if csv_file.is_some() {
-        read_csv(csv_file.unwrap(), target_size, bb, log)
+        read_csv(&csv_file.unwrap(), target_size, bb, log)
     } else if json_file.is_some() {
-        read_json(json_file.unwrap(), target_size, bb, log)
+        read_json(&json_file.unwrap(), target_size, bb, log)
     } else if yaml_file.is_some() {
-        read_yaml(yaml_file.unwrap(), target_size, bb, log)
+        read_yaml(&yaml_file.unwrap(), target_size, bb, log)
     } else if ron_file.is_some() {
-        read_ron(ron_file.unwrap(), target_size, bb, log)
+        read_ron(&ron_file.unwrap(), target_size, bb, log)
     } else {
         let missing = format!("input/wavefunction_{}*.*", wnum);
         Err(ErrorKind::FileNotFound(missing.to_string()).into())
@@ -617,12 +613,12 @@ pub fn check_input_dir() -> Result<()> {
 ///
 /// * A 3D array loaded with data from the file and resampled/interpolated if required.
 /// If something goes wrong in the parsing or file handling, a `csv::Error` is passed.
-fn read_csv(file: String, target_size: [usize; 3], bb: usize, log: &Logger) -> Result<Array3<R64>> {
+fn read_csv(file: &str, target_size: [usize; 3], bb: usize, log: &Logger) -> Result<Array3<R64>> {
     let parse_file = &file.to_owned();
     let mut rdr = csv::ReaderBuilder::new()
         .has_headers(false)
         .from_path(&file)
-        .chain_err(|| ErrorKind::CreateFile(file.clone()))?;
+        .chain_err(|| ErrorKind::CreateFile(file.to_string()))?;
     let mut max_i = 0;
     let mut max_j = 0;
     let mut max_k = 0;

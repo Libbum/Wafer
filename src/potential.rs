@@ -2,14 +2,14 @@ use ndarray::{Array3, Zip};
 use ndarray_parallel::prelude::*;
 use noisy_float::prelude::*;
 use slog::Logger;
-use std::f64::MAX;
 use std::f64::consts::PI;
+use std::f64::MAX;
 
 use config::{Config, Grid, Index3, PotentialType};
+use errors::*;
+use grid;
 use input;
 use output;
-use grid;
-use errors::*;
 
 #[derive(Debug)]
 /// Holds the potential arrays for the current simulation.
@@ -120,12 +120,14 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials> {
     let pot_sub = if let Ok(pot_sub_info) =
         input::potential_sub(sub_size, &config.output.file_type, log)
     {
-        if pot_sub_info.0.is_none() && pot_sub_info.1.is_some()
+        if pot_sub_info.0.is_none()
+            && pot_sub_info.1.is_some()
             && config.potential.variable_pot_sub()
         {
             error!(log, "Potential_sub input file contains a singular value, but potential type is FullCornell. Update or remove the potential file in the input directory before continuing.");
             return Err(ErrorKind::WrongPotentialSubDims.into());
-        } else if pot_sub_info.0.is_some() && pot_sub_info.1.is_none()
+        } else if pot_sub_info.0.is_some()
+            && pot_sub_info.1.is_none()
             && !config.potential.variable_pot_sub()
         {
             error!(log, "Potential_sub input file contains an array, but potential type is not FullCornell. Update or remove the potential file in the input directory before continuing.");
@@ -174,12 +176,7 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials> {
         }
     }
 
-    Ok(Potentials {
-        v: v,
-        a: a,
-        b: b,
-        pot_sub: pot_sub,
-    })
+    Ok(Potentials { v, a, b, pot_sub })
 }
 
 /// Generates a potential for the current simulation at a particular index point.
@@ -288,27 +285,29 @@ fn potential(config: &Config, idx: &Index3) -> Result<R64> {
             let x = dx / ((num.x as f64 - 1.) / 2.);
             let y = dy / ((num.y as f64 - 1.) / 2.);
             let z = dz / ((num.z as f64 - 1.) / 2.);
-            if 12.70820393249937 + 11.210068307552588 * x >= 14.674169922690343 * z
-                && 11.210068307552588 * x <= 12.70820393249937 + 14.674169922690343 * z
-                && 5.605034153776295 * (3.23606797749979 * x - 1.2360679774997896 * z)
-                    <= 6. * (4.23606797749979 + 5.23606797749979 * y)
-                && 18.1382715378281 * x + 3.464101615137755 * z <= 12.70820393249937
-                && 9.06913576891405 * x + 15.70820393249937 * y
-                    <= 12.70820393249937 + 3.464101615137755 * z
-                && 9.70820393249937 * y
-                    <= 12.70820393249937 + 5.605034153776294 * x + 14.674169922690343 * z
-                && 12.70820393249937 + 5.605034153776294 * x + 9.70820393249937 * y
-                    + 14.674169922690343 * z >= 0.
-                && 15.70820393249937 * y + 3.464101615137755 * z
-                    <= 12.70820393249937 + 9.06913576891405 * x
-                && 5.605034153776295 * (-6.47213595499958 * x - 1.2360679774997896 * z)
-                    <= 25.41640786499874
-                && 3.464101615137755 * z
-                    <= 9.06913576891405 * x + 3. * (4.23606797749979 + 5.23606797749979 * y)
-                && 1.7320508075688772 * (3.23606797749979 * x + 8.47213595499958 * z)
-                    <= 3. * (4.23606797749979 + 3.23606797749979 * y)
-                && 5.605034153776294 * x + 9.70820393249937 * y + 14.674169922690343 * z
-                    <= 12.70820393249937
+            if 12.708_203_932_499_37 + 11.210_068_307_552_588 * x >= 14.674_169_922_690_343 * z
+                && 11.210_068_307_552_588 * x <= 12.708_203_932_499_37 + 14.674_169_922_690_343 * z
+                && 5.605_034_153_776_295 * (3.236_067_977_499_79 * x - 1.236_067_977_499_789_6 * z)
+                    <= 6. * (4.236_067_977_499_79 + 5.236_067_977_499_79 * y)
+                && 18.138_271_537_828_1 * x + 3.464_101_615_137_755 * z <= 12.708_203_932_499_37
+                && 9.069_135_768_914_05 * x + 15.708_203_932_499_37 * y
+                    <= 12.708_203_932_499_37 + 3.464_101_615_137_755 * z
+                && 9.708_203_932_499_37 * y
+                    <= 12.708_203_932_499_37 + 5.605_034_153_776_294 * x + 14.674_169_922_690_343 * z
+                && 12.708_203_932_499_37
+                    + 5.605_034_153_776_294 * x
+                    + 9.708_203_932_499_37 * y
+                    + 14.674_169_922_690_343 * z >= 0.
+                && 15.708_203_932_499_37 * y + 3.464_101_615_137_755 * z
+                    <= 12.708_203_932_499_37 + 9.069_135_768_914_05 * x
+                && 5.605_034_153_776_295 * (-6.472_135_954_999_58 * x - 1.236_067_977_499_789_6 * z)
+                    <= 25.416_407_864_998_74
+                && 3.464_101_615_137_755 * z
+                    <= 9.069_135_768_914_05 * x + 3. * (4.236_067_977_499_79 + 5.236_067_977_499_79 * y)
+                && 1.732_050_807_568_877_2 * (3.236_067_977_499_79 * x + 8.472_135_954_999_58 * z)
+                    <= 3. * (4.236_067_977_499_79 + 3.236_067_977_499_79 * y)
+                && 5.605_034_153_776_294 * x + 9.708_203_932_499_37 * y + 14.674_169_922_690_343 * z
+                    <= 12.708_203_932_499_37
             {
                 Ok(r64(-100.))
             } else {
@@ -387,7 +386,9 @@ fn alphas(mu: f64) -> f64 {
 
     4. * PI
         * (1. - 2. * b1 * l.ln() / (b0 * b0 * l)
-            + 4. * b1 * b1
+            + 4.
+                * b1
+                * b1
                 * ((l.ln() - 0.5) * (l.ln() - 0.5) + b2 * b0 / (8. * b1 * b1) - 5.0 / 4.0)
                 / (b0 * b0 * b0 * b0 * l * l)) / (b0 * l)
 }
@@ -406,21 +407,31 @@ mod tests {
     //TODO: Build a test Config to throw in to functions.
 
     macro_rules! assert_approx_eq {
-    ($a:expr, $b:expr) => ({
-        let eps = 1.0e-6;
-        let (a, b) = (&$a, &$b);
-        assert!((*a - *b).abs() < eps,
+        ($a:expr, $b:expr) => {{
+            let eps = 1.0e-6;
+            let (a, b) = (&$a, &$b);
+            assert!(
+                (*a - *b).abs() < eps,
                 "assertion failed: `(left !== right)` \
-                           (left: `{:?}`, right: `{:?}`, expect diff: `{:?}`, real diff: `{:?}`)",
-                 *a, *b, eps, (*a - *b).abs());
-    });
-    ($a:expr, $b:expr, $eps:expr) => ({
-        let (a, b) = (&$a, &$b);
-        assert!((*a - *b).abs() < $eps,
+                 (left: `{:?}`, right: `{:?}`, expect diff: `{:?}`, real diff: `{:?}`)",
+                *a,
+                *b,
+                eps,
+                (*a - *b).abs()
+            );
+        }};
+        ($a:expr, $b:expr, $eps:expr) => {{
+            let (a, b) = (&$a, &$b);
+            assert!(
+                (*a - *b).abs() < $eps,
                 "assertion failed: `(left !== right)` \
-                           (left: `{:?}`, right: `{:?}`, expect diff: `{:?}`, real diff: `{:?}`)",
-                 *a, *b, $eps, (*a - *b).abs());
-    })
+                 (left: `{:?}`, right: `{:?}`, expect diff: `{:?}`, real diff: `{:?}`)",
+                *a,
+                *b,
+                $eps,
+                (*a - *b).abs()
+            );
+        }};
     }
 
     #[test]

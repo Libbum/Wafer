@@ -5,21 +5,21 @@ use ndarray::{Array3, ArrayView3, Zip};
 use ndarray_parallel::prelude::ParApply2;
 use ordinal::Ordinal;
 use rayon;
+use rmps;
 use ron::ser::to_string_pretty as ron_string;
 use ron::ser::PrettyConfig;
 use serde::Serialize;
 use serde_json;
 use serde_yaml;
-use rmps;
 use std::fs::{copy, create_dir_all, remove_file, File};
 use std::io::prelude::*;
 use term_size;
 use yansi::Color::Blue;
 
-use grid;
-use potential::{self, PotentialSubSingle};
 use config::{Config, FileType, Index3};
 use errors::*;
+use grid;
+use potential::{self, PotentialSubSingle};
 
 lazy_static! {
     /// Date & time at which the simulation was started. Used as a unique identifier for
@@ -73,7 +73,7 @@ pub fn print_banner(sha: &str) {
         rayon::current_num_threads()
     );
     println!("              {}", Blue.paint("\\__/"));
-    println!("");
+    println!();
 }
 
 /// Handles the saving of potential data to disk.
@@ -153,9 +153,9 @@ fn write_csv(array: &ArrayView3<R64>, filename: &str) -> Result<()> {
     for ((i, j, k), data) in array.indexed_iter() {
         buffer
             .serialize(PlainRecord {
-                i: i,
-                j: j,
-                k: k,
+                i,
+                j,
+                k,
                 data: *data,
             })
             .chain_err(|| ErrorKind::Serialize)?;
@@ -267,15 +267,17 @@ fn write_sub_csv(
         .from_path(filename)
         .chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
     if single_sub.is_some() {
-        buffer.write_record(&[single_sub.unwrap().to_string()]).chain_err(|| ErrorKind::Serialize)?;
+        buffer
+            .write_record(&[single_sub.unwrap().to_string()])
+            .chain_err(|| ErrorKind::Serialize)?;
         buffer.flush().chain_err(|| ErrorKind::Flush)?;
     } else if full_sub.is_some() {
         for ((i, j, k), data) in full_sub.unwrap().indexed_iter() {
             buffer
                 .serialize(PlainRecord {
-                    i: i,
-                    j: j,
-                    k: k,
+                    i,
+                    j,
+                    k,
                     data: *data,
                 })
                 .chain_err(|| ErrorKind::Serialize)?;
@@ -421,7 +423,7 @@ pub fn print_observable_header(wnum: u8) {
     let width = *TERMWIDTH;
     let spacer = (width - 69) / 2;
     let col2 = 37; //Energy+rrms+1
-    println!("");
+    println!();
     if let 0 = wnum {
         println!(
             "{:═^lspace$}╤{:═^twidth$}╤{:═^w$}╤{:═^width$}╤{:═^rspace$}",
@@ -597,7 +599,7 @@ fn print_summary(output: &ObservablesOutput) {
     }
     println!("══▶ rᵣₘₛ = {}", output.r);
     println!("══▶ L/rᵣₘₛ = {}", output.l_r);
-    println!("");
+    println!();
 }
 
 /// Saves the observables to a messagepack binary file.

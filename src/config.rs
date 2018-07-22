@@ -1,15 +1,15 @@
+use errors::*;
+use input;
 use ndarray::{Array3, Zip};
 use ndarray_parallel::prelude::*;
 use noisy_float::prelude::*;
-use rand::distributions::{IndependentSample, Normal};
+use output;
 use rand;
+use rand::distributions::{Distribution, Normal};
+use serde_yaml;
 use slog::Logger;
 use std::fmt;
 use std::fs::File;
-use serde_yaml;
-use input;
-use output;
-use errors::*;
 
 /// Grid size information.
 #[derive(Serialize, Deserialize, Debug)]
@@ -106,21 +106,21 @@ pub enum PotentialType {
 impl PotentialType {
     /// Returns true if `potential_sub` has a non-constant response function
     pub fn variable_pot_sub(&self) -> bool {
-        match self {
-            &PotentialType::NoPotential |
-            &PotentialType::Cube |
-            &PotentialType::QuadWell |
-            &PotentialType::Periodic |
-            &PotentialType::Coulomb |
-            &PotentialType::ComplexCoulomb |
-            &PotentialType::Harmonic |
-            &PotentialType::ComplexHarmonic |
-            &PotentialType::Dodecahedron |
-            &PotentialType::FromScript |
-            &PotentialType::FromFile |
-            &PotentialType::ElipticalCoulomb |
-            &PotentialType::SimpleCornell => false,
-            &PotentialType::FullCornell => true,
+        match *self {
+            PotentialType::NoPotential
+            | PotentialType::Cube
+            | PotentialType::QuadWell
+            | PotentialType::Periodic
+            | PotentialType::Coulomb
+            | PotentialType::ComplexCoulomb
+            | PotentialType::Harmonic
+            | PotentialType::ComplexHarmonic
+            | PotentialType::Dodecahedron
+            | PotentialType::FromScript
+            | PotentialType::FromFile
+            | PotentialType::ElipticalCoulomb
+            | PotentialType::SimpleCornell => false,
+            PotentialType::FullCornell => true,
         }
     }
 }
@@ -637,7 +637,7 @@ fn generate_gaussian(config: &Config, init_size: [usize; 3]) -> Array3<R64> {
     let normal = Normal::new(0.0, config.sig);
     let mut w = Array3::<R64>::zeros(init_size);
 
-    w.par_map_inplace(|el| *el = r64(normal.ind_sample(&mut rand::thread_rng())));
+    w.par_map_inplace(|el| *el = r64(normal.sample(&mut rand::thread_rng())));
     w
 }
 

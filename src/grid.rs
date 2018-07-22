@@ -1,16 +1,16 @@
-use indicatif::{ProgressBar, ProgressStyle};
-use noisy_float::prelude::*;
-use ndarray::{Array3, ArrayView3, ArrayViewMut3, Zip};
-use ndarray_parallel::prelude::*;
-use slog::Logger;
-use std::f64::MAX;
 use config;
 use config::{CentralDifference, Config, Index3, InitialCondition};
+use errors::*;
+use indicatif::{ProgressBar, ProgressStyle};
+use noisy_float::prelude::*;
+use input;
+use ndarray::{Array3, ArrayView3, ArrayViewMut3, Zip};
+use ndarray_parallel::prelude::*;
+use output;
 use potential;
 use potential::Potentials;
-use input;
-use output;
-use errors::*;
+use slog::Logger;
+use std::f64::MAX;
 
 #[derive(Debug)]
 /// Holds all computed observables for the current wavefunction.
@@ -579,7 +579,9 @@ fn evolve(
                             // l can now be indexed with local offset `o` and modifiers
                             *work = w * pa
                                 + pb * config.grid.dt
-                                    * (l[[o + 1, o, o]] + l[[o - 1, o, o]] + l[[o, o + 1, o]]
+                                    * (l[[o + 1, o, o]]
+                                        + l[[o - 1, o, o]]
+                                        + l[[o, o + 1, o]]
                                         + l[[o, o - 1, o]]
                                         + l[[o, o, o + 1]]
                                         + l[[o, o, o - 1]]
@@ -686,21 +688,31 @@ mod tests {
     use super::*;
 
     macro_rules! assert_approx_eq {
-    ($a:expr, $b:expr) => ({
-        let eps = 1.0e-6;
-        let (a, b) = (&$a, &$b);
-        assert!((*a - *b).abs() < eps,
+        ($a:expr, $b:expr) => {{
+            let eps = 1.0e-6;
+            let (a, b) = (&$a, &$b);
+            assert!(
+                (*a - *b).abs() < eps,
                 "assertion failed: `(left !== right)` \
-                           (left: `{:?}`, right: `{:?}`, expect diff: `{:?}`, real diff: `{:?}`)",
-                 *a, *b, eps, (*a - *b).abs());
-    });
-    ($a:expr, $b:expr, $eps:expr) => ({
-        let (a, b) = (&$a, &$b);
-        assert!((*a - *b).abs() < $eps,
+                 (left: `{:?}`, right: `{:?}`, expect diff: `{:?}`, real diff: `{:?}`)",
+                *a,
+                *b,
+                eps,
+                (*a - *b).abs()
+            );
+        }};
+        ($a:expr, $b:expr, $eps:expr) => {{
+            let (a, b) = (&$a, &$b);
+            assert!(
+                (*a - *b).abs() < $eps,
                 "assertion failed: `(left !== right)` \
-                           (left: `{:?}`, right: `{:?}`, expect diff: `{:?}`, real diff: `{:?}`)",
-                 *a, *b, $eps, (*a - *b).abs());
-    })
+                 (left: `{:?}`, right: `{:?}`, expect diff: `{:?}`, real diff: `{:?}`)",
+                *a,
+                *b,
+                $eps,
+                (*a - *b).abs()
+            );
+        }};
     }
 
     #[test]
