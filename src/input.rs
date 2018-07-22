@@ -3,6 +3,7 @@ use ron::de::from_reader as ron_reader;
 use slog::Logger;
 use std::fs::{create_dir, File};
 use std::path::Path;
+use noisy_float::prelude::*;
 use std::process::{Command, Stdio};
 use std::io::prelude::*;
 use serde_json;
@@ -70,7 +71,7 @@ pub fn potential(
     bb: usize,
     file_type: &FileType,
     log: &Logger,
-) -> Result<Array3<f64>> {
+) -> Result<Array3<R64>> {
     let mpk_file = check_potential_file("mpk");
     let csv_file = check_potential_file("csv");
     let json_file = check_potential_file("json");
@@ -192,7 +193,7 @@ fn fill_data(
 /// * `grid` - The `grid` portion of the `config` struct.
 /// * `bb` - Bounding box value for assigning central difference boundaries
 /// * `log` - Reference to the system logger.
-pub fn script_potential(file: &str, grid: &Grid, bb: usize, log: &Logger) -> Result<Array3<f64>> {
+pub fn script_potential(file: &str, grid: &Grid, bb: usize, log: &Logger) -> Result<Array3<R64>> {
     let target_size: [usize; 3] = [grid.size.x + bb, grid.size.y + bb, grid.size.z + bb];
     info!(log, "Generating potential from script file: {}", file);
     // Spawn python script
@@ -269,7 +270,7 @@ pub fn potential_sub(
     target_size: [usize; 3],
     file_type: &FileType,
     log: &Logger,
-) -> Result<(Option<Array3<f64>>, Option<f64>)> {
+) -> Result<(Option<Array3<R64>>, Option<R64>)> {
     let mpk_file = check_potential_sub_file("mpk");
     let csv_file = check_potential_sub_file("csv");
     let json_file = check_potential_sub_file("json");

@@ -1,4 +1,5 @@
 use chrono::Local;
+use noisy_float::prelude::*;
 use csv;
 use ndarray::{Array3, ArrayView3, Zip};
 use ndarray_parallel::prelude::ParApply2;
@@ -81,7 +82,7 @@ pub fn print_banner(sha: &str) {
 /// * `v` - The potential to output.
 /// * `project` - The project name (for directory to save to).
 /// * `file_type` - What type of file format to use in the output.
-pub fn potential(v: &ArrayView3<f64>, project: &str, file_type: &FileType) -> Result<()> {
+pub fn potential(v: &ArrayView3<R64>, project: &str, file_type: &FileType) -> Result<()> {
     let filename = format!(
         "{}/potential{}",
         get_project_dir(project),

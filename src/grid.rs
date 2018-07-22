@@ -1,4 +1,5 @@
 use indicatif::{ProgressBar, ProgressStyle};
+use noisy_float::prelude::*;
 use ndarray::{Array3, ArrayView3, ArrayViewMut3, Zip};
 use ndarray_parallel::prelude::*;
 use slog::Logger;
@@ -494,7 +495,7 @@ fn orthogonalise_wavefunction(wnum: u8, w: &mut Array3<f64>, w_store: &[Array3<f
 /// # Returns
 ///
 /// An array view containing only the workable area of the array.
-pub fn get_work_area(arr: &Array3<f64>, ext: usize) -> ArrayView3<f64> {
+pub fn get_work_area(arr: &Array3<R64>, ext: usize) -> ArrayView3<R64> {
     let dims = arr.dim();
     let exti = ext as isize;
     arr.slice(s![
