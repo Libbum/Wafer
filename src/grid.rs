@@ -2,10 +2,10 @@ use config;
 use config::{CentralDifference, Config, Index3, InitialCondition};
 use errors::*;
 use indicatif::{ProgressBar, ProgressStyle};
-use noisy_float::prelude::*;
 use input;
 use ndarray::{Array3, ArrayView3, ArrayViewMut3, Zip};
 use ndarray_parallel::prelude::*;
+use noisy_float::prelude::*;
 use output;
 use potential;
 use potential::Potentials;
@@ -197,9 +197,9 @@ fn solve(
         // Output status to screen
         if debug_level == 3 {
             if let Some(estimate) = eta(step, diff_old, diff.raw(), config) {
-                let percent = (100.
-                    - (estimate / ((step as f64 / config.output.screen_update as f64) + estimate)
-                        * 100.))
+                let percent = (100. - (estimate
+                    / ((step as f64 / config.output.screen_update as f64) + estimate)
+                    * 100.))
                     .floor();
                 if percent.is_finite() {
                     prog_bar.set_position(percent as u64);
@@ -323,11 +323,12 @@ fn compute_observables(config: &Config, potentials: &Potentials, phi: &Array3<R6
                         let l = phi.slice(s![lx - 1..lx + 2, ly - 1..ly + 2, lz - 1..lz + 2]);
                         // l can now be indexed with local offset `o` and modifiers
                         *work = v * w * w
-                            - w
-                                * (l[[o + 1, o, o]] + l[[o - 1, o, o]] + l[[o, o + 1, o]]
-                                    + l[[o, o - 1, o]]
-                                    + l[[o, o, o + 1]]
-                                    + l[[o, o, o - 1]] - r64(6.) * w)
+                            - w * (l[[o + 1, o, o]]
+                                + l[[o - 1, o, o]]
+                                + l[[o, o + 1, o]]
+                                + l[[o, o - 1, o]]
+                                + l[[o, o, o + 1]]
+                                + l[[o, o, o - 1]] - r64(6.) * w)
                                 / denominator;
                     },
                 );
@@ -346,19 +347,19 @@ fn compute_observables(config: &Config, potentials: &Potentials, phi: &Array3<R6
                         let l = phi.slice(s![lx - 2..lx + 3, ly - 2..ly + 3, lz - 2..lz + 3]);
                         // l can now be indexed with local offset `o` and modifiers
                         *work = v * w * w
-                            - w
-                                * (-l[[o + 2, o, o]] + _16 * l[[o + 1, o, o]]
-                                    + _16 * l[[o - 1, o, o]]
-                                    - l[[o - 2, o, o]]
-                                    - l[[o, o + 2, o]]
-                                    + _16 * l[[o, o + 1, o]]
-                                    + _16 * l[[o, o - 1, o]]
-                                    - l[[o, o - 2, o]]
-                                    - l[[o, o, o + 2]]
-                                    + _16 * l[[o, o, o + 1]]
-                                    + _16 * l[[o, o, o - 1]]
-                                    - l[[o, o, o - 2]] - r64(90.) * w)
-                                / denominator;
+                            - w * (-l[[o + 2, o, o]]
+                                + _16 * l[[o + 1, o, o]]
+                                + _16 * l[[o - 1, o, o]]
+                                - l[[o - 2, o, o]]
+                                - l[[o, o + 2, o]]
+                                + _16 * l[[o, o + 1, o]]
+                                + _16 * l[[o, o - 1, o]]
+                                - l[[o, o - 2, o]]
+                                - l[[o, o, o + 2]]
+                                + _16 * l[[o, o, o + 1]]
+                                + _16 * l[[o, o, o - 1]]
+                                - l[[o, o, o - 2]]
+                                - r64(90.) * w) / denominator;
                     },
                 );
             }
@@ -378,25 +379,24 @@ fn compute_observables(config: &Config, potentials: &Potentials, phi: &Array3<R6
                         let l = phi.slice(s![lx - 3..lx + 4, ly - 3..ly + 4, lz - 3..lz + 4]);
                         // l can now be indexed with local offset `o` and modifiers
                         *work = v * w * w
-                            - w
-                                * (_2 * l[[o + 3, o, o]] - _27 * l[[o + 2, o, o]]
-                                    + _270 * l[[o + 1, o, o]]
-                                    + _270 * l[[o - 1, o, o]]
-                                    - _27 * l[[o - 2, o, o]]
-                                    + _2 * l[[o - 3, o, o]]
-                                    + _2 * l[[o, o + 3, o]]
-                                    - _27 * l[[o, o + 2, o]]
-                                    + _270 * l[[o, o + 1, o]]
-                                    + _270 * l[[o, o - 1, o]]
-                                    - _27 * l[[o, o - 2, o]]
-                                    + _2 * l[[o, o - 3, o]]
-                                    + _2 * l[[o, o, o + 3]]
-                                    - _27 * l[[o, o, o + 2]]
-                                    + _270 * l[[o, o, o + 1]]
-                                    + _270 * l[[o, o, o - 1]]
-                                    - _27 * l[[o, o, o - 2]]
-                                    + _2 * l[[o, o, o - 3]]
-                                    - r64(1470.) * w) / denominator;
+                            - w * (_2 * l[[o + 3, o, o]] - _27 * l[[o + 2, o, o]]
+                                + _270 * l[[o + 1, o, o]]
+                                + _270 * l[[o - 1, o, o]]
+                                - _27 * l[[o - 2, o, o]]
+                                + _2 * l[[o - 3, o, o]]
+                                + _2 * l[[o, o + 3, o]]
+                                - _27 * l[[o, o + 2, o]]
+                                + _270 * l[[o, o + 1, o]]
+                                + _270 * l[[o, o - 1, o]]
+                                - _27 * l[[o, o - 2, o]]
+                                + _2 * l[[o, o - 3, o]]
+                                + _2 * l[[o, o, o + 3]]
+                                - _27 * l[[o, o, o + 2]]
+                                + _270 * l[[o, o, o + 1]]
+                                + _270 * l[[o, o, o - 1]]
+                                - _27 * l[[o, o, o - 2]]
+                                + _2 * l[[o, o, o - 3]]
+                                - r64(1470.) * w) / denominator;
                     },
                 );
             }
@@ -585,7 +585,8 @@ fn evolve(
                                         + l[[o, o - 1, o]]
                                         + l[[o, o, o + 1]]
                                         + l[[o, o, o - 1]]
-                                        - r64(6.) * w) / denominator;
+                                        - r64(6.) * w)
+                                    / denominator;
                         },
                     );
                 }
@@ -604,7 +605,8 @@ fn evolve(
                             // l can now be indexed with local offset `o` and modifiers
                             *work = w * pa
                                 + pb * config.grid.dt
-                                    * (-l[[o + 2, o, o]] + _16 * l[[o + 1, o, o]]
+                                    * (-l[[o + 2, o, o]]
+                                        + _16 * l[[o + 1, o, o]]
                                         + _16 * l[[o - 1, o, o]]
                                         - l[[o - 2, o, o]]
                                         - l[[o, o + 2, o]]
@@ -615,7 +617,8 @@ fn evolve(
                                         + _16 * l[[o, o, o + 1]]
                                         + _16 * l[[o, o, o - 1]]
                                         - l[[o, o, o - 2]]
-                                        - r64(90.) * w) / denominator;
+                                        - r64(90.) * w)
+                                    / denominator;
                         },
                     );
                 }
@@ -726,9 +729,19 @@ mod tests {
         });
         orthogonalise_wavefunction(1, &mut test, &w_store);
 
-        let compare =
-            Array3::<R64>::from_shape_vec((2, 2, 2), vec![r64(0.), r64(23.), r64(23.), r64(46.), r64(23.), r64(46.), r64(46.), r64(69.)])
-                .unwrap();
+        let compare = Array3::<R64>::from_shape_vec(
+            (2, 2, 2),
+            vec![
+                r64(0.),
+                r64(23.),
+                r64(23.),
+                r64(46.),
+                r64(23.),
+                r64(46.),
+                r64(46.),
+                r64(69.),
+            ],
+        ).unwrap();
         assert!(compare.all_close(&test, r64(0.01)));
     }
 

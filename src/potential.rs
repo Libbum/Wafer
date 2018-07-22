@@ -101,17 +101,12 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials> {
     let mut a = Array3::<R64>::zeros(v.dim());
     let mut b = Array3::<R64>::zeros(v.dim());
     //let b = r64(1.) / (r64(1.) + config.grid.dt * &v / r64(2.));
-    Zip::from(&mut b)
-        .and(&v)
-        .par_apply(|b, &v| {
-            *b = r64(1.) / (r64(1.) + config.grid.dt * v / r64(2.));
+    Zip::from(&mut b).and(&v).par_apply(|b, &v| {
+        *b = r64(1.) / (r64(1.) + config.grid.dt * v / r64(2.));
     });
     //let a = (r64(1.) - config.grid.dt * &v / r64(2.)) * &b;
-    Zip::from(&mut a)
-        .and(&b)
-        .and(&v)
-        .par_apply(|a, &b, &v| {
-            *a = (r64(1.) - config.grid.dt * v / r64(2.)) * b;
+    Zip::from(&mut a).and(&b).and(&v).par_apply(|a, &b, &v| {
+        *a = (r64(1.) - config.grid.dt * v / r64(2.)) * b;
     });
 
     let sub_size: [usize; 3] = [num.x, num.y, num.z];
@@ -240,7 +235,7 @@ fn potential(config: &Config, idx: &Index3) -> Result<R64> {
             if r < config.grid.dn {
                 Ok(r64(0.0))
             } else {
-                Ok(r64(-1.)/ r + r64(1.) / config.grid.dn)
+                Ok(r64(-1.) / r + r64(1.) / config.grid.dn)
             }
         }
         PotentialType::SimpleCornell => {
@@ -293,7 +288,9 @@ fn potential(config: &Config, idx: &Index3) -> Result<R64> {
                 && 9.069_135_768_914_05 * x + 15.708_203_932_499_37 * y
                     <= 12.708_203_932_499_37 + 3.464_101_615_137_755 * z
                 && 9.708_203_932_499_37 * y
-                    <= 12.708_203_932_499_37 + 5.605_034_153_776_294 * x + 14.674_169_922_690_343 * z
+                    <= 12.708_203_932_499_37
+                        + 5.605_034_153_776_294 * x
+                        + 14.674_169_922_690_343 * z
                 && 12.708_203_932_499_37
                     + 5.605_034_153_776_294 * x
                     + 9.708_203_932_499_37 * y
@@ -303,7 +300,8 @@ fn potential(config: &Config, idx: &Index3) -> Result<R64> {
                 && 5.605_034_153_776_295 * (-6.472_135_954_999_58 * x - 1.236_067_977_499_789_6 * z)
                     <= 25.416_407_864_998_74
                 && 3.464_101_615_137_755 * z
-                    <= 9.069_135_768_914_05 * x + 3. * (4.236_067_977_499_79 + 5.236_067_977_499_79 * y)
+                    <= 9.069_135_768_914_05 * x
+                        + 3. * (4.236_067_977_499_79 + 5.236_067_977_499_79 * y)
                 && 1.732_050_807_568_877_2 * (3.236_067_977_499_79 * x + 8.472_135_954_999_58 * z)
                     <= 3. * (4.236_067_977_499_79 + 3.236_067_977_499_79 * y)
                 && 5.605_034_153_776_294 * x + 9.708_203_932_499_37 * y + 14.674_169_922_690_343 * z
@@ -332,11 +330,10 @@ pub fn potential_sub_idx(config: &Config, idx: &Index3) -> Result<R64> {
             let r = config.grid.dn * calculate_r2(idx, &config.grid).sqrt();
             let t = 1.0; //TODO: This should be an optional parameter for FullCornell only
             let xi: f64 = 0.0; //TODO: This should be an optional parameter for FullCornell only
-            let md = r64(mu(t))
-                * r64(1.)
-                    + r64(0.07 * xi.powf(0.2))
-                        * (r64(1.) - config.grid.dn * config.grid.dn * dz * dz / (r * r))
-                * r64((1. + xi).powf(-0.29));
+            let md = r64(mu(t)) * r64(1.)
+                + r64(0.07 * xi.powf(0.2))
+                    * (r64(1.) - config.grid.dn * config.grid.dn * dz * dz / (r * r))
+                    * r64((1. + xi).powf(-0.29));
             Ok(r64(config.sig) / md + r64(4.) * config.mass)
         }
         _ => Err(ErrorKind::PotentialNotAvailable.into()),

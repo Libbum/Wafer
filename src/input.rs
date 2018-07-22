@@ -4,6 +4,7 @@ use errors::*;
 use grid;
 use ndarray::{Array1, Array3, ArrayViewMut3, Axis, Zip};
 use ndarray_parallel::prelude::*;
+use noisy_float::prelude::*;
 use potential::PotentialSubSingle;
 use rmps;
 use ron::de::from_reader as ron_reader;
@@ -13,7 +14,6 @@ use slog::Logger;
 use std::fs::{create_dir, File};
 use std::io::prelude::*;
 use std::path::Path;
-use noisy_float::prelude::*;
 use std::process::{Command, Stdio};
 
 #[derive(Debug, Deserialize)]
@@ -111,7 +111,7 @@ pub fn potential(
 }
 
 /// Loads an array from a mpk file on disk.
-fn read_mpk(file: String, target_size: [usize; 3], bb: usize, log: &Logger) -> Result<Array3<R64>> {
+fn read_mpk(file: &str, target_size: [usize; 3], bb: usize, log: &Logger) -> Result<Array3<R64>> {
     let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.to_string()))?;
     let data: Array3<R64> = rmps::decode::from_read(reader).chain_err(|| ErrorKind::Deserialize)?;
 
@@ -119,12 +119,7 @@ fn read_mpk(file: String, target_size: [usize; 3], bb: usize, log: &Logger) -> R
 }
 
 /// Loads an array from a json file on disk.
-fn read_json(
-    file: &str,
-    target_size: [usize; 3],
-    bb: usize,
-    log: &Logger,
-) -> Result<Array3<R64>> {
+fn read_json(file: &str, target_size: [usize; 3], bb: usize, log: &Logger) -> Result<Array3<R64>> {
     let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.to_string()))?;
     let data: Array3<R64> = serde_json::from_reader(reader).chain_err(|| ErrorKind::Deserialize)?;
 
@@ -132,12 +127,7 @@ fn read_json(
 }
 
 /// Loads an array from a yaml file on disk.
-fn read_yaml(
-    file: &str,
-    target_size: [usize; 3],
-    bb: usize,
-    log: &Logger,
-) -> Result<Array3<R64>> {
+fn read_yaml(file: &str, target_size: [usize; 3], bb: usize, log: &Logger) -> Result<Array3<R64>> {
     let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.to_string()))?;
     let data: Array3<R64> = serde_yaml::from_reader(reader).chain_err(|| ErrorKind::Deserialize)?;
 
@@ -145,7 +135,7 @@ fn read_yaml(
 }
 
 /// Loads an array from a ron file on disk.
-fn read_ron(file: String, target_size: [usize; 3], bb: usize, log: &Logger) -> Result<Array3<R64>> {
+fn read_ron(file: &str, target_size: [usize; 3], bb: usize, log: &Logger) -> Result<Array3<R64>> {
     let reader = File::open(&file).chain_err(|| ErrorKind::FileNotFound(file.to_string()))?;
     let data: Array3<R64> = ron_reader(reader).chain_err(|| ErrorKind::Deserialize)?;
 
@@ -374,7 +364,8 @@ fn read_sub_csv(
         data.push(record.data);
     };
     for result in rdr_iter {
-        let record: PlainRecord = result.chain_err(|| ErrorKind::ParsePlainRecord(file.to_string()))?;
+        let record: PlainRecord =
+            result.chain_err(|| ErrorKind::ParsePlainRecord(file.to_string()))?;
         if record.i > max_i {
             max_i = record.i
         };
@@ -740,8 +731,19 @@ mod tests {
 
     #[test]
     fn interpolation() {
-        let array =
-            Array3::<R64>::from_shape_vec((2, 2, 2), vec![r64(1.), r64(2.), r64(3.), r64(4.), r64(5.), r64(6.), r64(7.), r64(8.)]).unwrap();
+        let array = Array3::<R64>::from_shape_vec(
+            (2, 2, 2),
+            vec![
+                r64(1.),
+                r64(2.),
+                r64(3.),
+                r64(4.),
+                r64(5.),
+                r64(6.),
+                r64(7.),
+                r64(8.),
+            ],
+        ).unwrap();
 
         let mut complete = Array3::<R64>::zeros((6, 6, 6));
         let mut work = grid::get_mut_work_area(&mut complete, 1);

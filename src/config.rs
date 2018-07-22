@@ -660,7 +660,8 @@ fn generate_coulomb(config: &Config, init_size: [usize; 3]) -> Array3<R64> {
         let cosphi = config.grid.dn * dx / r;
         let mr2 = (-config.mass * r / r64(2.)).exp();
         // Terms here represent: n=1; n=2, l=0; n=2,l=1,m=0; n=2,l=1,m±1 respectively.
-        *x = (-config.mass * r).exp() + (r64(2.) - config.mass * r) * mr2
+        *x = (-config.mass * r).exp()
+            + (r64(2.) - config.mass * r) * mr2
             + config.mass * r * mr2 * costheta
             + config.mass * r * mr2 * (r64(1.) - costheta.powi(2)).sqrt() * cosphi;
     });

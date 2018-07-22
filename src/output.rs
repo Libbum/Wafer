@@ -1,8 +1,8 @@
 use chrono::Local;
-use noisy_float::prelude::*;
 use csv;
 use ndarray::{Array3, ArrayView3, Zip};
 use ndarray_parallel::prelude::ParApply2;
+use noisy_float::prelude::*;
 use ordinal::Ordinal;
 use rayon;
 use rmps;
