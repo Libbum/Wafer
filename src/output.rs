@@ -2,6 +2,7 @@ use chrono::Local;
 use csv;
 use ndarray::{Array3, ArrayView3, Zip};
 use ndarray_parallel::prelude::ParApply2;
+use noisy_float::prelude::*;
 use ordinal::Ordinal;
 use rayon;
 use rmps;
@@ -34,13 +35,13 @@ struct ObservablesOutput {
     /// Excited state number.
     state: u8,
     /// Total energy.
-    energy: f64,
+    energy: R64,
     /// Binding energy.
-    binding_energy: f64,
+    binding_energy: R64,
     /// Coefficient of determination
-    r: f64,
+    r: R64,
     /// Grid size / Coefficient of determination
-    l_r: f64,
+    l_r: R64,
 }
 
 #[derive(Debug, Serialize)]
@@ -53,7 +54,7 @@ struct PlainRecord {
     /// Index in *z*
     k: usize,
     /// Data at this position
-    data: f64,
+    data: R64,
 }
 
 /// Simply prints the Wafer banner with current commit info and thread count.
@@ -81,7 +82,7 @@ pub fn print_banner(sha: &str) {
 /// * `v` - The potential to output.
 /// * `project` - The project name (for directory to save to).
 /// * `file_type` - What type of file format to use in the output.
-pub fn potential(v: &ArrayView3<f64>, project: &str, file_type: &FileType) -> Result<()> {
+pub fn potential(v: &ArrayView3<R64>, project: &str, file_type: &FileType) -> Result<()> {
     let filename = format!(
         "{}/potential{}",
         get_project_dir(project),
@@ -108,7 +109,7 @@ pub fn potential_sub(config: &Config) -> Result<()> {
     );
 
     let mut sub =
-        Array3::<f64>::zeros((config.grid.size.x, config.grid.size.y, config.grid.size.z));
+        Array3::<R64>::zeros((config.grid.size.x, config.grid.size.y, config.grid.size.z));
     let (full_sub, single_sub) = if config.potential.variable_pot_sub() {
         // potential_sub is a complete array.
         Zip::indexed(&mut sub).par_apply(|(i, j, k), sub| {
@@ -144,7 +145,7 @@ pub fn potential_sub(config: &Config) -> Result<()> {
 /// # Arguments
 /// *`array` - The array to output
 /// * `filename` - file / directory to save to.
-fn write_csv(array: &ArrayView3<f64>, filename: &str) -> Result<()> {
+fn write_csv(array: &ArrayView3<R64>, filename: &str) -> Result<()> {
     let mut buffer = csv::WriterBuilder::new()
         .has_headers(false)
         .from_path(filename)
@@ -168,7 +169,7 @@ fn write_csv(array: &ArrayView3<f64>, filename: &str) -> Result<()> {
 /// # Arguments
 /// *`array` - The array to output
 /// * `filename` - file / directory to save to.
-fn write_mpk(array: &ArrayView3<f64>, filename: &str, err_kind: ErrorKind) -> Result<()> {
+fn write_mpk(array: &ArrayView3<R64>, filename: &str, err_kind: ErrorKind) -> Result<()> {
     let mut output = Vec::new();
     array
         .serialize(&mut rmps::Serializer::new(&mut output))
@@ -184,7 +185,7 @@ fn write_mpk(array: &ArrayView3<f64>, filename: &str, err_kind: ErrorKind) -> Re
 /// # Arguments
 /// *`array` - The array to output
 /// * `filename` - file / directory to save to.
-fn write_json(array: &ArrayView3<f64>, filename: &str, err_kind: ErrorKind) -> Result<()> {
+fn write_json(array: &ArrayView3<R64>, filename: &str, err_kind: ErrorKind) -> Result<()> {
     let buffer = File::create(&filename).chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
     serde_json::to_writer_pretty(buffer, array).chain_err(|| err_kind)?;
     Ok(())
@@ -195,7 +196,7 @@ fn write_json(array: &ArrayView3<f64>, filename: &str, err_kind: ErrorKind) -> R
 /// # Arguments
 /// *`array` - The array to output
 /// * `filename` - file / directory to save to.
-fn write_yaml(array: &ArrayView3<f64>, filename: &str, err_kind: ErrorKind) -> Result<()> {
+fn write_yaml(array: &ArrayView3<R64>, filename: &str, err_kind: ErrorKind) -> Result<()> {
     let buffer = File::create(&filename).chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
     serde_yaml::to_writer(buffer, array).chain_err(|| err_kind)?;
     Ok(())
@@ -206,7 +207,7 @@ fn write_yaml(array: &ArrayView3<f64>, filename: &str, err_kind: ErrorKind) -> R
 /// # Arguments
 /// *`array` - The array to output
 /// * `filename` - file / directory to save to.
-fn write_ron(array: &ArrayView3<f64>, filename: &str, err_kind: ErrorKind) -> Result<()> {
+fn write_ron(array: &ArrayView3<R64>, filename: &str, err_kind: ErrorKind) -> Result<()> {
     let mut buffer =
         File::create(&filename).chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
     let data = ron_string(array, PrettyConfig::default()).chain_err(|| ErrorKind::Serialize)?;
@@ -221,8 +222,8 @@ fn write_ron(array: &ArrayView3<f64>, filename: &str, err_kind: ErrorKind) -> Re
 /// * `single_sub` - If the potential_sub is a singular value, this will be Some.
 /// * `filename` - file / directory to save to.
 fn write_sub_mpk(
-    full_sub: &Option<ArrayView3<f64>>,
-    single_sub: Option<f64>,
+    full_sub: &Option<ArrayView3<R64>>,
+    single_sub: Option<R64>,
     filename: &str,
 ) -> Result<()> {
     let mut buffer =
@@ -257,8 +258,8 @@ fn write_sub_mpk(
 /// * `single_sub` - If the potential_sub is a singular value, this will be Some.
 /// * `filename` - file / directory to save to.
 fn write_sub_csv(
-    full_sub: &Option<ArrayView3<f64>>,
-    single_sub: Option<f64>,
+    full_sub: &Option<ArrayView3<R64>>,
+    single_sub: Option<R64>,
     filename: &str,
 ) -> Result<()> {
     let mut buffer = csv::WriterBuilder::new()
@@ -293,8 +294,8 @@ fn write_sub_csv(
 /// * `single_sub` - If the potential_sub is a singular value, this will be Some.
 /// * `filename` - file / directory to save to.
 fn write_sub_json(
-    full_sub: &Option<ArrayView3<f64>>,
-    single_sub: Option<f64>,
+    full_sub: &Option<ArrayView3<R64>>,
+    single_sub: Option<R64>,
     filename: &str,
 ) -> Result<()> {
     let buffer = File::create(&filename).chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
@@ -317,8 +318,8 @@ fn write_sub_json(
 /// * `single_sub` - If the potential_sub is a singular value, this will be Some.
 /// * `filename` - file / directory to save to.
 fn write_sub_yaml(
-    full_sub: &Option<ArrayView3<f64>>,
-    single_sub: Option<f64>,
+    full_sub: &Option<ArrayView3<R64>>,
+    single_sub: Option<R64>,
     filename: &str,
 ) -> Result<()> {
     let buffer = File::create(&filename).chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
@@ -341,8 +342,8 @@ fn write_sub_yaml(
 /// * `single_sub` - If the potential_sub is a singular value, this will be Some.
 /// * `filename` - file / directory to save to.
 fn write_sub_ron(
-    full_sub: &Option<ArrayView3<f64>>,
-    single_sub: Option<f64>,
+    full_sub: &Option<ArrayView3<R64>>,
+    single_sub: Option<R64>,
     filename: &str,
 ) -> Result<()> {
     let mut buffer =
@@ -376,7 +377,7 @@ fn write_sub_ron(
 /// * `project` - The project name (for directory to save to).
 /// * `file_type` - What type of file format to use in the output.
 pub fn wavefunction(
-    phi: &ArrayView3<f64>,
+    phi: &ArrayView3<R64>,
     num: u8,
     converged: bool,
     project: &str,
@@ -493,7 +494,7 @@ pub fn print_observable_header(wnum: u8) {
 }
 
 /// Pretty prints measurements at current step to screen
-pub fn print_measurements(tau: f64, diff: f64, observables: &grid::Observables) -> String {
+pub fn print_measurements(tau: R64, diff: R64, observables: &grid::Observables) -> String {
     let width = *TERMWIDTH;
     let spacer = (width - 69) / 2;
     if tau > 0.0 {
@@ -532,7 +533,7 @@ pub fn print_measurements(tau: f64, diff: f64, observables: &grid::Observables) 
 pub fn finalise_measurement(
     observables: &grid::Observables,
     wnum: u8,
-    numx: f64,
+    numx: R64,
     project: &str,
     file_type: &FileType,
 ) -> Result<()> {
@@ -778,10 +779,10 @@ mod tests {
     fn output_observables() {
         let observables = ObservablesOutput {
             state: 1,
-            energy: 4.0,
-            binding_energy: 0.0,
-            r: 1.2,
-            l_r: 0.3,
+            energy: r64(4.0),
+            binding_energy: r64(0.0),
+            r: r64(1.2),
+            l_r: r64(0.3),
         };
         let project = "test";
         // create a dummy output directory.
@@ -799,11 +800,11 @@ mod tests {
     fn output_potential_sub() {
         let arr = Array3::zeros((2, 2, 2));
 
-        assert!(write_sub_mpk(&None, Some(213.0), "test.mpk").is_ok());
-        assert!(write_sub_csv(&None, Some(21.0), "test.csv").is_ok());
-        assert!(write_sub_yaml(&None, Some(24.8), "test.yaml").is_ok());
-        assert!(write_sub_json(&None, Some(29.1), "test.json").is_ok());
-        assert!(write_sub_ron(&None, Some(94.32), "test.ron").is_ok());
+        assert!(write_sub_mpk(&None, Some(r64(213.0)), "test.mpk").is_ok());
+        assert!(write_sub_csv(&None, Some(r64(21.0)), "test.csv").is_ok());
+        assert!(write_sub_yaml(&None, Some(r64(24.8)), "test.yaml").is_ok());
+        assert!(write_sub_json(&None, Some(r64(29.1)), "test.json").is_ok());
+        assert!(write_sub_ron(&None, Some(r64(94.32)), "test.ron").is_ok());
 
         assert!(write_sub_mpk(&Some(arr.view()), None, "test.mpk").is_ok());
         assert!(write_sub_csv(&Some(arr.view()), None, "test.csv").is_ok());

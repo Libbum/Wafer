@@ -1,5 +1,6 @@
 use ndarray::{Array3, Zip};
 use ndarray_parallel::prelude::*;
+use noisy_float::prelude::*;
 use slog::Logger;
 use std::f64::consts::PI;
 use std::f64::MAX;
@@ -14,13 +15,13 @@ use output;
 /// Holds the potential arrays for the current simulation.
 pub struct Potentials {
     /// The potential.
-    pub v: Array3<f64>,
+    pub v: Array3<R64>,
     /// Ancillary array `a`.
-    pub a: Array3<f64>,
+    pub a: Array3<R64>,
     /// Ancillary array `b`.
-    pub b: Array3<f64>,
+    pub b: Array3<R64>,
     /// Potsub value.
-    pub pot_sub: (Option<Array3<f64>>, Option<f64>),
+    pub pot_sub: (Option<Array3<R64>>, Option<R64>),
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -28,7 +29,7 @@ pub struct Potentials {
 /// do not require an entire array.
 pub struct PotentialSubSingle {
     /// Value of `potential_sub` for the current potential.
-    pub pot_sub: f64,
+    pub pot_sub: R64,
 }
 
 /// A public wrapper around `potential`. Where `potential` does the calculation for a
@@ -42,11 +43,11 @@ pub struct PotentialSubSingle {
 ///
 /// A 3D array of potential values of the requested size.
 /// Or an error if called on the wrong potential type.
-pub fn generate(config: &Config) -> Result<Array3<f64>> {
+pub fn generate(config: &Config) -> Result<Array3<R64>> {
     let num = &config.grid.size;
     let bb = config.central_difference.bb();
     let init_size: [usize; 3] = [num.x + bb, num.y + bb, num.z + bb];
-    let mut v = Array3::<f64>::zeros(init_size);
+    let mut v = Array3::<R64>::zeros(init_size);
 
     Zip::indexed(&mut v).par_apply(|(i, j, k), x| {
         match potential(config, &Index3 { x: i, y: j, z: k }) {
@@ -72,10 +73,10 @@ pub fn generate(config: &Config) -> Result<Array3<f64>> {
 ///
 /// A `Potentials` struct with the potential `v` and ancillary arrays `a` and `b`.
 pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials> {
-    let mut minima: f64 = MAX;
+    let mut minima = r64(MAX);
     let bb = config.central_difference.bb();
     let num = &config.grid.size;
-    let v: Array3<f64> = match config.potential {
+    let v: Array3<R64> = match config.potential {
         PotentialType::FromFile => {
             let init_size: [usize; 3] = [num.x + bb, num.y + bb, num.z + bb];
             info!(log, "Loading potential from file");
@@ -97,8 +98,16 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials> {
         }
     }?;
 
-    let b = 1. / (1. + config.grid.dt * &v / 2.);
-    let a = (1. - config.grid.dt * &v / 2.) * &b;
+    let mut a = Array3::<R64>::zeros(v.dim());
+    let mut b = Array3::<R64>::zeros(v.dim());
+    //let b = r64(1.) / (r64(1.) + config.grid.dt * &v / r64(2.));
+    Zip::from(&mut b).and(&v).par_apply(|b, &v| {
+        *b = r64(1.) / (r64(1.) + config.grid.dt * v / r64(2.));
+    });
+    //let a = (r64(1.) - config.grid.dt * &v / r64(2.)) * &b;
+    Zip::from(&mut a).and(&b).and(&v).par_apply(|a, &b, &v| {
+        *a = (r64(1.) - config.grid.dt * v / r64(2.)) * b;
+    });
 
     let sub_size: [usize; 3] = [num.x, num.y, num.z];
     // Try to read a potential_sub from file first, and deal with inconsistencies in the setup.
@@ -123,7 +132,7 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials> {
             pot_sub_info
         }
     } else if config.potential.variable_pot_sub() {
-        let mut full_sub = Array3::<f64>::zeros((sub_size[0], sub_size[1], sub_size[2]));
+        let mut full_sub = Array3::<R64>::zeros((sub_size[0], sub_size[1], sub_size[2]));
         Zip::indexed(&mut full_sub).par_apply(|(i, j, k), full_sub| {
             let idx = Index3 { x: i, y: j, z: k };
             *full_sub = match potential_sub_idx(config, &idx) {
@@ -176,18 +185,18 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials> {
 ///
 /// A double with the potential value at the requested index, or an error if the function
 /// is called for an invalid potential type.
-fn potential(config: &Config, idx: &Index3) -> Result<f64> {
+fn potential(config: &Config, idx: &Index3) -> Result<R64> {
     let num = &config.grid.size;
     match config.potential {
-        PotentialType::NoPotential => Ok(0.0),
+        PotentialType::NoPotential => Ok(r64(0.0)),
         PotentialType::Cube => {
             if (idx.x > num.x / 4 && idx.x <= 3 * num.x / 4)
                 && (idx.y > num.y / 4 && idx.y <= 3 * num.y / 4)
                 && (idx.z > num.z / 4 && idx.z <= 3 * num.z / 4)
             {
-                Ok(-10.0)
+                Ok(r64(-10.0))
             } else {
-                Ok(0.0)
+                Ok(r64(0.0))
             }
         }
         PotentialType::QuadWell => {
@@ -195,9 +204,9 @@ fn potential(config: &Config, idx: &Index3) -> Result<f64> {
                 && (idx.y > num.y / 4 && idx.y <= 3 * num.y / 4)
                 && (idx.z > 3 * num.z / 8 && idx.z <= 5 * num.z / 8)
             {
-                Ok(-10.0)
+                Ok(r64(-10.0))
             } else {
-                Ok(0.0)
+                Ok(r64(0.0))
             }
         }
         PotentialType::Periodic => {
@@ -207,15 +216,15 @@ fn potential(config: &Config, idx: &Index3) -> Result<f64> {
                 * (2. * PI * (idx.y as f64 - 1.) / (num.y as f64 - 1.)).sin();
             temp *= (2. * PI * (idx.z as f64 - 1.) / (num.z as f64 - 1.)).sin()
                 * (2. * PI * (idx.z as f64 - 1.) / (num.z as f64 - 1.)).sin();
-            Ok(-temp + 1.)
+            Ok(r64(-temp + 1.))
         }
         PotentialType::Coulomb | PotentialType::ComplexCoulomb => {
             //TODO: ComplexCoulomb returns real until we have complex types
-            let r = config.grid.dn * (calculate_r2(idx, &config.grid)).sqrt();
+            let r = config.grid.dn * calculate_r2(idx, &config.grid).sqrt();
             if r < config.grid.dn {
-                Ok(-1. / config.grid.dn)
+                Ok(r64(-1.) / config.grid.dn)
             } else {
-                Ok(-1. / r)
+                Ok(r64(-1.) / r)
             }
         }
         PotentialType::ElipticalCoulomb => {
@@ -224,38 +233,38 @@ fn potential(config: &Config, idx: &Index3) -> Result<f64> {
             let dz = (idx.z as f64 - (num.z as f64 + 1.) / 2.) * 2.;
             let r = config.grid.dn * (dx * dx + dy * dy + dz * dz).sqrt();
             if r < config.grid.dn {
-                Ok(0.0)
+                Ok(r64(0.0))
             } else {
-                Ok(-1. / r + 1. / config.grid.dn)
+                Ok(r64(-1.) / r + r64(1.) / config.grid.dn)
             }
         }
         PotentialType::SimpleCornell => {
             // NOTE: units here are GeV for energy/momentum and GeV^(-1) for distance
-            let r = config.grid.dn * (calculate_r2(idx, &config.grid)).sqrt();
+            let r = config.grid.dn * calculate_r2(idx, &config.grid).sqrt();
             if r < config.grid.dn {
-                Ok(4. * config.mass)
+                Ok(r64(4.) * config.mass)
             } else {
-                Ok(-0.5 * (4. / 3.) / r + config.sig * r + 4. * config.mass)
+                Ok(r64(-0.5 * (4. / 3.)) / r + r64(config.sig) * r + r64(4.) * config.mass)
             }
         }
         PotentialType::FullCornell => {
             //NOTE: units here are GeV for energy/momentum and GeV^(-1) for distance
             let t = 1.0; //TODO: This should be an optional parameter for FullCornell only
             let xi: f64 = 0.0; //TODO: This should be an optional parameter for FullCornell only
-            let dz = idx.z as f64 - (config.grid.size.z as f64 + 1.) / 2.;
+            let dz = r64(idx.z as f64 - (config.grid.size.z as f64 + 1.) / 2.);
             let r = config.grid.dn * (calculate_r2(idx, &config.grid)).sqrt();
-            let md = mu(t)
-                * (1. + 0.07
-                    * xi.powf(0.2)
-                    * (1. - config.grid.dn * config.grid.dn * dz * dz / (r * r)))
-                * (1. + xi).powf(-0.29);
+            let md = r64(mu(t))
+                * (r64(1.)
+                    + r64(0.07 * xi.powf(0.2))
+                        * (r64(1.) - config.grid.dn * config.grid.dn * dz * dz / (r * r)))
+                * r64((1. + xi).powf(-0.29));
             if r < config.grid.dn {
-                Ok(4. * config.mass)
+                Ok(r64(4.) * config.mass)
             } else {
-                Ok(-alphas(2. * PI * t) * (4. / 3.) * (-md * r).exp() / r
-                    + config.sig * (1. - (-md * r).exp()) / md
-                    - 0.8 * config.sig / (4. * config.mass * config.mass * r)
-                    + 4. * config.mass)
+                Ok(r64(-alphas(2. * PI * t) * (4. / 3.)) * (-md * r).exp() / r
+                    + r64(config.sig) * (r64(1.) - (-md * r).exp()) / md
+                    - r64(0.8 * config.sig) / (r64(4.) * config.mass * config.mass * r)
+                    + r64(4.) * config.mass)
             }
         }
         PotentialType::Harmonic | PotentialType::ComplexHarmonic => {
@@ -279,7 +288,9 @@ fn potential(config: &Config, idx: &Index3) -> Result<f64> {
                 && 9.069_135_768_914_05 * x + 15.708_203_932_499_37 * y
                     <= 12.708_203_932_499_37 + 3.464_101_615_137_755 * z
                 && 9.708_203_932_499_37 * y
-                    <= 12.708_203_932_499_37 + 5.605_034_153_776_294 * x + 14.674_169_922_690_343 * z
+                    <= 12.708_203_932_499_37
+                        + 5.605_034_153_776_294 * x
+                        + 14.674_169_922_690_343 * z
                 && 12.708_203_932_499_37
                     + 5.605_034_153_776_294 * x
                     + 9.708_203_932_499_37 * y
@@ -289,15 +300,16 @@ fn potential(config: &Config, idx: &Index3) -> Result<f64> {
                 && 5.605_034_153_776_295 * (-6.472_135_954_999_58 * x - 1.236_067_977_499_789_6 * z)
                     <= 25.416_407_864_998_74
                 && 3.464_101_615_137_755 * z
-                    <= 9.069_135_768_914_05 * x + 3. * (4.236_067_977_499_79 + 5.236_067_977_499_79 * y)
+                    <= 9.069_135_768_914_05 * x
+                        + 3. * (4.236_067_977_499_79 + 5.236_067_977_499_79 * y)
                 && 1.732_050_807_568_877_2 * (3.236_067_977_499_79 * x + 8.472_135_954_999_58 * z)
                     <= 3. * (4.236_067_977_499_79 + 3.236_067_977_499_79 * y)
                 && 5.605_034_153_776_294 * x + 9.708_203_932_499_37 * y + 14.674_169_922_690_343 * z
                     <= 12.708_203_932_499_37
             {
-                Ok(-100.)
+                Ok(r64(-100.))
             } else {
-                Ok(0.0)
+                Ok(r64(0.0))
             }
         }
         PotentialType::FromFile | PotentialType::FromScript => {
@@ -311,19 +323,18 @@ fn potential(config: &Config, idx: &Index3) -> Result<f64> {
 /// Calculate binding energy offset (if any). Follows the `potential` input/output arguments.
 /// Used if calculation requires indexing. If not, call `potential_sub` instead. Currency only
 /// `FullCornell` requires this routine.
-pub fn potential_sub_idx(config: &Config, idx: &Index3) -> Result<f64> {
+pub fn potential_sub_idx(config: &Config, idx: &Index3) -> Result<R64> {
     match config.potential {
         PotentialType::FullCornell => {
-            let dz = idx.z as f64 - (config.grid.size.z as f64 + 1.) / 2.;
-            let r = config.grid.dn * (calculate_r2(idx, &config.grid)).sqrt();
+            let dz = r64(idx.z as f64 - (config.grid.size.z as f64 + 1.) / 2.);
+            let r = config.grid.dn * calculate_r2(idx, &config.grid).sqrt();
             let t = 1.0; //TODO: This should be an optional parameter for FullCornell only
             let xi: f64 = 0.0; //TODO: This should be an optional parameter for FullCornell only
-            let md = mu(t)
-                * (1. + 0.07
-                    * xi.powf(0.2)
-                    * (1. - config.grid.dn * config.grid.dn * dz * dz / (r * r)))
-                * (1. + xi).powf(-0.29);
-            Ok(config.sig / md + 4. * config.mass)
+            let md = r64(mu(t)) * r64(1.)
+                + r64(0.07 * xi.powf(0.2))
+                    * (r64(1.) - config.grid.dn * config.grid.dn * dz * dz / (r * r))
+                    * r64((1. + xi).powf(-0.29));
+            Ok(r64(config.sig) / md + r64(4.) * config.mass)
         }
         _ => Err(ErrorKind::PotentialNotAvailable.into()),
     }
@@ -332,7 +343,7 @@ pub fn potential_sub_idx(config: &Config, idx: &Index3) -> Result<f64> {
 /// Calculate binding energy offset (if any). Follows the `potential`
 /// input/output arguments. `FullCornell`, and subsequent potentials that require
 /// indexed values must call `potential_sub_idx`.
-pub fn potential_sub(config: &Config) -> Result<f64> {
+pub fn potential_sub(config: &Config) -> Result<R64> {
     match config.potential {
         PotentialType::NoPotential |
         PotentialType::Cube |
@@ -344,19 +355,19 @@ pub fn potential_sub(config: &Config) -> Result<f64> {
         PotentialType::ComplexHarmonic |
         PotentialType::Dodecahedron |
         PotentialType::FromScript | //TODO: Script should be treated differently.
-        PotentialType::FromFile => Ok(0.0),
-        PotentialType::ElipticalCoulomb => Ok(1. / config.grid.dn),
-        PotentialType::SimpleCornell => Ok(4.0 * config.mass),
+        PotentialType::FromFile => Ok(r64(0.0)),
+        PotentialType::ElipticalCoulomb => Ok(r64(1.) / config.grid.dn),
+        PotentialType::SimpleCornell => Ok(r64(4.0) * config.mass),
         PotentialType::FullCornell => Err(ErrorKind::PotentialNotAvailable.into()),
     }
 }
 
 /// Calculates squared distance
-pub fn calculate_r2(idx: &Index3, grid: &Grid) -> f64 {
+pub fn calculate_r2(idx: &Index3, grid: &Grid) -> R64 {
     let dx = (idx.x as f64) - ((grid.size.x as f64) + 1.) / 2.;
     let dy = (idx.y as f64) - ((grid.size.y as f64) + 1.) / 2.;
     let dz = (idx.z as f64) - ((grid.size.z as f64) + 1.) / 2.;
-    (dx * dx + dy * dy + dz * dz)
+    r64(dx * dx + dy * dy + dz * dz)
 }
 
 /// Running coupling. Used for Cornell potentials.
@@ -424,8 +435,8 @@ mod tests {
     fn distance_squared() {
         let grid = Grid {
             size: Index3 { x: 5, y: 6, z: 3 },
-            dn: 0.1,
-            dt: 3e-5,
+            dn: r64(0.1),
+            dt: r64(3e-5),
         };
         let idx = Index3 { x: 3, y: 3, z: 3 };
         assert_approx_eq!(calculate_r2(&idx, &grid), 1.25);
