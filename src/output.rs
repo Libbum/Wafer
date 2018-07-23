@@ -16,10 +16,10 @@ use std::io::prelude::*;
 use term_size;
 use yansi::Color::Blue;
 
-use config::{Config, FileType, Index3};
+use config::{self, Config, FileType, Index3};
 use errors::*;
 use grid;
-use potential::{self, PotentialSubSingle};
+use potential::{self, Potential, PotentialSubSingle};
 
 lazy_static! {
     /// Date & time at which the simulation was started. Used as a unique identifier for
@@ -57,6 +57,18 @@ struct PlainRecord {
     data: R64,
 }
 
+
+pub trait SaveFile {
+    fn write(&self, config: &Config) -> Result<()>;
+}
+
+//impl<T: FileType> SaveFile for T {
+//    fn write<T>() -> Result<()> {
+
+//    }
+//}
+//
+
 /// Simply prints the Wafer banner with current commit info and thread count.
 pub fn print_banner(sha: &str) {
     println!("                    {}", Blue.paint("___"));
@@ -79,21 +91,22 @@ pub fn print_banner(sha: &str) {
 /// Handles the saving of potential data to disk.
 ///
 /// # Arguments
-/// * `v` - The potential to output.
-/// * `project` - The project name (for directory to save to).
-/// * `file_type` - What type of file format to use in the output.
-pub fn potential(v: &ArrayView3<R64>, project: &str, file_type: &FileType) -> Result<()> {
-    let filename = format!(
-        "{}/potential{}",
-        get_project_dir(project),
-        file_type.extentsion()
-    );
-    match *file_type {
-        FileType::Messagepack => write_mpk(v, &filename, ErrorKind::SavePotential),
-        FileType::Csv => write_csv(v, &filename),
-        FileType::Json => write_json(v, &filename, ErrorKind::SavePotential),
-        FileType::Yaml => write_yaml(v, &filename, ErrorKind::SavePotential),
-        FileType::Ron => write_ron(v, &filename, ErrorKind::SavePotential),
+/// * `config` - The configuration struct.
+impl SaveFile for Potential {
+    fn write(&self, config: &Config) -> Result<()> {
+        let work = grid::get_work_area(&self, config.central_difference.ext());
+        let filename = format!(
+            "{}/potential{}",
+            get_project_dir(&config.project_name),
+            config.output.file_type.extentsion()
+        );
+        match config.output.file_type {
+            FileType::Messagepack => write_mpk(&work, &filename, ErrorKind::SavePotential),
+            FileType::Csv => write_csv(&work, &filename),
+            FileType::Json => write_json(&work, &filename, ErrorKind::SavePotential),
+            FileType::Yaml => write_yaml(&work, &filename, ErrorKind::SavePotential),
+            FileType::Ron => write_ron(&work, &filename, ErrorKind::SavePotential),
+        }
     }
 }
 
@@ -139,6 +152,23 @@ pub fn potential_sub(config: &Config) -> Result<()> {
     }
     Ok(())
 }
+
+//trait WriteArray {
+    //fn write(array: &ArrayView3<R64>, filename: &str, err_kind: ErrorKind) -> Result<()>;
+//}
+
+//impl WriteArray for config::FileType {
+    //fn write(array: &ArrayView3<R64>, filename: &str, err_kind: ErrorKind) -> Result<()> {
+        //let mut output = Vec::new();
+        //array
+            //.serialize(&mut rmps::Serializer::new(&mut output))
+            //.chain_err(|| ErrorKind::Serialize)?;
+        //let mut buffer =
+            //File::create(filename).chain_err(|| ErrorKind::CreateFile(filename.to_string()))?;
+        //buffer.write_all(&output).chain_err(|| err_kind)?;
+        //Ok(())
+    //}
+//}
 
 /// Outputs an array to disk in a plain, csv format
 ///

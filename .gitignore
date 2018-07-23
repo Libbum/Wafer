@@ -4,3 +4,4 @@ Cargo.lock
 output
 input
 simulation.log
+std*.log
