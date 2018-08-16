@@ -1,0 +1,98 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="API documentation for the Rust `grid` mod in crate `wafer`."><meta name="keywords" content="rust, rustlang, rust-lang, grid"><title>wafer::grid - Rust</title><link rel="stylesheet" type="text/css" href="../../normalize.css"><link rel="stylesheet" type="text/css" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../../dark.css"><link rel="stylesheet" type="text/css" href="../../light.css" id="themeStyle"><script src="../../storage.js"></script></head><body class="rustdoc mod"><!--[if lte IE 8]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="sidebar-menu">&#9776;</div><p class='location'>Module grid</p><div class="sidebar-elems"><div class="block items"><ul><li><a href="#reexports">Re-exports</a></li><li><a href="#structs">Structs</a></li><li><a href="#functions">Functions</a></li></ul></div><p class='location'><a href='../index.html'>wafer</a></p><script>window.sidebarCurrent = {name: 'grid', ty: 'mod', relpath: '../'};</script><script defer src="../sidebar-items.js"></script></div></nav><div class="theme-picker"><button id="theme-picker" aria-label="Pick another theme!"><img src="../../brush.svg" width="18" alt="Pick another theme!"></button><div id="theme-choices"></div></div><script src="../../theme.js"></script><nav class="sub"><form class="search-form js-only"><div class="search-container"><input class="search-input" name="search" autocomplete="off" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><a id="settings-menu" href="../../settings.html"><img src="../../wheel.svg" width="18" alt="Change settings"></a></div></form></nav><section id="main" class="content"><h1 class='fqn'><span class='in-band'>Module <a href='../index.html'>wafer</a>::<wbr><a class="mod" href=''>grid</a></span><span class='out-of-band'><span id='render-detail'><a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">[<span class='inner'>&#x2212;</span>]</a></span><a class='srclink' href='../../src/wafer/grid.rs.html#1-800' title='goto source code'>[src]</a></span></h1><div class='docblock'><p>The meat of the calculation is performed on a finite grid. Basically all of the computation
+work is done within this module.</p>
+</div><h2 id='reexports' class='section-header'><a href="#reexports">Re-exports</a></h2>
+<table><tr><td><code>use <a class="mod" href="../../wafer/config/index.html" title="mod wafer::config">config</a>;</code></td></tr><tr><td><code>use config::<a class="enum" href="../../wafer/config/enum.CentralDifference.html" title="enum wafer::config::CentralDifference">CentralDifference</a>;</code></td></tr><tr><td><code>use config::<a class="struct" href="../../wafer/config/struct.Config.html" title="struct wafer::config::Config">Config</a>;</code></td></tr><tr><td><code>use config::<a class="struct" href="../../wafer/config/struct.Index3.html" title="struct wafer::config::Index3">Index3</a>;</code></td></tr><tr><td><code>use config::<a class="enum" href="../../wafer/config/enum.InitialCondition.html" title="enum wafer::config::InitialCondition">InitialCondition</a>;</code></td></tr><tr><td><code>use <a class="mod" href="../../wafer/errors/index.html" title="mod wafer::errors">errors</a>::*;</code></td></tr><tr><td><code>use indicatif::ProgressBar;</code></td></tr><tr><td><code>use indicatif::ProgressStyle;</code></td></tr><tr><td><code>use <a class="mod" href="../../wafer/input/index.html" title="mod wafer::input">input</a>;</code></td></tr><tr><td><code>use ndarray::<a class="type" href="https://docs.rs/ndarray/0.11/ndarray/aliases/type.Array3.html" title="type ndarray::aliases::Array3">Array3</a>;</code></td></tr><tr><td><code>use ndarray::<a class="type" href="https://docs.rs/ndarray/0.11/ndarray/aliases/type.ArrayView3.html" title="type ndarray::aliases::ArrayView3">ArrayView3</a>;</code></td></tr><tr><td><code>use ndarray::<a class="type" href="https://docs.rs/ndarray/0.11/ndarray/aliases/type.ArrayViewMut3.html" title="type ndarray::aliases::ArrayViewMut3">ArrayViewMut3</a>;</code></td></tr><tr><td><code>use ndarray::<a class="struct" href="https://docs.rs/ndarray/0.11/ndarray/zip/struct.Zip.html" title="struct ndarray::zip::Zip">Zip</a>;</code></td></tr><tr><td><code>use ndarray_parallel::<a class="mod" href="http://docs.rs/ndarray-parallel/0.7/ndarray_parallel/prelude/index.html" title="mod ndarray_parallel::prelude">prelude</a>::*;</code></td></tr><tr><td><code>use noisy_float::prelude::*;</code></td></tr><tr><td><code>use <a class="mod" href="../../wafer/output/index.html" title="mod wafer::output">output</a>;</code></td></tr><tr><td><code>use <a class="mod" href="../../wafer/potential/index.html" title="mod wafer::potential">potential</a>;</code></td></tr><tr><td><code>use potential::<a class="struct" href="../../wafer/potential/struct.Potentials.html" title="struct wafer::potential::Potentials">Potentials</a>;</code></td></tr><tr><td><code>use slog::Logger;</code></td></tr><tr><td><code>use std::f64::<a class="constant" href="https://doc.rust-lang.org/nightly/core/f64/constant.MAX.html" title="constant core::f64::MAX">MAX</a>;</code></td></tr></table><h2 id='structs' class='section-header'><a href="#structs">Structs</a></h2>
+<table>
+                       <tr class=' module-item'>
+                           <td><a class="struct" href="struct.Observables.html"
+                                  title='struct wafer::grid::Observables'>Observables</a></td>
+                           <td class='docblock-short'>
+                                <p>Holds all computed observables for the current wavefunction.</p>
+
+                           </td>
+                       </tr></table><h2 id='functions' class='section-header'><a href="#functions">Functions</a></h2>
+<table>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.compute_observables.html"
+                                  title='fn wafer::grid::compute_observables'>compute_observables</a></td>
+                           <td class='docblock-short'>
+                                <p>Computes observable values of the system, for example the energy</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.eta.html"
+                                  title='fn wafer::grid::eta'>eta</a></td>
+                           <td class='docblock-short'>
+                                <p>Estimates completion time for the convergence of the current wavefunction.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.evolve.html"
+                                  title='fn wafer::grid::evolve'>evolve</a></td>
+                           <td class='docblock-short'>
+                                <p>Evolves the solution a number of <code>steps</code></p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.get_mut_work_area.html"
+                                  title='fn wafer::grid::get_mut_work_area'>get_mut_work_area</a></td>
+                           <td class='docblock-short'>
+                                <p>Shortcut to getting a mutable slice of the workable area of the current array.
+In other words, the finite element only cells are removed</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.get_norm_squared.html"
+                                  title='fn wafer::grid::get_norm_squared'>get_norm_squared</a></td>
+                           <td class='docblock-short'>
+                                <p>Calculate the normalisation condition of a wavefunction.
+The square root portion of this calculation happens later as we sometimes require
+just this condition.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.get_work_area.html"
+                                  title='fn wafer::grid::get_work_area'>get_work_area</a></td>
+                           <td class='docblock-short'>
+                                <p>Shortcut to getting a slice of the workable area of the current array.
+In other words, the finite element only cells are removed</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.normalise_wavefunction.html"
+                                  title='fn wafer::grid::normalise_wavefunction'>normalise_wavefunction</a></td>
+                           <td class='docblock-short'>
+                                <p>Normalisation of the wavefunction</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.orthogonalise_wavefunction.html"
+                                  title='fn wafer::grid::orthogonalise_wavefunction'>orthogonalise_wavefunction</a></td>
+                           <td class='docblock-short'>
+                                <p>Uses Gram Schmidt orthogonalisation to identify the next excited state's wavefunction, even if it's degenerate</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.run.html"
+                                  title='fn wafer::grid::run'>run</a></td>
+                           <td class='docblock-short'>
+                                <p>Runs the calculation and holds long term (system time) wavefunction storage</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.solve.html"
+                                  title='fn wafer::grid::solve'>solve</a></td>
+                           <td class='docblock-short'>
+                                <p>Runs the actual computation once system is setup and ready.</p>
+
+                           </td>
+                       </tr></table></section><section id="search" class="content hidden"></section><section class="footer"></section><aside id="help" class="hidden"><div><h1 class="hidden">Help</h1><div class="shortcuts"><h2>Keyboard Shortcuts</h2><dl><dt><kbd>?</kbd></dt><dd>Show this help dialog</dd><dt><kbd>S</kbd></dt><dd>Focus the search field</dd><dt><kbd>↑</kbd></dt><dd>Move up in search results</dd><dt><kbd>↓</kbd></dt><dd>Move down in search results</dd><dt><kbd>↹</kbd></dt><dd>Switch tab</dd><dt><kbd>&#9166;</kbd></dt><dd>Go to active search result</dd><dt><kbd>+</kbd></dt><dd>Expand all sections</dd><dt><kbd>-</kbd></dt><dd>Collapse all sections</dd></dl></div><div class="infos"><h2>Search Tricks</h2><p>Prefix searches with a type followed by a colon (e.g. <code>fn:</code>) to restrict the search to a given type.</p><p>Accepted types are: <code>fn</code>, <code>mod</code>, <code>struct</code>, <code>enum</code>, <code>trait</code>, <code>type</code>, <code>macro</code>, and <code>const</code>.</p><p>Search functions by type signature (e.g. <code>vec -> usize</code> or <code>* -> vec</code>)</p><p>Search multiple things at once by splitting your query with comma (e.g. <code>str,u8</code> or <code>String,struct:Vec,test</code>)</p></div></div></aside><script>window.rootPath = "../../";window.currentCrate = "wafer";</script><script src="../../aliases.js"></script><script src="../../main.js"></script><script defer src="../../search-index.js"></script></body></html>

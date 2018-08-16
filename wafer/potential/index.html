@@ -1,0 +1,108 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="API documentation for the Rust `potential` mod in crate `wafer`."><meta name="keywords" content="rust, rustlang, rust-lang, potential"><title>wafer::potential - Rust</title><link rel="stylesheet" type="text/css" href="../../normalize.css"><link rel="stylesheet" type="text/css" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../../dark.css"><link rel="stylesheet" type="text/css" href="../../light.css" id="themeStyle"><script src="../../storage.js"></script></head><body class="rustdoc mod"><!--[if lte IE 8]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="sidebar-menu">&#9776;</div><p class='location'>Module potential</p><div class="sidebar-elems"><div class="block items"><ul><li><a href="#reexports">Re-exports</a></li><li><a href="#structs">Structs</a></li><li><a href="#constants">Constants</a></li><li><a href="#functions">Functions</a></li></ul></div><p class='location'><a href='../index.html'>wafer</a></p><script>window.sidebarCurrent = {name: 'potential', ty: 'mod', relpath: '../'};</script><script defer src="../sidebar-items.js"></script></div></nav><div class="theme-picker"><button id="theme-picker" aria-label="Pick another theme!"><img src="../../brush.svg" width="18" alt="Pick another theme!"></button><div id="theme-choices"></div></div><script src="../../theme.js"></script><nav class="sub"><form class="search-form js-only"><div class="search-container"><input class="search-input" name="search" autocomplete="off" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><a id="settings-menu" href="../../settings.html"><img src="../../wheel.svg" width="18" alt="Change settings"></a></div></form></nav><section id="main" class="content"><h1 class='fqn'><span class='in-band'>Module <a href='../index.html'>wafer</a>::<wbr><a class="mod" href=''>potential</a></span><span class='out-of-band'><span id='render-detail'><a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">[<span class='inner'>&#x2212;</span>]</a></span><a class='srclink' href='../../src/wafer/potential.rs.html#1-455' title='goto source code'>[src]</a></span></h1><div class='docblock'><p>Handles the potential generation, binding energy offsets, callouts to files or scripts
+if needed etc.</p>
+</div><h2 id='reexports' class='section-header'><a href="#reexports">Re-exports</a></h2>
+<table><tr><td><code>use ndarray::<a class="type" href="https://docs.rs/ndarray/0.11/ndarray/aliases/type.Array3.html" title="type ndarray::aliases::Array3">Array3</a>;</code></td></tr><tr><td><code>use ndarray::<a class="struct" href="https://docs.rs/ndarray/0.11/ndarray/zip/struct.Zip.html" title="struct ndarray::zip::Zip">Zip</a>;</code></td></tr><tr><td><code>use ndarray_parallel::<a class="mod" href="http://docs.rs/ndarray-parallel/0.7/ndarray_parallel/prelude/index.html" title="mod ndarray_parallel::prelude">prelude</a>::*;</code></td></tr><tr><td><code>use noisy_float::prelude::*;</code></td></tr><tr><td><code>use slog::Logger;</code></td></tr><tr><td><code>use std::f64::consts::<a class="constant" href="https://doc.rust-lang.org/nightly/core/f64/consts/constant.PI.html" title="constant core::f64::consts::PI">PI</a>;</code></td></tr><tr><td><code>use std::f64::<a class="constant" href="https://doc.rust-lang.org/nightly/core/f64/constant.MAX.html" title="constant core::f64::MAX">MAX</a>;</code></td></tr><tr><td><code>use config::<a class="struct" href="../../wafer/config/struct.Config.html" title="struct wafer::config::Config">Config</a>;</code></td></tr><tr><td><code>use config::<a class="struct" href="../../wafer/config/struct.Grid.html" title="struct wafer::config::Grid">Grid</a>;</code></td></tr><tr><td><code>use config::<a class="struct" href="../../wafer/config/struct.Index3.html" title="struct wafer::config::Index3">Index3</a>;</code></td></tr><tr><td><code>use config::<a class="enum" href="../../wafer/config/enum.PotentialType.html" title="enum wafer::config::PotentialType">PotentialType</a>;</code></td></tr><tr><td><code>use <a class="mod" href="../../wafer/errors/index.html" title="mod wafer::errors">errors</a>::*;</code></td></tr><tr><td><code>use <a class="mod" href="../../wafer/grid/index.html" title="mod wafer::grid">grid</a>;</code></td></tr><tr><td><code>use <a class="mod" href="../../wafer/input/index.html" title="mod wafer::input">input</a>;</code></td></tr><tr><td><code>use <a class="mod" href="../../wafer/output/index.html" title="mod wafer::output">output</a>;</code></td></tr></table><h2 id='structs' class='section-header'><a href="#structs">Structs</a></h2>
+<table>
+                       <tr class=' module-item'>
+                           <td><a class="struct" href="struct.PotentialSubSingle.html"
+                                  title='struct wafer::potential::PotentialSubSingle'>PotentialSubSingle</a></td>
+                           <td class='docblock-short'>
+                                <p>A single value struct for potential_sub outputs that
+do not require an entire array.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="struct" href="struct.Potentials.html"
+                                  title='struct wafer::potential::Potentials'>Potentials</a></td>
+                           <td class='docblock-short'>
+                                <p>Holds the potential arrays for the current simulation.</p>
+
+                           </td>
+                       </tr></table><h2 id='constants' class='section-header'><a href="#constants">Constants</a></h2>
+<table>
+                       <tr class=' module-item'>
+                           <td><a class="constant" href="constant._IMPL_DESERIALIZE_FOR_PotentialSubSingle.html"
+                                  title='constant wafer::potential::_IMPL_DESERIALIZE_FOR_PotentialSubSingle'>_IMPL_DESERIALIZE_FOR_PotentialSubSingle</a></td>
+                           <td class='docblock-short'>
+                                
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="constant" href="constant._IMPL_SERIALIZE_FOR_PotentialSubSingle.html"
+                                  title='constant wafer::potential::_IMPL_SERIALIZE_FOR_PotentialSubSingle'>_IMPL_SERIALIZE_FOR_PotentialSubSingle</a></td>
+                           <td class='docblock-short'>
+                                
+                           </td>
+                       </tr></table><h2 id='functions' class='section-header'><a href="#functions">Functions</a></h2>
+<table>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.alphas.html"
+                                  title='fn wafer::potential::alphas'>alphas</a></td>
+                           <td class='docblock-short'>
+                                <p>Running coupling. Used for Cornell potentials.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.calculate_r2.html"
+                                  title='fn wafer::potential::calculate_r2'>calculate_r2</a></td>
+                           <td class='docblock-short'>
+                                <p>Calculates squared distance</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.generate.html"
+                                  title='fn wafer::potential::generate'>generate</a></td>
+                           <td class='docblock-short'>
+                                <p>A public wrapper around <code>potential</code>. Where <code>potential</code> does the calculation for a
+single point, <code>generate</code> builds the entire grid.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.load_arrays.html"
+                                  title='fn wafer::potential::load_arrays'>load_arrays</a></td>
+                           <td class='docblock-short'>
+                                <p>Handles the potential loading from file, or generating depending on configuration
+Ancillary arrays are also generated here.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.mu.html"
+                                  title='fn wafer::potential::mu'>mu</a></td>
+                           <td class='docblock-short'>
+                                <p>Debye screening mass. Used for Cornell potentials.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.potential.html"
+                                  title='fn wafer::potential::potential'>potential</a></td>
+                           <td class='docblock-short'>
+                                <p>Generates a potential for the current simulation at a particular index point.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.potential_sub.html"
+                                  title='fn wafer::potential::potential_sub'>potential_sub</a></td>
+                           <td class='docblock-short'>
+                                <p>Calculate binding energy offset (if any). Follows the <code>potential</code>
+input/output arguments. <code>FullCornell</code>, and subsequent potentials that require
+indexed values must call <code>potential_sub_idx</code>.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.potential_sub_idx.html"
+                                  title='fn wafer::potential::potential_sub_idx'>potential_sub_idx</a></td>
+                           <td class='docblock-short'>
+                                <p>Calculate binding energy offset (if any). Follows the <code>potential</code> input/output arguments.
+Used if calculation requires indexing. If not, call <code>potential_sub</code> instead. Currency only
+<code>FullCornell</code> requires this routine.</p>
+
+                           </td>
+                       </tr></table></section><section id="search" class="content hidden"></section><section class="footer"></section><aside id="help" class="hidden"><div><h1 class="hidden">Help</h1><div class="shortcuts"><h2>Keyboard Shortcuts</h2><dl><dt><kbd>?</kbd></dt><dd>Show this help dialog</dd><dt><kbd>S</kbd></dt><dd>Focus the search field</dd><dt><kbd>↑</kbd></dt><dd>Move up in search results</dd><dt><kbd>↓</kbd></dt><dd>Move down in search results</dd><dt><kbd>↹</kbd></dt><dd>Switch tab</dd><dt><kbd>&#9166;</kbd></dt><dd>Go to active search result</dd><dt><kbd>+</kbd></dt><dd>Expand all sections</dd><dt><kbd>-</kbd></dt><dd>Collapse all sections</dd></dl></div><div class="infos"><h2>Search Tricks</h2><p>Prefix searches with a type followed by a colon (e.g. <code>fn:</code>) to restrict the search to a given type.</p><p>Accepted types are: <code>fn</code>, <code>mod</code>, <code>struct</code>, <code>enum</code>, <code>trait</code>, <code>type</code>, <code>macro</code>, and <code>const</code>.</p><p>Search functions by type signature (e.g. <code>vec -> usize</code> or <code>* -> vec</code>)</p><p>Search multiple things at once by splitting your query with comma (e.g. <code>str,u8</code> or <code>String,struct:Vec,test</code>)</p></div></div></aside><script>window.rootPath = "../../";window.currentCrate = "wafer";</script><script src="../../aliases.js"></script><script src="../../main.js"></script><script defer src="../../search-index.js"></script></body></html>

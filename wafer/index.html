@@ -1,0 +1,100 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="API documentation for the Rust `wafer` crate."><meta name="keywords" content="rust, rustlang, rust-lang, wafer"><title>wafer - Rust</title><link rel="stylesheet" type="text/css" href="../normalize.css"><link rel="stylesheet" type="text/css" href="../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../dark.css"><link rel="stylesheet" type="text/css" href="../light.css" id="themeStyle"><script src="../storage.js"></script></head><body class="rustdoc mod"><!--[if lte IE 8]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="sidebar-menu">&#9776;</div><p class='location'>Crate wafer</p><div class="sidebar-elems"><div class="block items"><ul><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#functions">Functions</a></li></ul></div><p class='location'></p><script>window.sidebarCurrent = {name: 'wafer', ty: 'mod', relpath: '../'};</script></div></nav><div class="theme-picker"><button id="theme-picker" aria-label="Pick another theme!"><img src="../brush.svg" width="18" alt="Pick another theme!"></button><div id="theme-choices"></div></div><script src="../theme.js"></script><nav class="sub"><form class="search-form js-only"><div class="search-container"><input class="search-input" name="search" autocomplete="off" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><a id="settings-menu" href="../settings.html"><img src="../wheel.svg" width="18" alt="Change settings"></a></div></form></nav><section id="main" class="content"><h1 class='fqn'><span class='in-band'>Crate <a class="mod" href=''>wafer</a></span><span class='out-of-band'><span id='render-detail'><a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">[<span class='inner'>&#x2212;</span>]</a></span><a class='srclink' href='../src/wafer/main.rs.html#1-240' title='goto source code'>[src]</a></span></h1><div class='docblock'><p><strong>Wa</strong> ve <strong>f</strong> unction Solv <strong>er</strong>: a parallelized, 3D, Schrödinger equation solver.</p>
+<p>Wafer exploits a Wick-rotated time-dependent Schrödinger equation to solve for
+time-independent solutions in three dimensions.</p>
+<p>Inspired by <a href="http://sourceforge.net/projects/quantumfdtd/">quantumfdtd</a>,
+which is a proof of concept tool and falls short of a general purpose utility.
+Wafer attempts to remedy this issue.</p>
+<p>If you use Wafer in your research, please reference the following articles:</p>
+<p>M. Strickland and D. Yager-Elorriaga, “A parallel algorithm for solving the 3D
+Schrödinger equation”,
+<a href="http://dx.doi.org/10.1016/j.jcp.2010.04.032">Journal of Computational Physics <strong>229</strong>, 6015–6026 (2010)</a>.</p>
+</div><h2 id='reexports' class='section-header'><a href="#reexports">Re-exports</a></h2>
+<table><tr><td><code>extern crate <a class="mod" href="https://doc.rust-lang.org/nightly/std/index.html" title="mod std">std</a>;</code></td></tr><tr><td><code>extern crate <a class="mod" href="https://docs.rs/chrono/0.4.0/chrono/index.html" title="mod chrono">chrono</a>;</code></td></tr><tr><td><code>extern crate <a class="mod" href="https://docs.rs/clap/2.32.0/clap/index.html" title="mod clap">clap</a>;</code></td></tr><tr><td><code>extern crate csv;</code></td></tr><tr><td><code>extern crate <a class="mod" href="https://docs.rs/error-chain/0.12.0/error_chain/index.html" title="mod error_chain">error_chain</a>;</code></td></tr><tr><td><code>extern crate indicatif;</code></td></tr><tr><td><code>extern crate <a class="mod" href="https://docs.rs/lazy_static/1.1.0/lazy_static/index.html" title="mod lazy_static">lazy_static</a>;</code></td></tr><tr><td><code>extern crate <a class="mod" href="https://docs.rs/ndarray/0.11/ndarray/index.html" title="mod ndarray">ndarray</a>;</code></td></tr><tr><td><code>extern crate <a class="mod" href="http://docs.rs/ndarray-parallel/0.7/ndarray_parallel/index.html" title="mod ndarray_parallel">ndarray_parallel</a>;</code></td></tr><tr><td><code>extern crate noisy_float;</code></td></tr><tr><td><code>extern crate <a class="mod" href="https://docs.rs/num/0.2/num/index.html" title="mod num">num</a>;</code></td></tr><tr><td><code>extern crate <a class="mod" href="https://docs.rs/num_cpus/1.8.0/num_cpus/index.html" title="mod num_cpus">num_cpus</a>;</code></td></tr><tr><td><code>extern crate ordinal;</code></td></tr><tr><td><code>extern crate <a class="mod" href="https://docs.rs/rand/0.5.5/rand/index.html" title="mod rand">rand</a>;</code></td></tr><tr><td><code>extern crate <a class="mod" href="https://docs.rs/rayon/1.0/rayon/index.html" title="mod rayon">rayon</a>;</code></td></tr><tr><td><code>extern crate rmp_serde as rmps;</code></td></tr><tr><td><code>extern crate ron;</code></td></tr><tr><td><code>extern crate <a class="mod" href="https://docs.rs/serde/1.0.71/serde/index.html" title="mod serde">serde</a>;</code></td></tr><tr><td><code>extern crate <a class="mod" href="https://docs.rs/serde_derive/1.0.71/serde_derive/index.html" title="mod serde_derive">serde_derive</a>;</code></td></tr><tr><td><code>extern crate <a class="mod" href="https://docs.rs/serde_json/1.0.26/serde_json/index.html" title="mod serde_json">serde_json</a>;</code></td></tr><tr><td><code>extern crate <a class="mod" href="https://docs.rs/serde_yaml/0.7.5/serde_yaml/index.html" title="mod serde_yaml">serde_yaml</a>;</code></td></tr><tr><td><code>extern crate slog;</code></td></tr><tr><td><code>extern crate slog_async;</code></td></tr><tr><td><code>extern crate slog_term;</code></td></tr><tr><td><code>extern crate <a class="mod" href="https://docs.rs/term_size/1.0.0-beta1/term_size/index.html" title="mod term_size">term_size</a>;</code></td></tr><tr><td><code>extern crate <a class="mod" href="https://sergio.bz/rustdocs/yansi/yansi/index.html" title="mod yansi">yansi</a>;</code></td></tr><tr><td><code>use std::prelude::v1::*;</code></td></tr><tr><td><code>use clap::<a class="struct" href="https://docs.rs/clap/2.32.0/clap/app/struct.App.html" title="struct clap::app::App">App</a>;</code></td></tr><tr><td><code>use clap::<a class="struct" href="https://docs.rs/clap/2.32.0/clap/args/arg/struct.Arg.html" title="struct clap::args::arg::Arg">Arg</a>;</code></td></tr><tr><td><code>use config::<a class="struct" href="../wafer/config/struct.Config.html" title="struct wafer::config::Config">Config</a>;</code></td></tr><tr><td><code>use <a class="mod" href="../wafer/errors/index.html" title="mod wafer::errors">errors</a>::*;</code></td></tr><tr><td><code>use slog::Drain;</code></td></tr><tr><td><code>use slog::Duplicate;</code></td></tr><tr><td><code>use slog::Fuse;</code></td></tr><tr><td><code>use slog::Level;</code></td></tr><tr><td><code>use slog::LevelFilter;</code></td></tr><tr><td><code>use slog::Logger;</code></td></tr><tr><td><code>use std::fs::<a class="struct" href="https://doc.rust-lang.org/nightly/std/fs/struct.OpenOptions.html" title="struct std::fs::OpenOptions">OpenOptions</a>;</code></td></tr><tr><td><code>use std::<a class="mod" href="https://doc.rust-lang.org/nightly/std/process/index.html" title="mod std::process">process</a>;</code></td></tr><tr><td><code>use std::<a class="mod" href="https://doc.rust-lang.org/nightly/std/thread/index.html" title="mod std::thread">thread</a>;</code></td></tr><tr><td><code>use std::time::<a class="struct" href="https://doc.rust-lang.org/nightly/core/time/struct.Duration.html" title="struct core::time::Duration">Duration</a>;</code></td></tr><tr><td><code>use std::time::<a class="struct" href="https://doc.rust-lang.org/nightly/std/time/struct.Instant.html" title="struct std::time::Instant">Instant</a>;</code></td></tr></table><h2 id='modules' class='section-header'><a href="#modules">Modules</a></h2>
+<table>
+                       <tr class=' module-item'>
+                           <td><a class="mod" href="config/index.html"
+                                  title='mod wafer::config'>config</a></td>
+                           <td class='docblock-short'>
+                                <p>Config is a (mostly) public module which reads the configuration file <code>wafer.cfg</code>
+and populates the <code>Config</code> struct with the information required to run the current
+instance of the application.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="mod" href="errors/index.html"
+                                  title='mod wafer::errors'>errors</a></td>
+                           <td class='docblock-short'>
+                                <p>Handles the error chain of the program.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="mod" href="grid/index.html"
+                                  title='mod wafer::grid'>grid</a></td>
+                           <td class='docblock-short'>
+                                <p>The meat of the calculation is performed on a finite grid. Basically all of the computation
+work is done within this module.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="mod" href="input/index.html"
+                                  title='mod wafer::input'>input</a></td>
+                           <td class='docblock-short'>
+                                <p>Any required file input (apart from configuration) is handled here. Plain text and binary formats.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="mod" href="output/index.html"
+                                  title='mod wafer::output'>output</a></td>
+                           <td class='docblock-short'>
+                                <p>All file output is handled in this module. Plain text and binary options are both here.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="mod" href="potential/index.html"
+                                  title='mod wafer::potential'>potential</a></td>
+                           <td class='docblock-short'>
+                                <p>Handles the potential generation, binding energy offsets, callouts to files or scripts
+if needed etc.</p>
+
+                           </td>
+                       </tr></table><h2 id='functions' class='section-header'><a href="#functions">Functions</a></h2>
+<table>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.exit_with_pause.html"
+                                  title='fn wafer::exit_with_pause'>exit_with_pause</a></td>
+                           <td class='docblock-short'>
+                                <p>Exits (with error, but no display) after a short pause. Because we're using async logs, sometimes we dump before
+the log system outputs information. We spool for a little first in these instances so we get the
+logging info.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.main.html"
+                                  title='fn wafer::main'>main</a></td>
+                           <td class='docblock-short'>
+                                <p>System entry point</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.sha.html"
+                                  title='fn wafer::sha'>sha</a></td>
+                           <td class='docblock-short'>
+                                <p>Generate a SHA string</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.short_sha.html"
+                                  title='fn wafer::short_sha'>short_sha</a></td>
+                           <td class='docblock-short'>
+                                <p>Generate a short SHA string</p>
+
+                           </td>
+                       </tr></table></section><section id="search" class="content hidden"></section><section class="footer"></section><aside id="help" class="hidden"><div><h1 class="hidden">Help</h1><div class="shortcuts"><h2>Keyboard Shortcuts</h2><dl><dt><kbd>?</kbd></dt><dd>Show this help dialog</dd><dt><kbd>S</kbd></dt><dd>Focus the search field</dd><dt><kbd>↑</kbd></dt><dd>Move up in search results</dd><dt><kbd>↓</kbd></dt><dd>Move down in search results</dd><dt><kbd>↹</kbd></dt><dd>Switch tab</dd><dt><kbd>&#9166;</kbd></dt><dd>Go to active search result</dd><dt><kbd>+</kbd></dt><dd>Expand all sections</dd><dt><kbd>-</kbd></dt><dd>Collapse all sections</dd></dl></div><div class="infos"><h2>Search Tricks</h2><p>Prefix searches with a type followed by a colon (e.g. <code>fn:</code>) to restrict the search to a given type.</p><p>Accepted types are: <code>fn</code>, <code>mod</code>, <code>struct</code>, <code>enum</code>, <code>trait</code>, <code>type</code>, <code>macro</code>, and <code>const</code>.</p><p>Search functions by type signature (e.g. <code>vec -> usize</code> or <code>* -> vec</code>)</p><p>Search multiple things at once by splitting your query with comma (e.g. <code>str,u8</code> or <code>String,struct:Vec,test</code>)</p></div></div></aside><script>window.rootPath = "../";window.currentCrate = "wafer";</script><script src="../aliases.js"></script><script src="../main.js"></script><script defer src="../search-index.js"></script></body></html>

@@ -1,0 +1,306 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="API documentation for the Rust `output` mod in crate `wafer`."><meta name="keywords" content="rust, rustlang, rust-lang, output"><title>wafer::output - Rust</title><link rel="stylesheet" type="text/css" href="../../normalize.css"><link rel="stylesheet" type="text/css" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../../dark.css"><link rel="stylesheet" type="text/css" href="../../light.css" id="themeStyle"><script src="../../storage.js"></script></head><body class="rustdoc mod"><!--[if lte IE 8]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="sidebar-menu">&#9776;</div><p class='location'>Module output</p><div class="sidebar-elems"><div class="block items"><ul><li><a href="#reexports">Re-exports</a></li><li><a href="#structs">Structs</a></li><li><a href="#constants">Constants</a></li><li><a href="#statics">Statics</a></li><li><a href="#functions">Functions</a></li></ul></div><p class='location'><a href='../index.html'>wafer</a></p><script>window.sidebarCurrent = {name: 'output', ty: 'mod', relpath: '../'};</script><script defer src="../sidebar-items.js"></script></div></nav><div class="theme-picker"><button id="theme-picker" aria-label="Pick another theme!"><img src="../../brush.svg" width="18" alt="Pick another theme!"></button><div id="theme-choices"></div></div><script src="../../theme.js"></script><nav class="sub"><form class="search-form js-only"><div class="search-container"><input class="search-input" name="search" autocomplete="off" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><a id="settings-menu" href="../../settings.html"><img src="../../wheel.svg" width="18" alt="Change settings"></a></div></form></nav><section id="main" class="content"><h1 class='fqn'><span class='in-band'>Module <a href='../index.html'>wafer</a>::<wbr><a class="mod" href=''>output</a></span><span class='out-of-band'><span id='render-detail'><a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">[<span class='inner'>&#x2212;</span>]</a></span><a class='srclink' href='../../src/wafer/output.rs.html#1-821' title='goto source code'>[src]</a></span></h1><div class='docblock'><p>All file output is handled in this module. Plain text and binary options are both here.</p>
+</div><h2 id='reexports' class='section-header'><a href="#reexports">Re-exports</a></h2>
+<table><tr><td><code>use chrono::<a class="struct" href="https://docs.rs/chrono/0.4.0/chrono/offset/local/struct.Local.html" title="struct chrono::offset::local::Local">Local</a>;</code></td></tr><tr><td><code>use csv;</code></td></tr><tr><td><code>use ndarray::<a class="type" href="https://docs.rs/ndarray/0.11/ndarray/aliases/type.Array3.html" title="type ndarray::aliases::Array3">Array3</a>;</code></td></tr><tr><td><code>use ndarray::<a class="type" href="https://docs.rs/ndarray/0.11/ndarray/aliases/type.ArrayView3.html" title="type ndarray::aliases::ArrayView3">ArrayView3</a>;</code></td></tr><tr><td><code>use ndarray::<a class="struct" href="https://docs.rs/ndarray/0.11/ndarray/zip/struct.Zip.html" title="struct ndarray::zip::Zip">Zip</a>;</code></td></tr><tr><td><code>use ndarray_parallel::prelude::<a class="trait" href="http://docs.rs/ndarray-parallel/0.7/ndarray_parallel/ext_traits/trait.ParApply2.html" title="trait ndarray_parallel::ext_traits::ParApply2">ParApply2</a>;</code></td></tr><tr><td><code>use noisy_float::prelude::*;</code></td></tr><tr><td><code>use ordinal::Ordinal;</code></td></tr><tr><td><code>use <a class="mod" href="https://docs.rs/rayon/1.0/rayon/index.html" title="mod rayon">rayon</a>;</code></td></tr><tr><td><code>use rmps;</code></td></tr><tr><td><code>use ron::ser::to_string_pretty as ron_string;</code></td></tr><tr><td><code>use ron::ser::PrettyConfig;</code></td></tr><tr><td><code>use serde::<a class="trait" href="https://docs.rs/serde/1.0.71/serde/ser/trait.Serialize.html" title="trait serde::ser::Serialize">Serialize</a>;</code></td></tr><tr><td><code>use <a class="mod" href="https://docs.rs/serde_json/1.0.26/serde_json/index.html" title="mod serde_json">serde_json</a>;</code></td></tr><tr><td><code>use <a class="mod" href="https://docs.rs/serde_yaml/0.7.5/serde_yaml/index.html" title="mod serde_yaml">serde_yaml</a>;</code></td></tr><tr><td><code>use std::fs::<a class="fn" href="https://doc.rust-lang.org/nightly/std/fs/fn.copy.html" title="fn std::fs::copy">copy</a>;</code></td></tr><tr><td><code>use std::fs::<a class="fn" href="https://doc.rust-lang.org/nightly/std/fs/fn.create_dir_all.html" title="fn std::fs::create_dir_all">create_dir_all</a>;</code></td></tr><tr><td><code>use std::fs::<a class="fn" href="https://doc.rust-lang.org/nightly/std/fs/fn.remove_file.html" title="fn std::fs::remove_file">remove_file</a>;</code></td></tr><tr><td><code>use std::fs::<a class="struct" href="https://doc.rust-lang.org/nightly/std/fs/struct.File.html" title="struct std::fs::File">File</a>;</code></td></tr><tr><td><code>use std::io::<a class="mod" href="https://doc.rust-lang.org/nightly/std/io/prelude/index.html" title="mod std::io::prelude">prelude</a>::*;</code></td></tr><tr><td><code>use <a class="mod" href="https://docs.rs/term_size/1.0.0-beta1/term_size/index.html" title="mod term_size">term_size</a>;</code></td></tr><tr><td><code>use yansi::Color::<a class="enum" href="https://sergio.bz/rustdocs/yansi/yansi/color/enum.Color.html" title="enum yansi::color::Color">Blue</a>;</code></td></tr><tr><td><code>use config::<a class="struct" href="../../wafer/config/struct.Config.html" title="struct wafer::config::Config">Config</a>;</code></td></tr><tr><td><code>use config::<a class="enum" href="../../wafer/config/enum.FileType.html" title="enum wafer::config::FileType">FileType</a>;</code></td></tr><tr><td><code>use config::<a class="struct" href="../../wafer/config/struct.Index3.html" title="struct wafer::config::Index3">Index3</a>;</code></td></tr><tr><td><code>use <a class="mod" href="../../wafer/errors/index.html" title="mod wafer::errors">errors</a>::*;</code></td></tr><tr><td><code>use <a class="mod" href="../../wafer/grid/index.html" title="mod wafer::grid">grid</a>;</code></td></tr><tr><td><code>use <a class="mod" href="../../wafer/potential/index.html" title="mod wafer::potential">potential</a>;</code></td></tr><tr><td><code>use potential::<a class="struct" href="../../wafer/potential/struct.PotentialSubSingle.html" title="struct wafer::potential::PotentialSubSingle">PotentialSubSingle</a>;</code></td></tr></table><h2 id='structs' class='section-header'><a href="#structs">Structs</a></h2>
+<table>
+                       <tr class=' module-item'>
+                           <td><a class="struct" href="struct.ObservablesOutput.html"
+                                  title='struct wafer::output::ObservablesOutput'>ObservablesOutput</a></td>
+                           <td class='docblock-short'>
+                                <p>Structured output of observable values</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="struct" href="struct.PROJDATE.html"
+                                  title='struct wafer::output::PROJDATE'>PROJDATE</a></td>
+                           <td class='docblock-short'>
+                                <p>Date &amp; time at which the simulation was started. Used as a unique identifier for
+the output directory of a run.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="struct" href="struct.PlainRecord.html"
+                                  title='struct wafer::output::PlainRecord'>PlainRecord</a></td>
+                           <td class='docblock-short'>
+                                <p>A simple struct to parse data to a plain csv file</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="struct" href="struct.TERMWIDTH.html"
+                                  title='struct wafer::output::TERMWIDTH'>TERMWIDTH</a></td>
+                           <td class='docblock-short'>
+                                <p>Width of program output to screen.</p>
+
+                           </td>
+                       </tr></table><h2 id='constants' class='section-header'><a href="#constants">Constants</a></h2>
+<table>
+                       <tr class=' module-item'>
+                           <td><a class="constant" href="constant._IMPL_SERIALIZE_FOR_ObservablesOutput.html"
+                                  title='constant wafer::output::_IMPL_SERIALIZE_FOR_ObservablesOutput'>_IMPL_SERIALIZE_FOR_ObservablesOutput</a></td>
+                           <td class='docblock-short'>
+                                
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="constant" href="constant._IMPL_SERIALIZE_FOR_PlainRecord.html"
+                                  title='constant wafer::output::_IMPL_SERIALIZE_FOR_PlainRecord'>_IMPL_SERIALIZE_FOR_PlainRecord</a></td>
+                           <td class='docblock-short'>
+                                
+                           </td>
+                       </tr></table><h2 id='statics' class='section-header'><a href="#statics">Statics</a></h2>
+<table>
+                       <tr class=' module-item'>
+                           <td><a class="static" href="static.PROJDATE.html"
+                                  title='static wafer::output::PROJDATE'>PROJDATE</a></td>
+                           <td class='docblock-short'>
+                                
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="static" href="static.TERMWIDTH.html"
+                                  title='static wafer::output::TERMWIDTH'>TERMWIDTH</a></td>
+                           <td class='docblock-short'>
+                                
+                           </td>
+                       </tr></table><h2 id='functions' class='section-header'><a href="#functions">Functions</a></h2>
+<table>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.check_output_dir.html"
+                                  title='fn wafer::output::check_output_dir'>check_output_dir</a></td>
+                           <td class='docblock-short'>
+                                <p>Generates a unique folder inside an <code>output</code> directory for the current simulation.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.copy_config.html"
+                                  title='fn wafer::output::copy_config'>copy_config</a></td>
+                           <td class='docblock-short'>
+                                <p>Copies the current configuration file to the project folder</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.finalise_measurement.html"
+                                  title='fn wafer::output::finalise_measurement'>finalise_measurement</a></td>
+                           <td class='docblock-short'>
+                                <p>Sets up the final measurements for each wavefunction, printing them to screen and saving
+them to disk.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.get_project_dir.html"
+                                  title='fn wafer::output::get_project_dir'>get_project_dir</a></td>
+                           <td class='docblock-short'>
+                                <p>Each simulation has a unique folder output so as not to overwrite other instances.
+This function gets the name of the current folder.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.get_term_size.html"
+                                  title='fn wafer::output::get_term_size'>get_term_size</a></td>
+                           <td class='docblock-short'>
+                                <p>Uses <code>term_size</code> to pull in the terminal width and from there sets the output
+pretty printing value to an appropriate value (between 70-100).</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.observables_csv.html"
+                                  title='fn wafer::output::observables_csv'>observables_csv</a></td>
+                           <td class='docblock-short'>
+                                <p>Saves the observables to a plain csv file.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.observables_json.html"
+                                  title='fn wafer::output::observables_json'>observables_json</a></td>
+                           <td class='docblock-short'>
+                                <p>Saves the observables to a json file.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.observables_mpk.html"
+                                  title='fn wafer::output::observables_mpk'>observables_mpk</a></td>
+                           <td class='docblock-short'>
+                                <p>Saves the observables to a messagepack binary file.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.observables_ron.html"
+                                  title='fn wafer::output::observables_ron'>observables_ron</a></td>
+                           <td class='docblock-short'>
+                                <p>Saves the observables to a ron file.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.observables_yaml.html"
+                                  title='fn wafer::output::observables_yaml'>observables_yaml</a></td>
+                           <td class='docblock-short'>
+                                <p>Saves the observables to a yaml file.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.potential.html"
+                                  title='fn wafer::output::potential'>potential</a></td>
+                           <td class='docblock-short'>
+                                <p>Handles the saving of potential data to disk.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.potential_sub.html"
+                                  title='fn wafer::output::potential_sub'>potential_sub</a></td>
+                           <td class='docblock-short'>
+                                <p>Handles the saving of potential_sub data to disk (if required).</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.print_banner.html"
+                                  title='fn wafer::output::print_banner'>print_banner</a></td>
+                           <td class='docblock-short'>
+                                <p>Simply prints the Wafer banner with current commit info and thread count.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.print_measurements.html"
+                                  title='fn wafer::output::print_measurements'>print_measurements</a></td>
+                           <td class='docblock-short'>
+                                <p>Pretty prints measurements at current step to screen</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.print_observable_header.html"
+                                  title='fn wafer::output::print_observable_header'>print_observable_header</a></td>
+                           <td class='docblock-short'>
+                                <p>Pretty prints a header for the subsequent observable data</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.print_summary.html"
+                                  title='fn wafer::output::print_summary'>print_summary</a></td>
+                           <td class='docblock-short'>
+                                <p>Pretty print final summary</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.remove_partial.html"
+                                  title='fn wafer::output::remove_partial'>remove_partial</a></td>
+                           <td class='docblock-short'>
+                                <p>Removes a temporary <code>_partial</code> file from the current output directory.
+Should only be called if a converged file is written.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.sanitize_string.html"
+                                  title='fn wafer::output::sanitize_string'>sanitize_string</a></td>
+                           <td class='docblock-short'>
+                                <p>Sanitizes strings such that they will create safe filenames.
+For now, only used with the <code>project_name</code> variable in the configuration.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.wavefunction.html"
+                                  title='fn wafer::output::wavefunction'>wavefunction</a></td>
+                           <td class='docblock-short'>
+                                <p>Saves a wavefunction to disk, and controls what format (plain text or binary)
+the data should be handled as.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.write_csv.html"
+                                  title='fn wafer::output::write_csv'>write_csv</a></td>
+                           <td class='docblock-short'>
+                                <p>Outputs an array to disk in a plain, csv format</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.write_json.html"
+                                  title='fn wafer::output::write_json'>write_json</a></td>
+                           <td class='docblock-short'>
+                                <p>Outputs an array to disk in json format</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.write_mpk.html"
+                                  title='fn wafer::output::write_mpk'>write_mpk</a></td>
+                           <td class='docblock-short'>
+                                <p>Outputs an array to disk in the messagepack binary format</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.write_ron.html"
+                                  title='fn wafer::output::write_ron'>write_ron</a></td>
+                           <td class='docblock-short'>
+                                <p>Outputs an array to disk in ron format</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.write_sub_csv.html"
+                                  title='fn wafer::output::write_sub_csv'>write_sub_csv</a></td>
+                           <td class='docblock-short'>
+                                <p>Outputs a potential_sub to disk in csv format</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.write_sub_json.html"
+                                  title='fn wafer::output::write_sub_json'>write_sub_json</a></td>
+                           <td class='docblock-short'>
+                                <p>Outputs a potential_sub to disk in json format</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.write_sub_mpk.html"
+                                  title='fn wafer::output::write_sub_mpk'>write_sub_mpk</a></td>
+                           <td class='docblock-short'>
+                                <p>Outputs a potential_sub to disk in messagepack format</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.write_sub_ron.html"
+                                  title='fn wafer::output::write_sub_ron'>write_sub_ron</a></td>
+                           <td class='docblock-short'>
+                                <p>Outputs a potential_sub to disk in ron format</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.write_sub_yaml.html"
+                                  title='fn wafer::output::write_sub_yaml'>write_sub_yaml</a></td>
+                           <td class='docblock-short'>
+                                <p>Outputs a potential_sub to disk in yaml format</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.write_yaml.html"
+                                  title='fn wafer::output::write_yaml'>write_yaml</a></td>
+                           <td class='docblock-short'>
+                                <p>Outputs an array to disk in yaml format</p>
+
+                           </td>
+                       </tr></table></section><section id="search" class="content hidden"></section><section class="footer"></section><aside id="help" class="hidden"><div><h1 class="hidden">Help</h1><div class="shortcuts"><h2>Keyboard Shortcuts</h2><dl><dt><kbd>?</kbd></dt><dd>Show this help dialog</dd><dt><kbd>S</kbd></dt><dd>Focus the search field</dd><dt><kbd>↑</kbd></dt><dd>Move up in search results</dd><dt><kbd>↓</kbd></dt><dd>Move down in search results</dd><dt><kbd>↹</kbd></dt><dd>Switch tab</dd><dt><kbd>&#9166;</kbd></dt><dd>Go to active search result</dd><dt><kbd>+</kbd></dt><dd>Expand all sections</dd><dt><kbd>-</kbd></dt><dd>Collapse all sections</dd></dl></div><div class="infos"><h2>Search Tricks</h2><p>Prefix searches with a type followed by a colon (e.g. <code>fn:</code>) to restrict the search to a given type.</p><p>Accepted types are: <code>fn</code>, <code>mod</code>, <code>struct</code>, <code>enum</code>, <code>trait</code>, <code>type</code>, <code>macro</code>, and <code>const</code>.</p><p>Search functions by type signature (e.g. <code>vec -> usize</code> or <code>* -> vec</code>)</p><p>Search multiple things at once by splitting your query with comma (e.g. <code>str,u8</code> or <code>String,struct:Vec,test</code>)</p></div></div></aside><script>window.rootPath = "../../";window.currentCrate = "wafer";</script><script src="../../aliases.js"></script><script src="../../main.js"></script><script defer src="../../search-index.js"></script></body></html>

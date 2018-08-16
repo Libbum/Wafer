@@ -1,0 +1,208 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="API documentation for the Rust `input` mod in crate `wafer`."><meta name="keywords" content="rust, rustlang, rust-lang, input"><title>wafer::input - Rust</title><link rel="stylesheet" type="text/css" href="../../normalize.css"><link rel="stylesheet" type="text/css" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../../dark.css"><link rel="stylesheet" type="text/css" href="../../light.css" id="themeStyle"><script src="../../storage.js"></script></head><body class="rustdoc mod"><!--[if lte IE 8]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="sidebar-menu">&#9776;</div><p class='location'>Module input</p><div class="sidebar-elems"><div class="block items"><ul><li><a href="#reexports">Re-exports</a></li><li><a href="#structs">Structs</a></li><li><a href="#constants">Constants</a></li><li><a href="#functions">Functions</a></li></ul></div><p class='location'><a href='../index.html'>wafer</a></p><script>window.sidebarCurrent = {name: 'input', ty: 'mod', relpath: '../'};</script><script defer src="../sidebar-items.js"></script></div></nav><div class="theme-picker"><button id="theme-picker" aria-label="Pick another theme!"><img src="../../brush.svg" width="18" alt="Pick another theme!"></button><div id="theme-choices"></div></div><script src="../../theme.js"></script><nav class="sub"><form class="search-form js-only"><div class="search-container"><input class="search-input" name="search" autocomplete="off" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><a id="settings-menu" href="../../settings.html"><img src="../../wheel.svg" width="18" alt="Change settings"></a></div></form></nav><section id="main" class="content"><h1 class='fqn'><span class='in-band'>Module <a href='../index.html'>wafer</a>::<wbr><a class="mod" href=''>input</a></span><span class='out-of-band'><span id='render-detail'><a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">[<span class='inner'>&#x2212;</span>]</a></span><a class='srclink' href='../../src/wafer/input.rs.html#1-825' title='goto source code'>[src]</a></span></h1><div class='docblock'><p>Any required file input (apart from configuration) is handled here. Plain text and binary formats.</p>
+</div><h2 id='reexports' class='section-header'><a href="#reexports">Re-exports</a></h2>
+<table><tr><td><code>use config::<a class="struct" href="../../wafer/config/struct.Config.html" title="struct wafer::config::Config">Config</a>;</code></td></tr><tr><td><code>use config::<a class="enum" href="../../wafer/config/enum.FileType.html" title="enum wafer::config::FileType">FileType</a>;</code></td></tr><tr><td><code>use config::<a class="struct" href="../../wafer/config/struct.Grid.html" title="struct wafer::config::Grid">Grid</a>;</code></td></tr><tr><td><code>use csv;</code></td></tr><tr><td><code>use <a class="mod" href="../../wafer/errors/index.html" title="mod wafer::errors">errors</a>::*;</code></td></tr><tr><td><code>use <a class="mod" href="../../wafer/grid/index.html" title="mod wafer::grid">grid</a>;</code></td></tr><tr><td><code>use ndarray::<a class="type" href="https://docs.rs/ndarray/0.11/ndarray/aliases/type.Array1.html" title="type ndarray::aliases::Array1">Array1</a>;</code></td></tr><tr><td><code>use ndarray::<a class="type" href="https://docs.rs/ndarray/0.11/ndarray/aliases/type.Array3.html" title="type ndarray::aliases::Array3">Array3</a>;</code></td></tr><tr><td><code>use ndarray::<a class="type" href="https://docs.rs/ndarray/0.11/ndarray/aliases/type.ArrayViewMut3.html" title="type ndarray::aliases::ArrayViewMut3">ArrayViewMut3</a>;</code></td></tr><tr><td><code>use ndarray::<a class="struct" href="https://docs.rs/ndarray/0.11/ndarray/dimension/axis/struct.Axis.html" title="struct ndarray::dimension::axis::Axis">Axis</a>;</code></td></tr><tr><td><code>use ndarray::<a class="struct" href="https://docs.rs/ndarray/0.11/ndarray/zip/struct.Zip.html" title="struct ndarray::zip::Zip">Zip</a>;</code></td></tr><tr><td><code>use ndarray_parallel::<a class="mod" href="http://docs.rs/ndarray-parallel/0.7/ndarray_parallel/prelude/index.html" title="mod ndarray_parallel::prelude">prelude</a>::*;</code></td></tr><tr><td><code>use noisy_float::prelude::*;</code></td></tr><tr><td><code>use potential::<a class="struct" href="../../wafer/potential/struct.PotentialSubSingle.html" title="struct wafer::potential::PotentialSubSingle">PotentialSubSingle</a>;</code></td></tr><tr><td><code>use rmps;</code></td></tr><tr><td><code>use ron::de::from_reader as ron_reader;</code></td></tr><tr><td><code>use <a class="mod" href="https://docs.rs/serde_json/1.0.26/serde_json/index.html" title="mod serde_json">serde_json</a>;</code></td></tr><tr><td><code>use <a class="mod" href="https://docs.rs/serde_yaml/0.7.5/serde_yaml/index.html" title="mod serde_yaml">serde_yaml</a>;</code></td></tr><tr><td><code>use slog::Logger;</code></td></tr><tr><td><code>use std::fs::<a class="fn" href="https://doc.rust-lang.org/nightly/std/fs/fn.create_dir.html" title="fn std::fs::create_dir">create_dir</a>;</code></td></tr><tr><td><code>use std::fs::<a class="struct" href="https://doc.rust-lang.org/nightly/std/fs/struct.File.html" title="struct std::fs::File">File</a>;</code></td></tr><tr><td><code>use std::io::<a class="mod" href="https://doc.rust-lang.org/nightly/std/io/prelude/index.html" title="mod std::io::prelude">prelude</a>::*;</code></td></tr><tr><td><code>use std::path::<a class="struct" href="https://doc.rust-lang.org/nightly/std/path/struct.Path.html" title="struct std::path::Path">Path</a>;</code></td></tr><tr><td><code>use std::process::<a class="struct" href="https://doc.rust-lang.org/nightly/std/process/struct.Command.html" title="struct std::process::Command">Command</a>;</code></td></tr><tr><td><code>use std::process::<a class="struct" href="https://doc.rust-lang.org/nightly/std/process/struct.Stdio.html" title="struct std::process::Stdio">Stdio</a>;</code></td></tr></table><h2 id='structs' class='section-header'><a href="#structs">Structs</a></h2>
+<table>
+                       <tr class=' module-item'>
+                           <td><a class="struct" href="struct.PlainRecord.html"
+                                  title='struct wafer::input::PlainRecord'>PlainRecord</a></td>
+                           <td class='docblock-short'>
+                                <p>A simple struct to parse data from a plain csv file</p>
+
+                           </td>
+                       </tr></table><h2 id='constants' class='section-header'><a href="#constants">Constants</a></h2>
+<table>
+                       <tr class=' module-item'>
+                           <td><a class="constant" href="constant._IMPL_DESERIALIZE_FOR_PlainRecord.html"
+                                  title='constant wafer::input::_IMPL_DESERIALIZE_FOR_PlainRecord'>_IMPL_DESERIALIZE_FOR_PlainRecord</a></td>
+                           <td class='docblock-short'>
+                                
+                           </td>
+                       </tr></table><h2 id='functions' class='section-header'><a href="#functions">Functions</a></h2>
+<table>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.check_input_dir.html"
+                                  title='fn wafer::input::check_input_dir'>check_input_dir</a></td>
+                           <td class='docblock-short'>
+                                <p>Checks that the folder <code>input</code> exists. If not, creates it.
+This doesn't specifically need to happen for all instances,
+but we may want to put restart values in there later on.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.check_potential_file.html"
+                                  title='fn wafer::input::check_potential_file'>check_potential_file</a></td>
+                           <td class='docblock-short'>
+                                <p>Checks if a potential file exists in the input directory</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.check_potential_sub_file.html"
+                                  title='fn wafer::input::check_potential_sub_file'>check_potential_sub_file</a></td>
+                           <td class='docblock-short'>
+                                <p>Checks if a potential_sub file exists in the input directory</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.check_wavefunction_file.html"
+                                  title='fn wafer::input::check_wavefunction_file'>check_wavefunction_file</a></td>
+                           <td class='docblock-short'>
+                                <p>Checks if a wavefunction file exists in the input directory</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.fill_data.html"
+                                  title='fn wafer::input::fill_data'>fill_data</a></td>
+                           <td class='docblock-short'>
+                                <p>Once data has been pulled from disk into a convertable format,
+we contstruct an array ready to calculate on.
+This requires the addition of a central difference buffer zone and may require
+the data to be resampled if input sizes differ from the size of the data on disk.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.fill_sub_data.html"
+                                  title='fn wafer::input::fill_sub_data'>fill_sub_data</a></td>
+                           <td class='docblock-short'>
+                                <p>Returns a variable array of <code>potential_sub</code> data, which is resized if needed.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.load_wavefunctions.html"
+                                  title='fn wafer::input::load_wavefunctions'>load_wavefunctions</a></td>
+                           <td class='docblock-short'>
+                                <p>Loads previously computed wavefunctions from disk.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.potential.html"
+                                  title='fn wafer::input::potential'>potential</a></td>
+                           <td class='docblock-short'>
+                                <p>Loads potential file from disk. Handles cases where multiple files exist.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.potential_sub.html"
+                                  title='fn wafer::input::potential_sub'>potential_sub</a></td>
+                           <td class='docblock-short'>
+                                <p>Loads potential_sub file from disk. Handles cases where multiple files exist.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.read_csv.html"
+                                  title='fn wafer::input::read_csv'>read_csv</a></td>
+                           <td class='docblock-short'>
+                                <p>Given a filename, this function reads in the data of a csv file and parses
+the values into a 3D array. There are a few caveats to this as the file
+may be of a different shape to the requested size in the configuration file.
+The routine therefore attempts to resample/interpolate the data to fit the required
+parameters.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.read_json.html"
+                                  title='fn wafer::input::read_json'>read_json</a></td>
+                           <td class='docblock-short'>
+                                <p>Loads an array from a json file on disk.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.read_mpk.html"
+                                  title='fn wafer::input::read_mpk'>read_mpk</a></td>
+                           <td class='docblock-short'>
+                                <p>Loads an array from a mpk file on disk.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.read_ron.html"
+                                  title='fn wafer::input::read_ron'>read_ron</a></td>
+                           <td class='docblock-short'>
+                                <p>Loads an array from a ron file on disk.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.read_sub_csv.html"
+                                  title='fn wafer::input::read_sub_csv'>read_sub_csv</a></td>
+                           <td class='docblock-short'>
+                                <p>Loads a potential_sub value or array from a csv file on disk.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.read_sub_json.html"
+                                  title='fn wafer::input::read_sub_json'>read_sub_json</a></td>
+                           <td class='docblock-short'>
+                                <p>Loads a potential_sub value or array from a json file on disk.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.read_sub_mpk.html"
+                                  title='fn wafer::input::read_sub_mpk'>read_sub_mpk</a></td>
+                           <td class='docblock-short'>
+                                <p>Loads a potential_sub value or array from a messagepack file on disk.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.read_sub_ron.html"
+                                  title='fn wafer::input::read_sub_ron'>read_sub_ron</a></td>
+                           <td class='docblock-short'>
+                                <p>Loads a potential_sub value or array from a ron file on disk.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.read_sub_yaml.html"
+                                  title='fn wafer::input::read_sub_yaml'>read_sub_yaml</a></td>
+                           <td class='docblock-short'>
+                                <p>Loads a potential_sub value or array from a yaml file on disk.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.read_yaml.html"
+                                  title='fn wafer::input::read_yaml'>read_yaml</a></td>
+                           <td class='docblock-short'>
+                                <p>Loads an array from a yaml file on disk.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.script_potential.html"
+                                  title='fn wafer::input::script_potential'>script_potential</a></td>
+                           <td class='docblock-short'>
+                                <p>Loads potential file from a script.</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.trilerp_resize.html"
+                                  title='fn wafer::input::trilerp_resize'>trilerp_resize</a></td>
+                           <td class='docblock-short'>
+                                <p>Trilinear interpolation to resize an array.
+i.e, if we have v.size = (50,50,50), and size = (100, 100, 100)
+then the output will be (100,100,100) linearly interpolated</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.wavefunction.html"
+                                  title='fn wafer::input::wavefunction'>wavefunction</a></td>
+                           <td class='docblock-short'>
+                                <p>Loads wavefunction file from disk. Handles cases where multiple files exist.</p>
+
+                           </td>
+                       </tr></table></section><section id="search" class="content hidden"></section><section class="footer"></section><aside id="help" class="hidden"><div><h1 class="hidden">Help</h1><div class="shortcuts"><h2>Keyboard Shortcuts</h2><dl><dt><kbd>?</kbd></dt><dd>Show this help dialog</dd><dt><kbd>S</kbd></dt><dd>Focus the search field</dd><dt><kbd>↑</kbd></dt><dd>Move up in search results</dd><dt><kbd>↓</kbd></dt><dd>Move down in search results</dd><dt><kbd>↹</kbd></dt><dd>Switch tab</dd><dt><kbd>&#9166;</kbd></dt><dd>Go to active search result</dd><dt><kbd>+</kbd></dt><dd>Expand all sections</dd><dt><kbd>-</kbd></dt><dd>Collapse all sections</dd></dl></div><div class="infos"><h2>Search Tricks</h2><p>Prefix searches with a type followed by a colon (e.g. <code>fn:</code>) to restrict the search to a given type.</p><p>Accepted types are: <code>fn</code>, <code>mod</code>, <code>struct</code>, <code>enum</code>, <code>trait</code>, <code>type</code>, <code>macro</code>, and <code>const</code>.</p><p>Search functions by type signature (e.g. <code>vec -> usize</code> or <code>* -> vec</code>)</p><p>Search multiple things at once by splitting your query with comma (e.g. <code>str,u8</code> or <code>String,struct:Vec,test</code>)</p></div></div></aside><script>window.rootPath = "../../";window.currentCrate = "wafer";</script><script src="../../aliases.js"></script><script src="../../main.js"></script><script defer src="../../search-index.js"></script></body></html>
