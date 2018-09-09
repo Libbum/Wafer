@@ -7,21 +7,24 @@ use std::f64::MAX;
 
 use config::{Config, Grid, Index3, PotentialType};
 use errors::*;
-use grid;
 use input;
 use output;
+use output::SaveFile;
+
+
+pub type Potential = Array3<R64>;
 
 #[derive(Debug)]
 /// Holds the potential arrays for the current simulation.
 pub struct Potentials {
     /// The potential.
-    pub v: Array3<R64>,
+    pub v: Potential,
     /// Ancillary array `a`.
-    pub a: Array3<R64>,
+    pub a: Potential,
     /// Ancillary array `b`.
-    pub b: Array3<R64>,
+    pub b: Potential,
     /// Potsub value.
-    pub pot_sub: (Option<Array3<R64>>, Option<R64>),
+    pub pot_sub: (Option<Potential>, Option<R64>),
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -43,7 +46,7 @@ pub struct PotentialSubSingle {
 ///
 /// A 3D array of potential values of the requested size.
 /// Or an error if called on the wrong potential type.
-pub fn generate(config: &Config) -> Result<Array3<R64>> {
+pub fn generate(config: &Config) -> Result<Potential> {
     let num = &config.grid.size;
     let bb = config.central_difference.bb();
     let init_size: [usize; 3] = [num.x + bb, num.y + bb, num.z + bb];
@@ -76,7 +79,7 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials> {
     let mut minima = r64(MAX);
     let bb = config.central_difference.bb();
     let num = &config.grid.size;
-    let v: Array3<R64> = match config.potential {
+    let v: Potential = match config.potential {
         PotentialType::FromFile => {
             let init_size: [usize; 3] = [num.x + bb, num.y + bb, num.z + bb];
             info!(log, "Loading potential from file");
@@ -162,8 +165,9 @@ pub fn load_arrays(config: &Config, log: &Logger) -> Result<Potentials> {
 
     if config.output.save_potential {
         info!(log, "Saving potential to disk");
-        let work = grid::get_work_area(&v, config.central_difference.ext());
-        if let Err(err) = output::potential(&work, &config.project_name, &config.output.file_type) {
+//        let work = grid::get_work_area(&v, config.central_difference.ext());
+//        if let Err(err) = output::potential(&work, &config.project_name, &config.output.file_type) {
+        if let Err(err) = v.write(&config) {
             warn!(log, "Could not write potential to disk: {}", err);
         }
         if let Err(err) = output::potential_sub(&config) {
